@@ -124,22 +124,32 @@
     if (SD.SERVICE_PRESETS) {
       const ps = SD.SERVICE_PRESETS.filter(p => allow.has(p.type));
       if (ps.length) {
-        h += `<div class="grp"><h4>Готовые сервисы</h4>`;
+        const openPre = A.level.archLvl || A.level.opsLvl || A.level.sandbox || (SD.ux && SD.ux.palOpen('presets'));
+        h += `<div class="grp"><button type="button" class="p-more preset-h" data-pmore="presets" aria-expanded="${!!openPre}">Готовые сервисы · ${ps.length} <span aria-hidden="true">${openPre ? '▾' : '▸'}</span></button><div class="p-list" data-plist="presets" ${openPre ? '' : 'hidden'}>`;
         ps.forEach(p => { h += `<button type="button" class="part preset" data-type="${p.type}" data-preset="${p.id}" title="${esc(p.label)}: ${esc(p.short)}">${SD.icon(p.type)}<span class="t"><b>${esc(p.label)}</b><small>${esc(p.short)}</small></span></button>`; });
-        h += `</div>`;
+        h += `</div></div>`;
       }
     }
+    const lockedG = [], toolsG = []; let lockedN = 0, toolsN = 0;
+    const toolsOpen = A.level.opsLvl || A.level.sandbox || A.graph.nodes.some(n => SD.TYPES[n.type] && SD.TYPES[n.type].ops) || (SD.ux && SD.ux.palOpen('tools'));
     SD.GROUPS.forEach(g => {
       const types = Object.entries(SD.TYPES).filter(([, t]) => t.group === g.id);
       if (!types.length) return;
-      h += `<div class="grp"><h4>${esc(g.label)}</h4>`;
-      types.forEach(([k, t]) => {
-        const ok = allow.has(k) || !!t.ops;
+      const isOk = ([k, t]) => allow.has(k) || !!t.ops, part = ([k, t]) => {
+        const ok = isOk([k, t]);
         const lv = firstLevelWith(k);
-        h += `<button type="button" class="part ${ok ? '' : 'locked'}" data-type="${k}" ${ok ? '' : `title="${lv ? 'Откроется на уровне ' + lv : 'Доступно в песочнице'}" aria-disabled="true"`}>${SD.icon(k)}<span class="t"><b>${esc(t.name)}</b><small>${ok ? esc(t.short) : lv ? 'с уровня ' + lv : 'в песочнице'}</small></span></button>`;
-      });
+        return `<button type="button" class="part ${ok ? '' : 'locked'}" data-type="${k}" ${ok ? `title="${esc(t.name)}: ${esc(t.short)}"` : `title="${lv ? 'Откроется на уровне ' + lv : 'Доступно в песочнице'}" aria-disabled="true"`}>${SD.icon(k)}<span class="t"><b>${esc(t.name)}</b><small>${ok ? esc(t.short) : lv ? 'с уровня ' + lv : 'в песочнице'}</small></span></button>`;
+      };
+      const okT = types.filter(isOk), lockT = types.filter(x => !isOk(x));
+      if (types.every(([, t]) => t.ops)) { toolsG.push(`<div class="grp"><h4>${esc(g.label)}</h4>${types.map(part).join('')}</div>`); toolsN += types.length; return; }
+      if (!okT.length) { lockedG.push(`<div class="grp"><h4>${esc(g.label)}</h4>${lockT.map(part).join('')}</div>`); lockedN += lockT.length; return; }
+      h += `<div class="grp"><h4>${esc(g.label)}</h4>`;
+      okT.forEach(x => { h += part(x); });
+      if (lockT.length) { const op = SD.ux && SD.ux.palOpen(g.id); h += `<button type="button" class="p-more" data-pmore="${g.id}" aria-expanded="${!!op}">${okT.length ? 'ещё' : 'закрыто'} ${lockT.length} — откроются дальше <span aria-hidden="true">${op ? '▾' : '▸'}</span></button><div class="p-list" data-plist="${g.id}" ${op ? '' : 'hidden'}>${lockT.map(part).join('')}</div>`; }
       h += `</div>`;
     });
+    if (toolsG.length) h += `<div class="grp p-tools"><button type="button" class="p-more preset-h" data-pmore="tools" aria-expanded="${!!toolsOpen}" title="Мониторинг, логи, трейсы, Kubernetes: ставь, когда нужно увидеть, что происходит внутри">Инструменты эксплуатации · ${toolsN} <span aria-hidden="true">${toolsOpen ? '▾' : '▸'}</span></button><div class="p-list" data-plist="tools" ${toolsOpen ? '' : 'hidden'}>${toolsG.join('')}</div></div>`;
+    if (lockedG.length) { const op = SD.ux && SD.ux.palOpen('locked'); h += `<div class="grp p-locked"><button type="button" class="p-more" data-pmore="locked" aria-expanded="${!!op}">Ещё ${lockedN} деталей откроются дальше <span aria-hidden="true">${op ? '▾' : '▸'}</span></button><div class="p-list" data-plist="locked" ${op ? '' : 'hidden'}>${lockedG.join('')}</div></div>`; }
     h += `<p class="tip">Перетащи деталь на площадку или нажми на неё. Связь — от кружка справа у узла к другому узлу.</p>`;
     $('palette').innerHTML = h;
     const legend = new Set(Object.keys(A.level.traffic).filter(k => A.level.traffic[k] > 0));
@@ -303,6 +313,8 @@
     if (SD.xray) SD.xray.mount();
     if (SD.archLens) SD.archLens.mount();
     if (SD.opsUI) SD.opsUI.mount();
+    if (SD.ux) SD.ux.mount();
+    if (SD.learn) SD.learn.mount();
     if (SD.landscape) SD.landscape.mount();
     if (SD.principles) SD.principles.mount();
     if (SD.guide) SD.guide.mount();

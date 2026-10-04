@@ -14,6 +14,7 @@
     const d = $('layerCtl'); if (!d || !SD.editor.getLayer || !SD.app || !SD.app.A || !SD.app.A.graph) return;
     const g = A().graph, cur = SD.editor.getLayer();
     const cnt = l => g.nodes.filter(n => SD.layerOf(n.type) === l).length;
+    d.hidden = cur === 'all' && !g.nodes.some(n => SD.layerOf(n.type) !== 'product');
     d.innerHTML = `<span class="lc-t">Слои</span>` + SD.LAYERS.map(([k, t]) => `<button type="button" data-layer="${k}" class="${cur === k ? 'on' : ''}" aria-pressed="${cur === k}" title="${k === 'all' ? 'Показать всё сразу' : k === 'product' ? 'Только продукт: то, через что идут запросы пользователей' : 'Продукт приглушён, слой «' + t + '» — ярко'}">${t}${k === 'all' ? '' : ` <small>${cnt(k)}</small>`}</button>`).join('');
   }
   function mountLayers() {

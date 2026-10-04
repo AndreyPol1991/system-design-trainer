@@ -11,11 +11,12 @@
   function metrics(A) {
     const r = A.res; if (!r) return;
     const g = t => A.goals && A.goals.find(x => x.t === t);
-    const cls = t => { const x = g(t); return x ? (x.ok ? 'ok' : 'bad') : ''; };
+    const empty = A.graph.nodes.every(n => n.type === 'client');
+    const cls = t => { const x = g(t); return empty ? '' : x ? (x.ok ? 'ok' : 'bad') : ''; };
     const items = [
       ['Нагрузка', F().num(r.total.rps) + ' RPS', '', `×${A.mul.toFixed(2).replace('.', ',').replace(/0$/, '')}`],
-      ['Успешно', F().pct(r.total.success), r.total.success >= 0.999 ? 'ok' : r.total.success >= 0.99 ? 'warn' : 'bad', r.total.degraded > 0.005 ? `упрощённо ${Math.round(r.total.degraded * 100)} %` : 'ответов'],
-      ['Время ответа', F().ms(r.total.lat), cls('latency'), 'в среднем'],
+      ['Успешно', empty ? '—' : F().pct(r.total.success), empty ? '' : r.total.success >= 0.999 ? 'ok' : r.total.success >= 0.99 ? 'warn' : 'bad', empty ? 'схема пока пустая' : r.total.degraded > 0.005 ? `упрощённо ${Math.round(r.total.degraded * 100)} %` : 'ответов'],
+      ['Время ответа', empty ? '—' : F().ms(r.total.lat), cls('latency'), 'в среднем'],
       ['В месяц', F().usd(r.cost), cls('cost'), r.ai && r.ai.tokenCost > 1 ? `токены ${F().usd(r.ai.tokenCost)}` : 'инфраструктура']
     ];
     if (r.jobs.in > 0) items.push(['Очередь', F().num(A.backlog) + ' сообщ.', r.jobs.backlogRate > 0.5 ? 'bad' : 'ok', r.jobs.backlogRate > 0.5 ? `+${F().num(r.jobs.backlogRate)}/с` : `${F().num(r.jobs.in)}/с на входе`]);
@@ -69,7 +70,12 @@
     }
     if (!L.sandbox) {
       h += `<h3>Цели ${A.mul !== 1 || Object.keys(A.down).length ? '<span class="note">проверяются при нагрузке ×1 без сбоев</span>' : ''}</h3><ul class="goals">`;
-      (A.goals || []).forEach(g => { h += `<li class="${g.ok ? 'ok' : 'bad'}"><span class="st">${g.ok ? '✓' : '·'}</span><span class="gt">${esc(g.text)}<span class="gd">${esc(g.detail)}</span></span></li>`; });
+      const built = A.graph.nodes.some(n => n.type !== 'client' && !(L.preset || []).some(p => p[0] === n.id)), flowing = A.res1 && A.res1.total.success > 0.001;
+      (A.goals || []).forEach((g, gi) => {
+        const pend = !built || (!flowing && g.ok && (g.t === 'latency' || g.t === 'cost'));
+        if (pend) { h += `<li class="pend"><span class="st">·</span><span class="gt">${esc(g.text)}<span class="gd">${!built ? 'ещё нечего проверять — собери систему' : 'проверим, когда пойдут успешные ответы'}</span></span></li>`; return; }
+        h += `<li class="${g.ok ? 'ok' : 'bad'}"><span class="st">${g.ok ? '✓' : '·'}</span><span class="gt">${esc(g.text)}<span class="gd">${esc(g.detail)}</span>${SD.learn ? SD.learn.goalExtra(A, gi) : ''}</span></li>`;
+      });
       h += `</ul>`;
       const all = A.goals && A.goals.length && A.goals.every(g => g.ok);
       const quizAll = L.decisions.every((_, i) => (A.quiz[L.id] || {})[i] === 'right');
@@ -84,7 +90,8 @@
       } else if (prog.stars) h += `<div class="verdict"><span>Лучший результат: ${stars(prog.stars)}</span></div>`;
     }
     if (SD.archLens && !L.interview) h += SD.archLens.card(A);
-    if (A.advice && A.advice.length) {
+    if (A.advice && A.advice.length && A.graph.nodes.every(n => n.type === 'client')) h += `<h3>Прораб видит</h3><div class="advice"><div class="adv info"><span>Схема пока пустая: запросам некуда идти. Поставь первый узел из палитры и соедини его с «Пользователями».</span></div></div>`;
+    else if (A.advice && A.advice.length) {
       h += `<h3>Прораб видит</h3><div class="advice">`;
       A.advice.slice(0, 7).forEach(a => {
         h += `<div class="adv ${a.sev}"><span>${esc(a.text)}${a.dive && SD.DIVES[a.dive] ? ` <button class="linkish" type="button" data-dive="${a.dive}">Как это работает</button>` : ''}${a.node ? ` <button class="linkish" type="button" data-sel="${a.node}">Показать</button>` : ''}${a.edge ? ` <button class="linkish" type="button" data-sele="${a.edge}">Показать связь</button>` : ''}</span></div>`;

@@ -120,7 +120,7 @@
   function card(S) {
     const L = S.level, r = S.res1 || S.res; if (!r) return '';
     const cur = detect(S.graph, r), tg = target(L);
-    let h = '<h3>Архитектура и паттерны</h3><div class="arch-card">';
+    let h = '<div class="arch-card">';
     h += `<div class="ac-row"><small>Твоя схема</small><div>${cur.styles.length ? cur.styles.map(s => chipS(s)).join('') : '<span class="note">слишком простая, чтобы назвать стиль</span>'}</div></div>`;
     if (tg) {
       const need = tg.styles.filter(s => !cur.styles.some(c => c.id === s.id));
@@ -141,6 +141,10 @@
     h += `<div class="ac-lens"><small>Показать на схеме:</small>${LENSES.map(([k, t]) => `<button type="button" class="chip-btn ${on(k) ? 'on' : ''}" data-lens="${k}" aria-pressed="${on(k)}">${t}</button>`).join('')}<span class="note">можно несколько сразу</span></div>`;
     if (SD.landscape) h += `<button type="button" class="dive-cta" data-landopen="1">${SD.icon('app')}<span><b>Ландшафт: вся система вокруг схемы</b><small>CI/CD и GitOps, Kubernetes, логи, метрики, трейсы, алерты, данные и аналитика — и как они вместе работают в инциденте</small></span></button>`;
     h += '</div>';
+    /* на уровнях, где архитектура не тема, карточка свёрнута в одну строку */
+    let acOpen = false; try { acOpen = localStorage.getItem('amp-stroyka-ac-open') === '1'; } catch (e) { acOpen = false; }
+    const open = L.archLvl || L.opsLvl || L.practice || L.sandbox || acOpen;
+    h = `<details class="ac-det" ${open ? 'open' : ''}><summary><span class="ac-st">Архитектура и паттерны</span><span class="ac-sum">${esc(cur.styles.map(s => s.name).join(' · ') || 'стиль пока не виден')} · паттернов ${ids.length}${cur.needed.length ? ' · подсказок ' + cur.needed.length : ''}</span></summary>${h}</details>`;
     lastNeeded = cur.needed.slice(0, 6);
     return h;
   }
@@ -322,6 +326,7 @@
   }
 
   function mount() {
+    document.addEventListener('toggle', e => { if (e.target.classList && e.target.classList.contains('ac-det')) { try { localStorage.setItem('amp-stroyka-ac-open', e.target.open ? '1' : '0'); } catch (err) { /* без хранилища */ } } }, true);
     const tb = document.querySelector('.stage .toolbar'), wave = $('waveBtn');
     if (tb && wave && !$('lensBtn')) {
       const l = document.createElement('div'); l.className = 'lens-ctl';
@@ -382,6 +387,7 @@
     let seen = false; try { seen = !!localStorage.getItem('amp-stroyka-arch-intro'); } catch (e) { seen = true; }
     if (!seen && SD.mentor) setTimeout(() => {
       try { localStorage.setItem('amp-stroyka-arch-intro', '1'); } catch (e) { /* без хранилища */ }
+      if (!SD.app || !SD.app.A || !Object.keys(SD.app.A.progress || {}).length) return;
       SD.mentor.say('<b>Новое: архитектура и паттерны.</b> Где искать: 1) вкладка «Задание» → блок «Архитектура и паттерны» — стиль твоей схемы против эталона уровня и чего не хватает; 2) «Линза» над холстом — паттерны, границы сервисов, ярусы, синхронные связи прямо на схеме; 3) у каждого узла и стрелки в инспекторе — «Паттерны на этом узле» с кнопкой «Применить».', { force: true, mood: 'happy', auto: 26000, acts: [['Понял', 'hide', '', true]] });
     }, 2500);
   }
