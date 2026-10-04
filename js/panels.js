@@ -39,14 +39,15 @@
     const kinds = Object.entries(L.traffic).filter(([, v]) => v > 0);
     const prog = A.progress[L.id] || {};
     let h = '';
-    h += `<span class="eyebrow">${L.sandbox ? 'Песочница' : L.interview ? 'Собеседование · этап «Схема»' : L.innerLvl ? 'Внутри сервиса · C4, уровень компонентов' : L.knobLvl ? 'Настройки на пальцах' : L.archLvl ? 'Архитектура из сервисов' : L.practice ? 'Практикум паттернов' : L.fix ? 'Найди и перестрой · инцидент' : `Уровень ${idx + 1} · ${tierLabel(L.tier)}`}</span>`;
+    h += `<span class="eyebrow">${L.sandbox ? 'Песочница' : L.interview ? 'Собеседование · этап «Схема»' : L.innerLvl ? 'Внутри сервиса · C4, уровень компонентов' : L.knobLvl ? 'Настройки на пальцах' : L.opsLvl ? 'Эксплуатация и инструменты' : L.archLvl ? 'Архитектура из сервисов' : L.practice ? 'Практикум паттернов' : L.fix ? 'Найди и перестрой · инцидент' : `Уровень ${idx + 1} · ${tierLabel(L.tier)}`}</span>`;
     h += `<h2>${esc(L.title)}</h2>`;
     h += `<p class="story" style="margin-top:8px">${esc(L.story)}</p>`;
     if (L.chips) h += `<div class="chips-row">${L.chips.map(c => `<span class="chip">${esc(c)}</span>`).join('')}</div>`;
     if (L.interview && SD.interview) h += SD.interview.paneBlock(A);
     if (L.innerTarget && SD.innerUI) h += `<button type="button" class="dive-cta" data-act="inner" data-id="${L.innerTarget}">${SD.icon('app')}<span><b>Открыть сервис изнутри</b><small>Слои, порты, адаптеры, трасса и код. Двойной клик по сервису на схеме делает то же самое.</small></span></button>`;
     if (L.focus && SD.guide && A.graph.nodes.some(x => x.id === L.focus.node)) { const fn = A.graph.nodes.find(x => x.id === L.focus.node), fd = (SD.TYPES[fn.type].props || []).find(p => p.key === L.focus.prop); h += `<button type="button" class="dive-cta" data-act="guide" data-id="${fn.id}" data-key="${L.focus.prop}">${SD.icon(fn.type)}<span><b>«${esc(fd ? fd.label : L.focus.prop)}» на пальцах</b><small>Что это, как работает и сравнение всех вариантов на этой схеме</small></span></button>`; }
-    if ((L.practice || L.innerLvl || L.knobLvl || L.archLvl) && L.pattern) h += `<button type="button" class="dive-cta" data-act="patcard">${SD.icon('app')}<span><b>Карточка паттерна</b><small>Проблема, решение, код и связанные паттерны</small></span></button>`;
+    if (SD.opsTaskCta) h += SD.opsTaskCta(L);
+    if ((L.practice || L.innerLvl || L.knobLvl || L.archLvl || L.opsLvl) && L.pattern) h += `<button type="button" class="dive-cta" data-act="patcard">${SD.icon('app')}<span><b>Карточка паттерна</b><small>Проблема, решение, код и связанные паттерны</small></span></button>`;
     if (L.diagnose) {
       const pick = (A.diagPick || {})[L.id], ok = SD.DIAG[L.id];
       h += `<div class="q diag"><p>Шаг 1. Что сломано? Какой это антипаттерн?</p><div class="opts">`;
@@ -243,6 +244,7 @@
     const trk = (list, title, sub, tag) => { if (!list || !list.length) return; h += `<section class="tier"><h3>${title} · <span>${sub}</span></h3><div class="cards">`; list.forEach(l => { const st = (A.progress[l.id] || {}).stars || 0; h += `<button type="button" class="lvl ${A.level === l ? 'cur' : ''}" data-level="${l.id}"><span class="n">${tag}<span>${st ? '✓' : ''}</span></span><b>${esc(l.title)}</b><small>${esc(l.story.split('. ')[0])}.</small></button>`; }); h += `</div></section>`; };
     trk(SD.KNOBS, 'Настройки на пальцах', 'одна настройка — один урок, со сравнением вариантов', 'НАСТРОЙКА');
     trk(SD.ARCHL, 'Архитектура из сервисов', 'сервисы с ролями: уведомления, заказы, каталог', 'АРХИТЕКТУРА');
+    trk(SD.OPSL || [], 'Эксплуатация и инструменты', 'метрики, алерты, логи, трейсы, Kubernetes — и как они устроены внутри', 'ЭКСПЛУАТАЦИЯ');
     h += `<section class="tier"><h3>Внутри сервиса · <span>C4, уровень компонентов: проблема сидит в коде сервиса</span></h3><div class="cards">`;
     (SD.INNER || []).forEach(l => { const st = (A.progress[l.id] || {}).stars || 0; h += `<button type="button" class="lvl ${A.level === l ? 'cur' : ''}" data-level="${l.id}"><span class="n">КОМПОНЕНТЫ<span>${st ? '✓' : ''}</span></span><b>${esc(l.title)}</b><small>${esc(l.story.split('. ')[0])}.</small></button>`; });
     h += `</div></section>`;

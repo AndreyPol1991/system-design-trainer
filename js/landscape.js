@@ -288,6 +288,8 @@
       if (el.gives) h += `<h4>Что даёт</h4><p>${esc(el.gives)}</p>`;
       if (el.without) h += `<h4>Без него</h4><p>${esc(el.without)}</p>`;
       if (el.tools) h += `<h4>Инструменты</h4><p>${esc(el.tools)}</p>`;
+      const con = CON_OF[S.sel];
+      if (con && SD.ops) h += `<button type="button" class="btn primary" data-lscon="${con}">Открыть ${esc(CON_NAME[con])} на живых данных</button>`;
       if (el.cap) h += `<label class="ls-tg"><input type="checkbox" data-lscap="${el.cap}" ${on[el.cap] ? 'checked' : ''}> ${on[el.cap] ? 'Включено' : 'Выключено'} — переключи и посмотри на DORA и инциденты</label>`;
       h += '</div>';
     }
@@ -295,6 +297,7 @@
       h += `<h3 class="xr-h">Инцидент: ${esc(INC[S.inc.id].name)}</h3><ol class="ls-tl">${S.inc.list.map((x, i) => `<li class="${x.cls} ${i === S.step ? 'cur' : ''} ${i > S.step ? 'later' : ''}"><b>${esc(x.t)}</b><span>${esc(x.txt)}</span></li>`).join('')}</ol>`;
       h += `<div class="ls-btns">${S.step < S.inc.list.length - 1 ? '<button type="button" class="btn primary" data-lsnext="1">Дальше ▶</button>' : '<button type="button" class="btn" data-lsinc="' + S.inc.id + '">Ещё раз</button>'}<button type="button" class="btn ghost" data-lsstop="1">Закрыть сценарий</button></div><p class="xr-note">Переключи инструменты ниже и проиграй снова — увидишь, как меняется ход инцидента.</p>`;
     }
+    if (SD.ops) { h += `<div id="lsGd">${SD.ops.gameday()}</div><div class="ls-incs">${Object.entries(CON_NAME).map(([k, v]) => `<button type="button" class="chip-btn ${S.con === k ? 'on' : ''}" data-lscon="${k}">${esc(v)}</button>`).join('')}</div>`; }
     h += `<h3 class="xr-h">Сценарии: как инструменты работают вместе</h3><div class="ls-incs">${Object.entries(INC).map(([k, v]) => `<button type="button" class="chip-btn ${S.inc && S.inc.id === k ? 'on' : ''}" data-lsinc="${k}" title="${esc(v.note)}">${esc(v.name)}</button>`).join('')}</div>`;
     h += `<h3 class="xr-h">Что включено · ≈ $${sc.cost.toLocaleString('ru-RU')} в месяц</h3>`;
     CAPS.forEach(([, title, list]) => { h += `<div class="ls-capg"><small>${esc(title)}</small>${list.map(([k, name, , cost]) => `<label class="ls-cap"><input type="checkbox" data-lscap="${k}" ${on[k] ? 'checked' : ''}><span>${esc(name)}</span>${cost ? `<em>$${cost}</em>` : ''}</label>`).join('')}</div>`; });
@@ -304,13 +307,28 @@
     $('lsLive').innerHTML = `<span class="xr-chip ${sc2.tier[1]}"><small>DORA</small><b>${sc2.tier[0]}</b></span><span class="xr-chip"><small>Восстановление</small><b>≈ ${sc2.mttr} мин</b></span><span class="xr-chip"><small>обнаружить ${sc2.det} · найти ${sc2.dia} · откатить ${sc2.fix}</small></span>`;
   }
 
+  /* ---------- консоли наблюдаемости ---------- */
+  const CON_OF = { grafana: 'grafana', prom: 'prom', kibana: 'kibana', logs: 'kibana', alert: 'alert', trace: 'jaeger' };
+  const CON_NAME = { grafana: 'Grafana', kibana: 'Kibana', prom: 'Prometheus', alert: 'Alertmanager', jaeger: 'Jaeger' };
+  /* у SVG нет свойства hidden — прячем схему и подсказку стилем */
+  const showMap = v => { $('lsSvg').style.display = v ? '' : 'none'; const h = document.querySelector('#lsModal .xr-hint'); if (h) h.style.display = v ? '' : 'none'; $('lsCon').hidden = v; };
+  function openCon(tab) { S.con = tab; showMap(false); renderCon(true); side(); }
+  function closeCon() { S.con = null; showMap(true); side(); }
+  function renderCon(force) {
+    const box = $('lsCon'); if (!box || !S.con) return;
+    const ae = document.activeElement;
+    if (!force && ae && box.contains(ae) && (ae.tagName === 'INPUT' || ae.tagName === 'SELECT')) return;
+    const st = box.querySelector('.oc-body'), top = st ? st.scrollTop : 0;
+    box.innerHTML = `<div class="oc-head"><button type="button" class="btn ghost" data-lsconx="1">← Ландшафт</button><div class="seg">${Object.entries(CON_NAME).map(([k, v]) => `<button type="button" data-lscon="${k}" aria-selected="${S.con === k}">${v}</button>`).join('')}</div><span class="oc-sep"></span><b class="oc-lbl">Сбой:</b><button type="button" class="btn" data-ocact="chaos">Уронить экземпляр</button><button type="button" class="btn" data-ocact="wave">Волна ×3</button><button type="button" class="btn ghost" data-ocact="heal">Поднять всё</button></div><div class="oc-body">${SD.ops.render(S.con)}</div>`;
+    const nb = box.querySelector('.oc-body'); if (nb) nb.scrollTop = top;
+  }
   /* ---------- открыть, закрыть, события ---------- */
   function mount() {
     const m = document.createElement('div');
     m.className = 'modal xr-modal'; m.id = 'lsModal'; m.hidden = true;
     m.innerHTML = `<div class="sheet xr-sheet" role="dialog" aria-modal="true" aria-labelledby="lsTitle">
       <div class="sheet-head xr-head"><span class="eyebrow" style="margin:0">Вся система</span><h2 id="lsTitle">Ландшафт: код → платформа → продукт → наблюдаемость → данные</h2><div class="xr-live" id="lsLive"></div><button class="btn ghost x" type="button" data-lsclose="1">Закрыть</button></div>
-      <div class="xr-body"><div class="xr-main"><svg class="xr-svg ls-svg" id="lsSvg" viewBox="0 0 ${W} ${H}" role="img" aria-labelledby="lsTitle"></svg><p class="xr-hint">Нажми на любой инструмент — расскажу, что это, как работает и что будет без него. Нажми на свой сервис — провалишься внутрь. Точки: <span class="ls-k" style="--c:var(--accent)">код</span> <span class="ls-k" style="--c:var(--k-read)">запросы</span> <span class="ls-k" style="--c:var(--text-muted)">логи</span> <span class="ls-k" style="--c:var(--ok)">метрики</span> <span class="ls-k" style="--c:var(--info)">трейсы</span> <span class="ls-k" style="--c:var(--k-write)">данные</span></p></div>
+      <div class="xr-body"><div class="xr-main"><svg class="xr-svg ls-svg" id="lsSvg" viewBox="0 0 ${W} ${H}" role="img" aria-labelledby="lsTitle"></svg><div class="ls-con" id="lsCon" hidden></div><p class="xr-hint">Нажми на любой инструмент — расскажу, что это, как работает и что будет без него. Нажми на свой сервис — провалишься внутрь. Точки: <span class="ls-k" style="--c:var(--accent)">код</span> <span class="ls-k" style="--c:var(--k-read)">запросы</span> <span class="ls-k" style="--c:var(--text-muted)">логи</span> <span class="ls-k" style="--c:var(--ok)">метрики</span> <span class="ls-k" style="--c:var(--info)">трейсы</span> <span class="ls-k" style="--c:var(--k-write)">данные</span></p></div>
       <aside class="xr-side" id="lsSide"></aside></div></div>`;
     document.body.appendChild(m);
     m.addEventListener('click', e => {
@@ -323,24 +341,44 @@
       if (b.dataset.lsinc) playInc(b.dataset.lsinc);
       if (b.dataset.lsnext) nextStep();
       if (b.dataset.lsstop) { S.inc = null; S.hl = []; side(); }
+      if (b.dataset.lscon) openCon(b.dataset.lscon);
+      if (b.dataset.lsconx) closeCon();
+      if (b.dataset.ocact) { const id = { chaos: 'chaosBtn', wave: 'waveBtn', heal: 'healBtn' }[b.dataset.ocact]; if ($(id)) $(id).click(); }
+      if (b.dataset.oclvl) { SD.ops.setLvl(b.dataset.oclvl); renderCon(true); }
+      if (b.dataset.ocprom) { SD.ops.setProm(b.dataset.ocprom); renderCon(true); }
+      if (b.dataset.octid) { SD.ops.openTrace(b.dataset.octid); openCon('jaeger'); }
     });
+    m.addEventListener('input', e => { if (e.target.id === 'ocQ') { SD.ops.setQuery(e.target.value); clearTimeout(S.qt); S.qt = setTimeout(() => { renderCon(true); const q = $('ocQ'); if (q) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); } }, 250); } });
     m.addEventListener('change', e => {
-      const t = e.target; if (!t.dataset.lscap) return;
+      const t = e.target;
+      if (t.id === 'ocSvc') { SD.ops.setSvc(t.value); renderCon(true); return; }
+      if (!t.dataset.lscap) return;
       on[t.dataset.lscap] = t.checked; save();
       if (S.inc) { const id = S.inc.id, st = S.step; S.inc = { id, list: steps(id), bad: null }; S.step = Math.min(st, S.inc.list.length - 1); S.hl = S.inc.list[S.step] ? S.inc.list[S.step].hl : []; }
-      side();
+      side(); if (S.con) renderCon(true);
     });
-    window.addEventListener('keydown', e => { if (e.key === 'Escape' && !m.hidden) { e.stopPropagation(); close(); } }, true);
+    window.addEventListener('keydown', e => { if (e.key === 'Escape' && !m.hidden) { e.stopPropagation(); if (S.con) closeCon(); else close(); } }, true);
     /* вход: кнопка в шапке рядом с «Песочницей» */
     const sb = $('navSandbox');
     if (sb && !$('navLand')) { const b = document.createElement('button'); b.className = sb.className; b.id = 'navLand'; b.type = 'button'; b.textContent = 'Ландшафт'; b.title = 'Вся система: CI/CD, Kubernetes, логи, метрики, трейсы, данные'; sb.before(b); b.addEventListener('click', open); }
   }
   function open() {
-    load(); layout(); S.dots = []; S.sel = null; S.inc = null; S.hl = [];
-    $('lsModal').hidden = false;
+    load();
+    const cs = SD.opsState ? SD.opsState(A().graph) : null;
+    if (cs && cs.any) { on.metrics = cs.metrics.size > 0; on.logs = cs.logs.size > 0; on.traces = cs.traces.size > 0; on.alerts = cs.alerts; }
+    layout(); S.dots = []; S.sel = null; S.inc = null; S.hl = []; S.con = null; S.gdSig = '';
+    if (SD.ops) SD.ops.reset();
+    $('lsModal').hidden = false; showMap(true);
     side(); draw();
     S.last = performance.now();
-    const loop = now => { if ($('lsModal').hidden) return; const dt = Math.min(80, now - S.last); S.last = now; tick(dt); draw(); S.raf = requestAnimationFrame(loop); };
+    const loop = now => {
+      if ($('lsModal').hidden) return;
+      const dt = Math.min(80, now - S.last); S.last = now;
+      if (!S.con) { tick(dt); draw(); }
+      if (SD.ops && SD.ops.tick(now - (S.opsT || now))) { if (S.con) renderCon(); const gd = SD.ops.gameday(); if (gd !== S.gdSig) { S.gdSig = gd; const b = $('lsGd'); if (b) b.innerHTML = gd; } }
+      S.opsT = now;
+      S.raf = requestAnimationFrame(loop);
+    };
     cancelAnimationFrame(S.raf); S.raf = requestAnimationFrame(loop);
   }
   function close() { $('lsModal').hidden = true; cancelAnimationFrame(S.raf); }

@@ -26,6 +26,7 @@
         <div class="xr-main">
           <div class="xr-ctl" id="xrCtl"></div>
           <svg class="xr-svg" id="xrSvg" viewBox="0 0 1000 500" role="img" aria-labelledby="xrTitle"></svg>
+          <div class="xr-html" id="xrHtml" hidden></div>
           <p class="xr-hint" id="xrHint" hidden></p>
           <div class="xr-stats" id="xrStats"></div>
         </div>
@@ -109,7 +110,7 @@
     loadDone();
     const ctx = makeCtx(n);
     $('xrSvg').setAttribute('viewBox', def.viewBox || '0 0 1000 500');
-    $('xrSvg').innerHTML = '';
+    $('xrSvg').innerHTML = ''; $('xrSvg').style.display = ''; $('xrHtml').hidden = true; $('xrHtml').innerHTML = '';
     renderCrumbs(); renderLive(); renderCtl(); renderProps(); renderTries(); renderLegend(); renderNb(); renderParts(); renderPart();
     const s = def.simple ? def.simple(n) : null;
     $('xrSimple').innerHTML = s ? `<span class="eyebrow">Простыми словами</span><span class="an">${s.an}</span>${s.pl ? `<span class="pl">${s.pl}</span>` : ''}` : '';
@@ -152,6 +153,8 @@
       setProp: (k, v) => SD.app.setProp(ctx.node.id, k, v),
       scenario: () => X.scn,
       view: () => X.view,
+      html: $('xrHtml'),
+      useHtml: on => { $('xrSvg').style.display = on ? 'none' : ''; $('xrHtml').hidden = !on; },
       part: () => X.part,
       setPart: k => setPart(k),
       speed: () => X.speed
@@ -232,7 +235,7 @@
     const ps = partsOf(), hint = $('xrHint');
     if (!ps) { $('xrParts').innerHTML = ''; hint.hidden = true; return; }
     hint.hidden = false;
-    hint.textContent = X.part ? 'Ты внутри блока. Esc или крошка вверху — назад ко всему узлу.' : 'Нажми на любой блок на картинке — провалишься в него: что это, зачем и как он работает.';
+    hint.textContent = X.part ? 'Ты внутри блока. Esc или крошка вверху — назад ко всему узлу.' : X.def.html ? 'Как он устроен внутри — блоки «Из чего состоит» справа.' : 'Нажми на любой блок на картинке — провалишься в него: что это, зачем и как он работает.';
     $('xrParts').innerHTML = `<h3 class="xr-h">Из чего состоит — нажми, чтобы разобрать</h3><div class="xr-parts">${Object.entries(ps).map(([k, p]) => `<button type="button" class="chip-btn ${X.part === k ? 'on' : ''}" data-xpart="${k}">${esc(p.name)}</button>`).join('')}</div>`;
   }
   function renderPart() {

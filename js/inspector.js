@@ -172,6 +172,14 @@
     const p = Object.assign(SD.edgeDefaults(), e.props);
     const er = A.res && A.res.edges[e.id];
     const nm = n => esc(n.label || SD.TYPES[n.type].name);
+    if (k.ops) {
+      const tool = SD.TYPES[b.type].ops ? b : a, other = tool === b ? a : b, ok = SD.TYPES[tool.type].ops;
+      const WHAT = { metrics: ['отдаёт метрики', 'Prometheus каждые несколько секунд забирает у «' + nm(other) + '» счётчики: запросы, ошибки, задержку, CPU.'], logs: ['пишет логи', '«' + nm(other) + '» пишет логи в stdout, агент на сервере отправляет их в Elasticsearch — там их ищут в Kibana.'], traces: ['отправляет трейсы', '«' + nm(other) + '» отправляет отрезки каждого запроса (spans) с trace id — Jaeger собирает из них путь запроса.'], dash: ['рисует графики', 'Grafana берёт данные из Prometheus и строит дашборды.'], alerts: ['передаёт сработавшие правила', 'Prometheus проверяет правила и отправляет сработавшие в Alertmanager, тот — дежурному.'], k8s: ['разворачивает и лечит', 'Kubernetes запускает поды «' + nm(other) + '», раскладывает их по серверам и сам поднимает упавшие.'] }[ok] || ['связь', ''];
+      let h2 = `<div class="insp-head"><span class="edge-ico">⇢</span><div><b>${nm(a)} → ${nm(b)}</b><small>${WHAT[0]} · трафик пользователей сюда не идёт</small></div></div>`;
+      h2 += `<div class="simple sm"><span class="eyebrow">Что по ней идёт</span><span class="an">${WHAT[1]}</span></div>`;
+      if (SD.xray && SD.xray.has(tool.type)) h2 += `<button type="button" class="dive-cta xr-cta" data-act="xray" data-id="${tool.id}">${SD.icon(tool.type)}<span><b>Открыть «${nm(tool)}» изнутри</b><small>Живые данные твоей схемы и как он устроен</small></span></button>`;
+      return h2;
+    }
     let h = `<div class="insp-head"><span class="edge-ico">→</span><div><b>${nm(a)} → ${nm(b)}</b><small>${er && er.async ? 'асинхронная доставка' : k.resil ? 'синхронный вызов' : 'поток данных'}</small></div></div>`;
     if (er) {
       const kinds = Object.entries(er.byKind).filter(([, v]) => v > 0.001);

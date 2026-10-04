@@ -110,7 +110,7 @@
   /* ---------- шапка и палитра ---------- */
   function renderHeader() {
     const L = A.level, i = SD.LEVELS.indexOf(L);
-    $('lvlTag').textContent = L.sandbox ? 'ПЕСОЧНИЦА' : L.interview ? 'СОБЕСЕДОВАНИЕ' : L.innerLvl ? 'ВНУТРИ СЕРВИСА' : L.knobLvl ? 'НАСТРОЙКА' : L.archLvl ? 'АРХИТЕКТУРА' : L.practice ? 'ПРАКТИКУМ' : L.fix ? 'ИНЦИДЕНТ' : `УР. ${i + 1}/${SD.LEVELS.length}`;
+    $('lvlTag').textContent = L.sandbox ? 'ПЕСОЧНИЦА' : L.interview ? 'СОБЕСЕДОВАНИЕ' : L.innerLvl ? 'ВНУТРИ СЕРВИСА' : L.knobLvl ? 'НАСТРОЙКА' : L.opsLvl ? 'ЭКСПЛУАТАЦИЯ' : L.archLvl ? 'АРХИТЕКТУРА' : L.practice ? 'ПРАКТИКУМ' : L.fix ? 'ИНЦИДЕНТ' : `УР. ${i + 1}/${SD.LEVELS.length}`;
     $('lvlName').textContent = L.title;
     const st = (A.progress[L.id] || {}).stars || 0;
     $('lvlStars').textContent = L.sandbox || L.interview ? '' : SD.panels.stars(st);
@@ -134,7 +134,7 @@
       if (!types.length) return;
       h += `<div class="grp"><h4>${esc(g.label)}</h4>`;
       types.forEach(([k, t]) => {
-        const ok = allow.has(k);
+        const ok = allow.has(k) || !!t.ops;
         const lv = firstLevelWith(k);
         h += `<button type="button" class="part ${ok ? '' : 'locked'}" data-type="${k}" ${ok ? '' : `title="${lv ? 'Откроется на уровне ' + lv : 'Доступно в песочнице'}" aria-disabled="true"`}>${SD.icon(k)}<span class="t"><b>${esc(t.name)}</b><small>${ok ? esc(t.short) : lv ? 'с уровня ' + lv : 'в песочнице'}</small></span></button>`;
       });
@@ -302,6 +302,7 @@
     if (SD.innerUI) SD.innerUI.mount();
     if (SD.xray) SD.xray.mount();
     if (SD.archLens) SD.archLens.mount();
+    if (SD.opsUI) SD.opsUI.mount();
     if (SD.landscape) SD.landscape.mount();
     if (SD.principles) SD.principles.mount();
     if (SD.guide) SD.guide.mount();

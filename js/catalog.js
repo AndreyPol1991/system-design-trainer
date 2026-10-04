@@ -370,6 +370,7 @@ SD.TYPES = {
 SD.edgeDefaults = () => ({ proto: 'rest', timeout: 0, retries: 0, backoff: 'none', cb: false, fallback: false });
 SD.edgeKind = (from, to) => {
   if (!from || !to) return 'none';
+  if ((SD.TYPES[from.type] || {}).ops || (SD.TYPES[to.type] || {}).ops) return { proto: false, resil: false, ops: true };
   const sync = ['app', 'gateway', 'lb', 'worker', 'ws', 'client'].includes(from.type);
   const protoTarget = ['app', 'gateway', 'external', 'lb'].includes(to.type);
   return { proto: protoTarget && from.type !== 'queue', resil: sync && !['client', 'lb'].includes(from.type) };

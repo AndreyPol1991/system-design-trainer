@@ -77,7 +77,7 @@
       const nr = res.nodes[n.id];
       if (!nr) continue;
       const rt = k => ctx.routeMemo.get(n.id + '|' + k);
-      if (!['client', 'external'].includes(n.type) && nr.rps === 0 && !nr.dead)
+      if (!['client', 'external'].includes(n.type) && !T()[n.type].ops && nr.rps === 0 && !nr.dead)
         A.push({ sev: 'info', node: n.id, text: `«${name(n)}» не получает трафика. Проверь направление стрелок: запрос идёт от пользователя вглубь системы.` });
       if (nr.dead) A.push({ sev: 'bad', node: n.id, text: deadText(n) });
       if (nr.status === 'hot' && !nr.dead) A.push({ sev: 'bad', node: n.id, text: overloadText(ctx, n, nr, level), dive: T()[n.type].dive });

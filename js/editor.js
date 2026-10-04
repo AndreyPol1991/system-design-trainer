@@ -2,6 +2,15 @@
 (function () {
   const NS = 'http://www.w3.org/2000/svg';
   const W = 188, H0 = 64;
+  /* слои схемы: продукт, наблюдаемость, платформа, данные */
+  let layer = 'all';
+  try { layer = localStorage.getItem('amp-stroyka-layer') || 'all'; } catch (e) { layer = 'all'; }
+  const lyOf = t => (SD.layerOf ? SD.layerOf(t) : 'product');
+  const vis = l => layer === 'all' ? 'show' : layer === 'product' ? (l === 'product' ? 'show' : 'hide') : l === layer ? 'show' : l === 'product' ? 'dim' : 'hide';
+  const nodeVis = n => vis(lyOf(n.type));
+  const edgeVis = (a, b) => { const x = nodeVis(a), y = nodeVis(b); return x === 'hide' || y === 'hide' ? 'hide' : x === 'dim' || y === 'dim' ? 'dim' : 'show'; };
+  const isOps = n => !!(n && SD.TYPES[n.type] && SD.TYPES[n.type].ops);
+  const opsKind = (a, b) => SD.TYPES[(isOps(b) ? b : a).type].ops;
   const el = (tag, attrs, parent) => {
     const e = document.createElementNS(NS, tag);
     if (attrs) Object.entries(attrs).forEach(([k, v]) => e.setAttribute(k, v));
@@ -166,7 +175,8 @@
       const sel = E.sel && E.sel.type === 'node' && E.sel.id === n.id;
       const ch = changeOf(n, r);
       const gl = E.glow.get(n.id), glc = gl && gl.until > performance.now() ? ' ' + gl.cls : '';
-      const grp = el('g', { class: `node ${st === 'ok' ? '' : st}${sel ? ' sel' : ''}${glc}`, transform: `translate(${n.x},${n.y})`, 'data-id': n.id, tabindex: 0, role: 'button', 'aria-label': n.label || SD.TYPES[n.type].name }, g);
+      const nv = nodeVis(n);
+      const grp = el('g', { class: `node ${st === 'ok' ? '' : st}${sel ? ' sel' : ''}${glc} ly-${lyOf(n.type)}${nv === 'hide' ? ' l-hide' : nv === 'dim' ? ' l-dim' : ''}${isOps(n) ? ' ops-node' : ''}`, transform: `translate(${n.x},${n.y})`, 'data-id': n.id, tabindex: 0, role: 'button', 'aria-label': n.label || SD.TYPES[n.type].name }, g);
       if (n.type === 'sql' && n.props.shards > 1) {
         el('rect', { class: 'stack', x: 6, y: -6, width: s.w, height: s.h, rx: 10 }, grp);
         el('rect', { class: 'stack', x: 3, y: -3, width: s.w, height: s.h, rx: 10 }, grp);
@@ -371,7 +381,8 @@
       const info = er && er.info;
       const sel = E.sel && E.sel.type === 'edge' && E.sel.id === e.id;
       const fail = info && info.s < 0.98 && flow > 0.001;
-      const cls = ['edge', flow > 0.001 ? 'active' : (E.res ? 'idle' : ''), er && er.async ? 'async' : '', sel ? 'sel' : '', info && info.amp > 1.3 ? 'storm' : '', info && info.open ? 'cbopen' : '', fail ? 'fail' : ''].join(' ');
+      const ev = edgeVis(a, b), ops = isOps(a) || isOps(b);
+      const cls = ['edge', ev === 'hide' ? 'l-hide' : ev === 'dim' ? 'l-dim' : '', ops ? 'ops ops-' + opsKind(a, b) : '', flow > 0.001 ? 'active' : (E.res ? 'idle' : ''), er && er.async ? 'async' : '', sel ? 'sel' : '', info && info.amp > 1.3 ? 'storm' : '', info && info.open ? 'cbopen' : '', fail ? 'fail' : ''].join(' ');
       const grp = el('g', { class: cls, 'data-edge': e.id }, g);
       if (flow > 0.001) grp.style.setProperty('--w', (1.4 + Math.min(3.4, Math.log10(flow + 1) * 0.85)).toFixed(2));
       const d = edgePath(a, b);
@@ -463,7 +474,15 @@
     if (E.running && E.res && !document.hidden) {
       E.graph.edges.forEach(e => {
         const er = E.res.edges[e.id], p = E.paths.get(e.id);
-        if (!er || !p || er.flow < 0.001) return;
+        const a0 = node(e.from), b0 = node(e.to);
+        if (!p || !a0 || !b0 || edgeVis(a0, b0) === 'hide') return;
+        if (isOps(a0) || isOps(b0)) {
+          const ok = opsKind(a0, b0), acc0 = (spawnAcc.get(e.id) || 0) + (ok === 'k8s' ? 0.35 : 0.9) * dt;
+          let k = Math.floor(acc0); spawnAcc.set(e.id, acc0 - k);
+          while (k-- > 0 && E.particles.length < 420) E.particles.push({ e: e.id, p, len: p.getTotalLength(), s: 0, kind: 'read', ops: ok, el: null, to: e.to });
+          return;
+        }
+        if (!er || er.flow < 0.001) return;
         const rate = 1.2 + Math.log10(er.flow + 1) * 1.6;
         const acc = (spawnAcc.get(e.id) || 0) + rate * dt;
         let n = Math.floor(acc);
@@ -527,15 +546,16 @@
         if (pt.el) pt.el.remove();
         const to = node(pt.to);
         const land = to && landing(pt, to);
-        if (land) { const end = pt.p.getPointAtLength(pt.len); born.push({ hop: true, x0: end.x, y0: end.y, x1: land.x, y1: land.y, t: 0, kind: pt.kind, flash: land.flash, el: null }); }
+        if (land && !pt.ops) { const end = pt.p.getPointAtLength(pt.len); born.push({ hop: true, x0: end.x, y0: end.y, x1: land.x, y1: land.y, t: 0, kind: pt.kind, flash: land.flash, el: null }); }
         return false;
       }
       const q = pt.p.getPointAtLength(pt.s);
       if (!pt.el) {
-        pt.el = pt.async ? el('rect', { width: 6, height: 6, rx: 1, style: `fill:${SD.kindColor(pt.kind)}` }, E.gParts)
+        pt.el = pt.ops ? el('rect', { width: 5, height: 5, rx: 1, class: 'ops-p ' + pt.ops }, E.gParts) : pt.async ? el('rect', { width: 6, height: 6, rx: 1, style: `fill:${SD.kindColor(pt.kind)}` }, E.gParts)
           : el('circle', pt.retry ? { r: 3.6, class: 'retry-p', style: `stroke:${SD.kindColor(pt.kind)}` } : { r: 3.4, style: `fill:${SD.kindColor(pt.kind)}` }, E.gParts);
       }
-      if (pt.async) { pt.el.setAttribute('x', q.x - 3); pt.el.setAttribute('y', q.y - 3); }
+      if (pt.ops) { pt.el.setAttribute('x', q.x - 2.5); pt.el.setAttribute('y', q.y - 2.5); }
+      else if (pt.async) { pt.el.setAttribute('x', q.x - 3); pt.el.setAttribute('y', q.y - 3); }
       else { pt.el.setAttribute('cx', q.x); pt.el.setAttribute('cy', q.y); }
       return true;
     });
@@ -706,6 +726,7 @@
   SD.editor = {
     init, bindPalette, setGraph, render, fit, select, removeSel, addNode, addEdge, node, subtitle,
     getGraph: () => E.graph, getSel: () => E.sel, markDeltas,
+    getLayer: () => layer, setLayer: l => { layer = l || 'all'; try { localStorage.setItem('amp-stroyka-layer', layer); } catch (e) { /* без хранилища */ } clearParticles(); render(); },
     zoomIn: () => zoomAt(1.2), zoomOut: () => zoomAt(1 / 1.2),
     setRunning: v => { E.running = v; if (!v) clearParticles(); },
     changed
