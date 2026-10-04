@@ -159,7 +159,7 @@
     brief(fromTour);
   }
   function showStep(force) {
-    const m = run.mission, s = m[run.step];
+    const m = run.mission, s = m && m[run.step];
     if (!s) return;
     if (s.done) { say(s.done, { mood: 'happy', force: true, step: 'миссия выполнена', acts: [['Спасибо', 'hide', '', true]], ask: true }); run.mission = null; return; }
     say(s.say, { force, step: `шаг ${run.step + 1} из ${m.length - 1}`, focus: s.focus, acts: [['Не получается', 'hintstep'], ['Дальше я сам', 'skipm']] });

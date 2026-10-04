@@ -50,6 +50,7 @@
     S.done[lab.id] = S.done[lab.id] || [];
     if (S.done[lab.id].includes(tid)) return;
     S.done[lab.id].push(tid); save(); renderTasks(lab); list();
+    if (SD.bridge && lab.tasks.every(x => S.done[lab.id].includes(x.id))) SD.bridge.labDone(lab.id);
     const t = lab.tasks.find(x => x.id === tid);
     if (SD.app && t) SD.app.toast(`Задание выполнено: ${t.text}`);
   }
