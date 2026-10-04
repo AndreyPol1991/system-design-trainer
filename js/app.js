@@ -86,6 +86,7 @@
   }
   function award() {
     const L = A.level;
+    if (SD.bridge) SD.bridge.won(L, A);
     if (L.interview) { if (!A.intWon || A.intWon !== L.id) { A.intWon = L.id; toast('Схема выполняет все цели симулятора. Возвращайся к этапам собеседования.'); if (SD.mentor) SD.mentor.onEvent('win', { stars: 3 }); } return; }
     const quizAll = L.decisions.every((_, i) => (A.quiz[L.id] || {})[i] === 'right');
     const cheap = L.stretch && A.res1.cost <= L.stretch.cost;
@@ -283,6 +284,7 @@
       if (SD.mentor) SD.mentor.onEvent('check');
       if (A.level.sandbox) { toast('В песочнице нет целей: смотри метрики и советы прораба.'); return; }
       const bad = A.goals.filter(g => !g.ok);
+      if (bad.length && SD.bridge) SD.bridge.miss(A.level);
       toast(bad.length ? `Не выполнено целей: ${bad.length} из ${A.goals.length}. Первая: ${bad[0].text.toLowerCase()}.` : 'Все цели выполнены.');
     });
     $('chaosBtn').addEventListener('click', () => {
@@ -295,7 +297,7 @@
     $('solBtn').addEventListener('click', () => {
       const L = A.level;
       if (!L.solution) { toast(L.interview ? 'На собеседовании эталона нет: он откроется в разборе после завершения.' : 'В песочнице эталона нет.'); return; }
-      confirmBox('Заменить твою схему эталонным решением? Текущая схема пропадёт.', 'Показать эталон', () => { loadLevel(L, L.solution); toast(L.solution.note); });
+      confirmBox('Заменить твою схему эталонным решением? Текущая схема пропадёт.', 'Показать эталон', () => { if (SD.bridge) SD.bridge.peek(L); loadLevel(L, L.solution); toast(L.solution.note); });
     });
     $('clearBtn').addEventListener('click', () => confirmBox('Вернуть уровень к началу? Твоя схема пропадёт.', 'Начать заново', () => loadLevel(A.level)));
     $('zoomIn').addEventListener('click', SD.editor.zoomIn);
@@ -316,6 +318,7 @@
     if (SD.ux) SD.ux.mount();
     if (SD.learn) SD.learn.mount();
     if (SD.walk) SD.walk.mount();
+    if (SD.cmd) SD.cmd.mount();
     if (SD.landscape) SD.landscape.mount();
     if (SD.principles) SD.principles.mount();
     if (SD.guide) SD.guide.mount();
