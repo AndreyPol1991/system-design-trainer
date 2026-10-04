@@ -266,6 +266,7 @@
     const t = U.tries[A.level.id] = (U.tries[A.level.id] || []).slice(-11);
     t.push({ c: Math.round(r.cost), l: Math.round(r.total.lat), s: +r.total.success.toFixed(4), ok: A.goals.every(x => x.ok) ? 1 : 0 });
     save();
+    if (A.tab === 'task') SD.panels.task(A);
   }
   function runCheck(pred) {
     const A = SD.app.A, p = pop();
@@ -288,13 +289,15 @@
       const p = document.getElementById('predPop'); if (p && !p.hidden && !e.target.closest('#predPop') && !e.target.closest('#checkBtn')) p.hidden = true;
     });
     const cb = document.getElementById('checkBtn');
-    if (cb) cb.addEventListener('click', e => {
-      const A = SD.app && SD.app.A; if (!A) return;
-      if (bypass) { setTimeout(() => record(A), 0); return; }
-      if (shouldAsk(A)) { e.stopImmediatePropagation(); ask(); return; }
-      const p = document.getElementById('predPop'); if (p) p.hidden = true;
-      setTimeout(() => record(A), 0);
-    }, true);
+    if (cb) {
+      cb.addEventListener('click', e => {
+        const A = SD.app && SD.app.A; if (!A || bypass) return;
+        if (shouldAsk(A)) { e.stopImmediatePropagation(); ask(); return; }
+        const p = document.getElementById('predPop'); if (p) p.hidden = true;
+      }, true);
+      /* после обработчика проверки: цифры уже пересчитаны — запоминаем попытку */
+      cb.addEventListener('click', () => { const A = SD.app && SD.app.A; if (A && !A.level.sandbox) record(A); });
+    }
     setInterval(draw, 400);
     window.addEventListener('resize', () => setTimeout(draw, 60));
   }

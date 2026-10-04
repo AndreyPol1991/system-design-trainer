@@ -315,6 +315,7 @@
     if (SD.opsUI) SD.opsUI.mount();
     if (SD.ux) SD.ux.mount();
     if (SD.learn) SD.learn.mount();
+    if (SD.walk) SD.walk.mount();
     if (SD.landscape) SD.landscape.mount();
     if (SD.principles) SD.principles.mount();
     if (SD.guide) SD.guide.mount();

@@ -1091,6 +1091,46 @@ h1, h2, h3 { text-wrap: balance; margin: 0; }
 #edgesG .edge.why-edge .wire { stroke: var(--warn); stroke-width: 3.5; }
 @keyframes whyPulse { 50% { box-shadow: 0 0 0 9px color-mix(in srgb, var(--bad) 0%, transparent); } }
 .goals .why-list li { display: list-item; padding: 0; background: none; border: 0; border-radius: 0; }
+.walk-card { position: absolute; z-index: 5; left: 50%; bottom: 58px; transform: translateX(-50%); width: min(460px, calc(100% - 32px)); display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border-radius: 14px; background: var(--surface); border: 1px solid var(--accent); box-shadow: var(--shadow); font-size: 12.5px; line-height: 1.5; color: var(--text-2); }
+.walk-card[hidden] { display: none; }
+.walk-card.walk-pane { position: static; transform: none; width: auto; margin: 0 0 16px; box-shadow: none; background: var(--surface-2); }
+.walk-pane .walk-b { max-height: none; }
+.walk-h { display: flex; align-items: center; gap: 8px; }
+.walk-e { font: 600 11px var(--f-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+.walk-n { font: 11.5px var(--f-mono); color: var(--text-muted); }
+.walk-x { margin-left: auto; border: 0; background: none; color: var(--text-muted); font-size: 17px; cursor: pointer; }
+.walk-dots { display: flex; gap: 5px; flex-wrap: wrap; }
+.walk-dots button { width: 18px; height: 6px; border-radius: 3px; border: 0; padding: 0; background: var(--surface-3); cursor: pointer; }
+.walk-dots button.past { background: color-mix(in srgb, var(--accent) 45%, var(--surface-3)); }
+.walk-dots button.on { background: var(--accent); }
+.walk-b { display: flex; flex-direction: column; gap: 4px; max-height: 210px; overflow: auto; }
+.walk-b p { margin: 0; }
+.walk-t { color: var(--text); font-size: 14px; }
+.walk-s, .walk-p { color: var(--text-muted); }
+.walk-num { font: 12px var(--f-mono); color: var(--text-2); }
+.walk-num b { color: var(--text); }
+.walk-why { color: var(--text); }
+.walk-ok { color: var(--ok); } .walk-bad { color: var(--warn); } .walk-pat { color: var(--info); }
+.walk-note { padding-top: 6px; border-top: 1px solid var(--border); color: var(--text); }
+.walk-act { display: flex; gap: 6px; flex-wrap: wrap; }
+.walk-act .btn { padding: 6px 12px; font-size: 12.5px; }
+.walk-act .btn[disabled] { opacity: .4; cursor: default; }
+.walk-ring { border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-glow); animation: none; }
+.walk-ring span { background: var(--accent); color: var(--accent-text); }
+.cmp-det { margin-top: 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); padding: 8px 10px; }
+.cmp-det > summary { cursor: pointer; font: 600 11px var(--f-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted); }
+.cmp-svg { display: block; width: 100%; height: auto; margin-top: 6px; }
+.cmp-zone { fill: var(--ok-soft); }
+.cmp-ax { stroke: var(--border-strong); }
+.cmp-goal { stroke: var(--ok); stroke-dasharray: 4 4; }
+.cmp-lb { fill: var(--text-muted); font: 11px var(--f-mono); }
+.cmp-pt { fill: var(--surface-3); stroke: var(--text-muted); stroke-width: 1.5; }
+.cmp-pt.ok { stroke: var(--ok); }
+.cmp-pt.last { fill: var(--text); stroke: var(--bg); stroke-width: 2; }
+.cmp-me { fill: var(--text); font: 600 12px var(--f-sans, inherit); }
+.cmp-ref { fill: var(--accent); }
+.cmp-reft { fill: var(--accent); font: 600 12px var(--f-sans, inherit); }
+.cmp-cap { margin: 6px 0 0; font-size: 12px; color: var(--text-2); }
 .pred-pop { position: fixed; z-index: 60; width: 300px; display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border-strong); box-shadow: var(--shadow); font-size: 12.5px; line-height: 1.45; color: var(--text-2); animation: chgIn .2s ease-out; }
 .pred-pop[hidden] { display: none; }
 .pred-pop b { color: var(--text); font-size: 13.5px; }
@@ -1945,6 +1985,7 @@ h1, h2, h3 { text-wrap: balance; margin: 0; }
 <script src="js/ops-ui.js"></script>
 <script src="js/ux.js"></script>
 <script src="js/learn.js"></script>
+<script src="js/walk.js"></script>
 <script src="js/landscape.js"></script>
 <script src="js/principles-data.js"></script>
 <script src="js/principles-gof.js"></script>

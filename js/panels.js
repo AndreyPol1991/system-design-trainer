@@ -40,6 +40,7 @@
     const kinds = Object.entries(L.traffic).filter(([, v]) => v > 0);
     const prog = A.progress[L.id] || {};
     let h = '';
+    if (SD.walk && SD.walk.active()) h += SD.walk.paneHtml();
     h += `<span class="eyebrow">${L.sandbox ? 'Песочница' : L.interview ? 'Собеседование · этап «Схема»' : L.innerLvl ? 'Внутри сервиса · C4, уровень компонентов' : L.knobLvl ? 'Настройки на пальцах' : L.opsLvl ? 'Эксплуатация и инструменты' : L.archLvl ? 'Архитектура из сервисов' : L.practice ? 'Практикум паттернов' : L.fix ? 'Найди и перестрой · инцидент' : `Уровень ${idx + 1} · ${tierLabel(L.tier)}`}</span>`;
     h += `<h2>${esc(L.title)}</h2>`;
     h += `<p class="story" style="margin-top:8px">${esc(L.story)}</p>`;
@@ -77,6 +78,7 @@
         h += `<li class="${g.ok ? 'ok' : 'bad'}"><span class="st">${g.ok ? '✓' : '·'}</span><span class="gt">${esc(g.text)}<span class="gd">${esc(g.detail)}</span>${SD.learn ? SD.learn.goalExtra(A, gi) : ''}</span></li>`;
       });
       h += `</ul>`;
+      if (SD.walk) h += SD.walk.compareHtml(A);
       const all = A.goals && A.goals.length && A.goals.every(g => g.ok);
       const quizAll = L.decisions.every((_, i) => (A.quiz[L.id] || {})[i] === 'right');
       const cheap = L.stretch && A.res.cost <= L.stretch.cost;
