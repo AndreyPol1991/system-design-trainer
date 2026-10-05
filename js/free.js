@@ -14,7 +14,7 @@
   U.best = U.best || {};
 
   /* ---------- кейсы ---------- */
-  const casesOf = () => SD.LEVELS.filter((L, i) => i > 0 && L.solution && !L.ai).concat((SD.DATAL || []).filter(L => L.solution));
+  const casesOf = () => SD.LEVELS.filter((L, i) => i > 0 && L.solution && !L.ai).concat((SD.DATAL || []).filter(L => L.solution), (SD.CLOUDL || []).filter(L => L.solution));
   const memo = {};
   function derive(L) {
     if (memo[L.id]) return memo[L.id];
