@@ -45,6 +45,7 @@
     h += `<h2>${esc(L.title)}</h2>`;
     h += `<p class="story" style="margin-top:8px">${esc(L.story)}</p>`;
     if (SD.free) h += SD.free.taskBlock(A);
+    if (SD.incidents) h += SD.incidents.card(L);
     if (L.chips) h += `<div class="chips-row">${L.chips.map(c => `<span class="chip">${esc(c)}</span>`).join('')}</div>`;
     if (L.interview && SD.interview) h += SD.interview.paneBlock(A);
     if (L.innerTarget && SD.innerUI) h += `<button type="button" class="dive-cta" data-act="inner" data-id="${L.innerTarget}">${SD.icon('app')}<span><b>Открыть сервис изнутри</b><small>Слои, порты, адаптеры, трасса и код. Двойной клик по сервису на схеме делает то же самое.</small></span></button>`;
