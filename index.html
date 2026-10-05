@@ -2748,6 +2748,235 @@ html.calm .lt *, html.calm .lt *::before, html.calm .lt *::after { animation-del
 .xr-legend .xr-sw.xe-swu { background: color-mix(in srgb, var(--bad) 25%, var(--surface)); border: 1.5px dashed var(--bad); }
 .xr-legend .xr-sw.xe-swn { background: none; border: 1.5px dashed var(--border-strong); }
 
+/* ---------- «NoSQL изнутри» (xray-nosql.js, xn-) ---------- */
+.xn-dyn { pointer-events: none; }
+.xn-badge { fill: var(--surface-2); stroke: var(--border-strong); stroke-width: 1.2; }
+.xn-pf { fill: transparent; stroke: transparent; stroke-width: 1.2; }
+.xn-go { fill: var(--accent); }
+.xn-ok { fill: var(--ok); font-weight: 700; } .xn-warn { fill: var(--warn); font-weight: 700; } .xn-bad { fill: var(--bad); font-weight: 700; } .xn-acc { fill: var(--accent); font-weight: 700; } .xn-job { fill: var(--k-job); font-weight: 700; }
+.xn-vt { font: 700 15px var(--f-body); fill: var(--text); }
+.xn-big { font: 700 18px var(--f-mono); fill: var(--text); }
+.xn-ms { font: 500 max(10.5px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-body); fill: var(--text-muted); }
+.xn-fn { font: 600 max(10.5px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-mono); fill: var(--text); }
+.xn-fn.sm { font-weight: 500; fill: var(--text-2); font-size: max(10px, calc(var(--fsmin, 0px) / var(--sc, 1))); }
+.xn-fn.dim, .xn-code.dim { opacity: .45; }
+.xn-nl { font: 700 max(10px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-mono); fill: var(--text); pointer-events: none; }
+.xn-val { font: 500 max(10.5px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-body); fill: var(--text-2); }
+.xn-mono { font: 500 max(10px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-mono); fill: var(--text-2); white-space: pre; font-variant-ligatures: none; }
+.xn-mono.on { fill: var(--accent); font-weight: 700; }
+/* код */
+.xn-codebg { fill: var(--code-bg); stroke: var(--border); stroke-width: 1; }
+.xn-code { font: 500 max(11px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-mono); fill: var(--text); white-space: pre; font-variant-ligatures: none; }
+.xn-code.sm { font-size: max(10.5px, calc(var(--fsmin, 0px) / var(--sc, 1))); }
+.xn-code.hlt { fill: var(--accent); font-weight: 700; }
+.xn-kw { fill: var(--tok-k); font-weight: 700; } .xn-st { fill: var(--tok-s); } .xn-nu { fill: var(--tok-n); } .xn-cm { fill: var(--text-muted); font-style: italic; }
+/* кольцо и узлы */
+.xn-arc { fill: none; stroke-width: 14; stroke-linecap: butt; opacity: .85; }
+.xn-arc.big { stroke-width: 26; opacity: .8; }
+.xn-arc.dead { opacity: .25; }
+.xn-arc.moved { stroke-dasharray: 6 3; opacity: 1; }
+.xn-node { fill: var(--surface-2); stroke-width: 2.4; }
+.xn-node.rep { stroke-width: 3.6; fill: var(--surface-3); }
+.xn-node.hot { fill: var(--bad-soft); }
+.xn-node.dead { fill: var(--bad-soft); stroke-dasharray: 4 3; opacity: .85; }
+.xn-load { fill: var(--accent); opacity: .3; pointer-events: none; }
+.xn-load.hot { fill: var(--bad); opacity: .45; }
+.xn-coord { fill: none; stroke: var(--accent); stroke-width: 2; stroke-dasharray: 4 3; }
+.xn-proc { fill: none; stroke: var(--warn); stroke-width: 2; stroke-dasharray: 3 3; }
+.xn-x { stroke: var(--bad); stroke-width: 2.4; stroke-linecap: round; }
+.xn-tok { fill: var(--accent); stroke: var(--bg); stroke-width: 1.5; }
+.xn-tokl { stroke: var(--accent); stroke-width: 2; }
+.xn-fanl { stroke: var(--border-strong); stroke-width: 1.2; stroke-dasharray: 3 4; opacity: .8; }
+.xn-chip { fill: var(--surface-2); stroke: var(--border-strong); }
+.xn-chip.dead { fill: var(--bad-soft); stroke: var(--bad); stroke-dasharray: 3 3; }
+.xn-ack { stroke-width: 1.4; }
+.xn-ack.ok { fill: var(--ok-soft); stroke: var(--ok); } .xn-ack.wait { fill: var(--surface-2); stroke: var(--warn); stroke-dasharray: 3 2; } .xn-ack.dead { fill: var(--bad-soft); stroke: var(--bad); }
+.xn-krow { fill: var(--accent-soft); stroke: none; }
+.xn-cl { fill: var(--surface-3); } .xn-cl.on { fill: var(--k-write); }
+.xn-sst { fill: var(--surface-3); stroke: var(--border-strong); }
+.xn-sst.fl { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 2; } .xn-sst.cmp { fill: var(--warn-soft); stroke: var(--warn); stroke-width: 2; }
+/* блоки изнутри */
+.xn-backb { fill: var(--surface-2); stroke: var(--border-strong); }
+.xn-back { fill: var(--accent); font-weight: 600; }
+.xn-panel { fill: var(--surface); stroke: var(--border); stroke-width: 1.2; }
+.xn-panel.on { stroke: var(--accent); stroke-width: 1.8; }
+.xn-ar { stroke: var(--text-muted); stroke-width: 1.6; fill: none; } .xn-ah { fill: var(--text-muted); }
+.xn-ar.acc { stroke: var(--accent); stroke-width: 2; } .xn-ah.acc { fill: var(--accent); }
+.xn-rep { fill: var(--surface-2); stroke: var(--border-strong); stroke-width: 1.2; }
+.xn-rep.w { fill: var(--ok-soft); stroke: var(--ok); }
+.xn-rep.r { stroke: var(--accent); stroke-width: 2.4; }
+.xn-log { fill: var(--surface-2); stroke: var(--border); }
+.xn-log.on { fill: var(--accent-soft); stroke: var(--accent); }
+.xn-log.del { fill: var(--bad-soft); stroke: var(--bad); stroke-dasharray: 3 2; }
+.xn-sstf { fill: var(--surface-2); stroke: var(--border-strong); stroke-width: 1.2; }
+.xn-sstf.big { fill: var(--surface-3); stroke-width: 1.8; }
+.xn-sstf.fl { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 2; }
+.xn-axis { stroke: var(--border-strong); stroke-width: 2; }
+.xn-cur { fill: var(--accent); }
+.xn-ev { fill: var(--surface-3); stroke: var(--border-strong); stroke-width: 1.5; }
+.xn-ev.on { fill: var(--info); stroke: var(--bg); } .xn-ev.bad { fill: var(--bad); stroke: var(--bg); } .xn-ev.warn { fill: var(--warn); stroke: var(--bg); } .xn-ev.ok { fill: var(--ok); stroke: var(--bg); }
+.xn-cellt { fill: var(--surface-3); stroke: none; }
+.xn-cellt.live { fill: var(--ok); } .xn-cellt.tomb { fill: color-mix(in srgb, var(--bad) 35%, var(--surface)); }
+.xn-pbar { fill: var(--info); opacity: .7; } .xn-pbar.hot { fill: var(--bad); opacity: .85; } .xn-pbar.sp { fill: var(--ok); opacity: .85; }
+.xn-qbox { fill: var(--surface-2); stroke: var(--border); }
+.xn-qbox.on { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.8; }
+/* легенда */
+.xr-legend .xr-sw.xn-swt { background: var(--accent); border-radius: 2px; transform: rotate(45deg) scale(.8); }
+.xr-legend .xr-sw.xn-swr { border-color: var(--k-read); border-width: 3px; }
+
+/* ---------- «Объектное хранилище изнутри» (xray-objstore.js, xs3-) ---------- */
+.xs3-dyn { pointer-events: none; }
+.xs3-badge { fill: var(--surface-2); stroke: var(--border-strong); stroke-width: 1.2; }
+.xs3-go { fill: var(--accent); }
+.xs3-ok { fill: var(--ok); font-weight: 700; } .xs3-warn { fill: var(--warn); font-weight: 700; } .xs3-bad { fill: var(--bad); font-weight: 700; } .xs3-acc { fill: var(--accent); font-weight: 700; }
+.xs3-off { opacity: .6; }
+.xs3-vt { font: 700 15px var(--f-body); fill: var(--text); }
+.xs3-big { font: 700 20px var(--f-mono); fill: var(--text); }
+.xs3-ms { font: 500 max(10.5px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-body); fill: var(--text-muted); }
+.xs3-ms.xs3-fut { opacity: .3; }
+.xs3-fn { font: 600 max(10.5px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-mono); fill: var(--text); }
+.xs3-pn { font: 600 max(10px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-mono); fill: var(--text); pointer-events: none; }
+.xs3-cl { font: 700 max(10px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-mono); fill: var(--text); pointer-events: none; }
+.xs3-mono { font: 500 max(10px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-mono); fill: var(--text-2); white-space: pre; font-variant-ligatures: none; }
+.xs3-mono.on { fill: var(--accent); font-weight: 700; } .xs3-mono.bad { fill: var(--bad); font-weight: 700; } .xs3-mono.dim { fill: var(--text-muted); text-decoration: line-through; }
+/* код */
+.xs3-codebg { fill: var(--code-bg); stroke: var(--border); stroke-width: 1; }
+.xs3-code { font: 500 max(11px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-mono); fill: var(--text); white-space: pre; font-variant-ligatures: none; }
+.xs3-code.sm { font-size: max(10.5px, calc(var(--fsmin, 0px) / var(--sc, 1))); }
+.xs3-kw { fill: var(--tok-k); font-weight: 700; } .xs3-st { fill: var(--tok-s); } .xs3-nu { fill: var(--tok-n); } .xs3-cm { fill: var(--text-muted); font-style: italic; }
+/* бакет */
+.xs3-row { fill: var(--surface); stroke: var(--border); stroke-width: 1; }
+.xs3-row.new { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.6; }
+.xs3-row.get { fill: var(--info-soft); stroke: var(--info); stroke-width: 1.4; }
+.xs3-row.exp { fill: var(--bad-soft); stroke: var(--bad); stroke-dasharray: 4 3; }
+.xs3-cls { stroke-width: 1.2; }
+.xs3-cls.c0, .xs3-fill.c0 { fill: color-mix(in srgb, var(--k-read) 30%, var(--surface)); stroke: var(--k-read); }
+.xs3-cls.c1, .xs3-fill.c1 { fill: color-mix(in srgb, var(--k-static) 30%, var(--surface)); stroke: var(--k-static); }
+.xs3-cls.c2, .xs3-fill.c2 { fill: color-mix(in srgb, var(--k-write) 30%, var(--surface)); stroke: var(--k-write); }
+.xs3-cls.c3, .xs3-fill.c3 { fill: color-mix(in srgb, var(--text-muted) 35%, var(--surface)); stroke: var(--text-muted); }
+.xs3-cls.fl { stroke: var(--accent); stroke-width: 2.4; }
+.xs3-shelf { fill: var(--surface-2); stroke-width: 1.4; }
+.xs3-shelf.c0 { stroke: var(--k-read); } .xs3-shelf.c1 { stroke: var(--k-static); } .xs3-shelf.c2 { stroke: var(--k-write); } .xs3-shelf.c3 { stroke: var(--text-muted); }
+.xs3-shelf.sel { stroke-width: 2.6; fill: var(--surface-3); }
+.xs3-th { fill: var(--surface-3); } .xs3-th.on { fill: var(--warn); }
+.xs3-up { fill: var(--k-upload); stroke: var(--bg); stroke-width: 1.5; }
+.xs3-url { fill: var(--accent); stroke: var(--bg); stroke-width: 1.2; }
+.xs3-panel { fill: var(--surface); stroke: var(--border); stroke-width: 1.2; }
+.xs3-panel.on { stroke: var(--accent); stroke-width: 1.8; }
+.xs3-panel.okb { stroke: var(--ok); stroke-width: 1.6; } .xs3-panel.badb { stroke: var(--bad); stroke-width: 1.8; }
+.xs3-part { stroke-width: 1.2; }
+.xs3-part.p0 { fill: var(--surface-2); stroke: var(--border-strong); stroke-dasharray: 3 2; }
+.xs3-part.p1 { fill: var(--info-soft); stroke: var(--info); }
+.xs3-part.p2 { fill: var(--ok-soft); stroke: var(--ok); }
+.xs3-part.p3 { fill: var(--bad-soft); stroke: var(--bad); stroke-width: 2; }
+.xs3-pbar { fill: var(--info); }
+.xs3-ver { fill: var(--surface-2); stroke: var(--border-strong); stroke-width: 1.1; }
+.xs3-ver.cur { fill: var(--ok-soft); stroke: var(--ok); stroke-width: 1.6; }
+.xs3-ver.mk { fill: var(--bad-soft); stroke: var(--bad); stroke-dasharray: 4 3; }
+.xs3-ver.gone { fill: none; stroke: var(--bad); stroke-dasharray: 4 3; }
+/* кнопки на картинке */
+.xs3-btn { cursor: pointer; outline: none; }
+.xs3-btn rect { fill: var(--surface-2); stroke: var(--border-strong); stroke-width: 1.2; }
+.xs3-btn.on rect { fill: var(--accent-soft); stroke: var(--accent); }
+.xs3-btn text { font: 600 max(10.5px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-body); fill: var(--text-2); text-anchor: middle; }
+.xs3-btn.on text { fill: var(--accent); }
+.xs3-btn:hover rect, .xs3-btn:focus-visible rect { stroke: var(--accent); stroke-width: 2; }
+/* блоки изнутри */
+.xs3-backb { fill: var(--surface-2); stroke: var(--border-strong); }
+.xs3-back { fill: var(--accent); font-weight: 600; }
+.xs3-krow { fill: var(--accent-soft); stroke: none; }
+.xs3-ar { stroke: var(--text-muted); stroke-width: 1.6; fill: none; } .xs3-ah { fill: var(--text-muted); }
+.xs3-ar.ok { stroke: var(--ok); } .xs3-ah.ok { fill: var(--ok); }
+.xs3-ar.acc { stroke: var(--accent); stroke-width: 2; } .xs3-ah.acc { fill: var(--accent); }
+.xs3-ar.bad { stroke: var(--bad); } .xs3-ah.bad { fill: var(--bad); }
+.xs3-ar.fut, .xs3-ah.fut, .xs3-sl.fut { opacity: .22; }
+.xs3-life { stroke: var(--border-strong); stroke-width: 1.2; stroke-dasharray: 4 4; }
+.xs3-sl { font: 600 max(10.5px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-mono); fill: var(--text-2); white-space: pre; }
+.xs3-sl.now { fill: var(--accent); font-weight: 700; } .xs3-sl.xs3-ok { fill: var(--ok); } .xs3-sl.xs3-bad { fill: var(--bad); }
+.xs3-step { fill: var(--surface-2); stroke: var(--border); }
+.xs3-step.on { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.6; }
+.xs3-axis { stroke: var(--border-strong); stroke-width: 2; }
+.xs3-tick { stroke: var(--border-strong); stroke-width: 1.2; }
+.xs3-cur { fill: var(--accent); }
+.xs3-spark { fill: none; stroke: var(--accent); stroke-width: 2.4; stroke-linejoin: round; }
+.xs3-spark.st { stroke: var(--warn); stroke-dasharray: 5 4; stroke-width: 1.6; }
+/* легенда */
+.xr-legend .xr-sw.xs3-swu { background: var(--k-upload); }
+.xr-legend .xr-sw.xs3-sw0 { background: color-mix(in srgb, var(--k-read) 30%, var(--surface)); border: 1.5px solid var(--k-read); }
+.xr-legend .xr-sw.xs3-sw1 { background: color-mix(in srgb, var(--k-static) 30%, var(--surface)); border: 1.5px solid var(--k-static); }
+.xr-legend .xr-sw.xs3-sw2 { background: color-mix(in srgb, var(--k-write) 30%, var(--surface)); border: 1.5px solid var(--k-write); }
+.xr-legend .xr-sw.xs3-sw3 { background: color-mix(in srgb, var(--text-muted) 35%, var(--surface)); border: 1.5px solid var(--text-muted); }
+
+/* ---------- «CDN изнутри» (xray-cdn.js, xcd-) ---------- */
+.xcd-dyn { pointer-events: none; }
+.xcd-badge { fill: var(--surface-2); stroke: var(--border-strong); stroke-width: 1.2; }
+.xcd-go { fill: var(--accent); }
+.xcd-ok { fill: var(--ok); font-weight: 700; } .xcd-warn { fill: var(--warn); font-weight: 700; } .xcd-bad { fill: var(--bad); font-weight: 700; } .xcd-acc { fill: var(--accent); font-weight: 700; }
+.xcd-vt { font: 700 15px var(--f-body); fill: var(--text); }
+.xcd-nh { font-size: 12px; }
+.xcd-ms { font: 500 max(10.5px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-body); fill: var(--text-muted); }
+.xcd-fn { font: 600 max(10.5px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-mono); fill: var(--text); }
+.xcd-pn { font: 600 max(10px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-mono); fill: var(--bg); pointer-events: none; }
+.xcd-code { font: 700 max(10px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-mono); fill: var(--text); pointer-events: none; }
+.xcd-cn { font: 500 max(10px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-body); fill: var(--text-muted); pointer-events: none; }
+.xcd-val { font: 500 max(10.5px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-body); fill: var(--text-2); }
+.xcd-val.xcd-ok { fill: var(--ok); } .xcd-val.xcd-warn { fill: var(--warn); } .xcd-val.xcd-bad { fill: var(--bad); }
+.xcd-mono { font: 500 max(10px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-mono); fill: var(--text-2); white-space: pre; font-variant-ligatures: none; }
+.xcd-mono.on { fill: var(--accent); font-weight: 700; } .xcd-mono.ok { fill: var(--ok); font-weight: 700; } .xcd-mono.warn { fill: var(--warn); font-weight: 700; } .xcd-mono.bad { fill: var(--bad); font-weight: 700; }
+.xcd-hk { fill: var(--tok-f); }
+.xcd-codebg { fill: var(--code-bg); stroke: var(--border); stroke-width: 1; }
+/* карта */
+.xcd-grid { stroke: var(--border); stroke-width: 1; stroke-dasharray: 2 6; }
+.xcd-city { fill: var(--surface-3); stroke: var(--border-strong); stroke-width: 1.2; }
+.xcd-link { stroke: var(--warn); stroke-width: 1.1; stroke-dasharray: 3 5; opacity: .45; }
+.xcd-link.sh { stroke: var(--accent); opacity: .4; }
+.xcd-link.main { stroke: var(--accent); stroke-width: 2.4; stroke-dasharray: none; opacity: .8; }
+.xcd-hub { fill: var(--surface-2); stroke: var(--border-strong); stroke-width: 1.6; stroke-dasharray: 3 2; }
+.xcd-hub.on { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 2; stroke-dasharray: none; }
+.xcd-pop { fill: var(--surface); stroke: var(--info); stroke-width: 1.4; }
+.xcd-pop.pu { stroke: var(--warn); stroke-width: 2.2; stroke-dasharray: 4 2; }
+.xcd-slot { stroke: var(--bg); stroke-width: .8; }
+.xcd-slot.e { fill: none; stroke: var(--border-strong); stroke-dasharray: 1.5 1.5; }
+.xcd-slot.x { opacity: .35; }
+.xcd-slot.old { stroke: var(--bad); stroke-width: 2; }
+.xcd-slot.fl { stroke: var(--text); stroke-width: 1.6; }
+.xcd-wait { fill: none; stroke: var(--warn); stroke-width: 1.8; stroke-dasharray: 2 2; }
+.xcd-proc { fill: none; stroke: var(--warn); stroke-width: 2; stroke-dasharray: 3 3; }
+.xcd-mark { stroke: var(--text); stroke-width: 2; }
+.xcd-krow { fill: var(--accent-soft); stroke: none; }
+.xcd-none { fill: transparent; stroke: none; }
+/* кнопки на картинке */
+.xcd-btn { cursor: pointer; outline: none; }
+.xcd-btn rect { fill: var(--surface-2); stroke: var(--border-strong); stroke-width: 1.2; }
+.xcd-btn.on rect { fill: var(--accent-soft); stroke: var(--accent); }
+.xcd-btn text { font: 600 max(10.5px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-body); fill: var(--text-2); text-anchor: middle; }
+.xcd-btn.on text { fill: var(--accent); }
+.xcd-btn:hover rect, .xcd-btn:focus-visible rect { stroke: var(--accent); stroke-width: 2; }
+/* блоки изнутри */
+.xcd-backb { fill: var(--surface-2); stroke: var(--border-strong); }
+.xcd-back { fill: var(--accent); font-weight: 600; }
+.xcd-panel { fill: var(--surface); stroke: var(--border); stroke-width: 1.2; }
+.xcd-panel.on { stroke: var(--accent); stroke-width: 1.8; }
+.xcd-panel.okb { stroke: var(--ok); stroke-width: 1.6; } .xcd-panel.badb { stroke: var(--bad); stroke-width: 1.8; }
+.xcd-ar { stroke: var(--text-muted); stroke-width: 1.6; fill: none; } .xcd-ah { fill: var(--text-muted); }
+.xcd-ar.ok { stroke: var(--ok); } .xcd-ah.ok { fill: var(--ok); }
+.xcd-ar.acc { stroke: var(--accent); stroke-width: 2; } .xcd-ah.acc { fill: var(--accent); }
+.xcd-ar.fut, .xcd-ah.fut, .xcd-sl.fut, .xcd-nt.fut { opacity: .22; }
+.xcd-life { stroke: var(--border-strong); stroke-width: 1.2; stroke-dasharray: 4 4; }
+.xcd-sl { font: 600 max(10.5px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-mono); fill: var(--text-2); white-space: pre; }
+.xcd-sl.now { fill: var(--accent); font-weight: 700; } .xcd-sl.xcd-ok { fill: var(--ok); } .xcd-sl.xcd-acc { fill: var(--accent); }
+.xcd-nt { fill: var(--surface-2); stroke: var(--border-strong); stroke-dasharray: 3 3; }
+.xcd-nt.now { stroke: var(--accent); stroke-dasharray: none; }
+.xcd-slotrow { fill: var(--surface-2); stroke: var(--border); }
+.xcd-slotrow.e { fill: none; stroke-dasharray: 3 3; }
+.xcd-slotrow.fl { fill: var(--accent-soft); stroke: var(--accent); }
+.xcd-slotrow.old { fill: var(--bad-soft); stroke: var(--bad); }
+.xcd-seg { fill: var(--surface-3); }
+.xcd-seg.ok { fill: var(--ok); } .xcd-seg.warn { fill: var(--warn); } .xcd-seg.bad { fill: var(--bad); }
+/* легенда */
+.xr-legend .xr-sw.xcd-sw0 { background: var(--k-read); }
+.xr-legend .xr-sw.xcd-sws { background: var(--k-job); border: 2px solid var(--bad); }
+
 /* ===== сцены изнутри: конец ===== */
 /* ---------- живой разбор ---------- */
 .lv-card { padding: 12px 14px; border-radius: var(--r); border: 1px solid var(--border); background: var(--surface-2); display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; font-size: 13px; }
@@ -3030,6 +3259,9 @@ html.calm .lt *, html.calm .lt *::before, html.calm .lt *::after { animation-del
 <script src="js/xray-olap.js"></script>
 <script src="js/xray-lake.js"></script>
 <script src="js/xray-etl.js"></script>
+<script src="js/xray-nosql.js"></script>
+<script src="js/xray-objstore.js"></script>
+<script src="js/xray-cdn.js"></script>
 <script src="js/arch-lens.js"></script>
 <script src="js/ops-console.js"></script>
 <script src="js/ops-ui.js"></script>
