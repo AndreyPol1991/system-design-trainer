@@ -193,10 +193,10 @@
   const memo = t => `<p class="lt-mem"><b>Запомни.</b> ${t}</p>`;
   const asm = list => `<details class="lt-asm" open><summary>Допущения для расчёта</summary><ul>${list.filter(Boolean).map(x => `<li>${x}</li>`).join('')}</ul></details>`;
   const INFO0 = 'Наведи на строку — покажу, что в ней и где она лежит. Во вкладке «Запросы» клик по строке ищет её по id.';
-  const TABS = [['table', '1', 'Таблица'], ['weight', '2', 'Вес'], ['idx', '3', 'Индексы'], ['part', '4', 'Партиции'], ['shard', '5', 'Шарды'], ['query', '6', 'Запросы'], ['reshard', '7', 'Решардинг'], ['hot', '8', 'Горячий шард'], ['iso', '9', 'Изоляция'], ['srv', '10', 'Сервер'], ['memo', '✓', 'Итоги']];
+  const TABS = [['table', '1', 'Таблица'], ['weight', '2', 'Вес'], ['idx', '3', 'Индексы'], ['part', '4', 'Партиции'], ['shard', '5', 'Шарды'], ['query', '6', 'Запросы'], ['reshard', '7', 'Решардинг'], ['hot', '8', 'Горячий шард'], ['iso', '9', 'Изоляция'], ['srv', '10', 'Сервер'], ['cache', '11', 'Кэш'], ['repl', '12', 'Реплики'], ['memo', '✓', 'Итоги']];
   const TAB_IDS = TABS.map(t => t[0]);
-  const STAGE = new Set(['idx', 'part', 'shard', 'query', 'reshard', 'hot', 'iso', 'srv']);
-  const CUSTOM = new Set(['idx', 'iso', 'srv']);
+  const STAGE = new Set(['idx', 'part', 'shard', 'query', 'reshard', 'hot', 'iso', 'srv', 'cache', 'repl']);
+  const CUSTOM = new Set(['idx', 'iso', 'srv', 'cache', 'repl']);
 
   /* бытовые аналогии — первая строка в обоих режимах */
   const LIFE = {
@@ -211,6 +211,8 @@
     idx: 'Индекс — как алфавитный указатель в конце книги: чтобы найти «Казань», не листаешь всю книгу, а открываешь указатель на «К» и сразу видишь номера страниц.',
     iso: 'Двое правят одну таблицу в общем документе. Видит ли каждый правки другого до того, как тот нажал «Сохранить»? И что будет, если оба поменяли одну ячейку, каждый — от своей старой копии?',
     srv: 'Сервер — кухня ресторана: повара (ядра) готовят одновременно, холодильник (память) держит ходовые продукты под рукой, кладовая (диск) далеко и медленно, окно выдачи (сеть) пропускает сколько пропускает. Ресторан упирается в самое узкое место.',
+    cache: 'Кэш — блокнот у кассира: самые частые ответы записаны под рукой, не надо каждый раз звонить на склад (в базу). Но записи в блокноте стареют: склад поменял цену, а блокнот нет — кассир назовёт старую. А блокнот маленький — редкое приходится вычёркивать.',
+    repl: 'Реплика — копия бухгалтерской книги в соседнем офисе: главная книга (primary) отправляет каждую запись курьером. Пока курьер в пути, в копии старые цифры. Сгорела главная книга до приезда курьера — эти записи пропали.',
     memo: 'Как после экскурсии по складу: коротко — что где лежит и почему.'
   };
 
@@ -263,7 +265,9 @@
     ['Горячий шард и уникальность', ['Ключ с перекосом (страна, 55 % RU) даёт горячий шард; дата как ключ — все записи в последний шард.', 'Лечение — hash(id) или составной ключ.', 'UNIQUE работает только внутри шарда: глобальная уникальность — таблица-справочник email → id, шардированная по email.']],
     ['Индексы', ['Индекс — отсортированная копия ключей с адресами строк: поиск — спуск по дереву вместо перебора.', 'Тип под запрос: B-tree — равенство и диапазоны, hash — только равенство, GIN — слова, GiST — гео, BRIN — огромные таблицы по времени.', 'Составной работает по левому префиксу, покрывающий даёт Index Only Scan, частичный — только при том же условии.', 'Каждый индекс замедляет запись и занимает место.']],
     ['Изоляция', ['MVCC: UPDATE создаёт новую версию строки, каждая транзакция видит версии по своему снимку.', 'Read Committed — снимок на запрос: неповторяемое чтение и фантомы возможны.', 'Repeatable Read — снимок на транзакцию; Serializable ещё и ловит перекос записи.', 'Прочитал в приложение — посчитал — записал: так теряются обновления. Лечение — SET x = x + …, FOR UPDATE или версия.']],
-    ['Сервер', ['Ресурсы — ядра, память, диск, сеть; упираемся в самое узкое.', 'Горячее не влезло в память — нагрузка уходит на диск.', 'Вертикально — проще, пока хватает; реплики — для чтений; шарды — для записей и объёма.']]
+    ['Сервер', ['Ресурсы — ядра, память, диск, сеть; упираемся в самое узкое.', 'Горячее не влезло в память — нагрузка уходит на диск.', 'Вертикально — проще, пока хватает; реплики — для чтений; шарды — для записей и объёма.']],
+    ['Кэш', ['Доля попаданий — главная метрика: каждый промах — поход в базу.', 'TTL короче — свежее, но больше промахов; LRU выкидывает давно не читанное, LFU — редко читаемое.', 'Изменил данные — удали ключ (cache-aside) или пиши в кэш и базу вместе (write-through).', 'Истёк популярный ключ — лавина в базу: single flight или ранний перерасчёт.']],
+    ['Реплики', ['Реплики отстают: читать с них сразу после записи — увидеть старое.', 'Read-your-writes: свои записи читаем с primary.', 'Асинхронная репликация быстрая, но падение primary уносит хвост подтверждённых записей; синхронная — без потерь, но запись ждёт реплики.', 'Failover — перевод реплики в primary: секунды или минуты без записи.']]
   ];
   const MEMO_BIZ = [
     ['Таблица клиентов', ['Каждая колонка — бизнес-правило: номер не меняется, email уникален, деньги точные до копейки.', 'Ошибка в типе или уникальности превращается в деньги: потерянные копейки, чужие письма, обращения в поддержку.']],
@@ -274,7 +278,9 @@
     ['Рост, перекосы, дубли', ['Рост закладывают заранее (кольцо или виртуальные шарды): переезд втрое короче и безопаснее.', 'Делить по стране при 54 % России — сервер «Россия» падает первым в распродажу.', 'Дубли email после шардирования — чужие письма и очередь в поддержку; нужен общий справочник адресов.']],
     ['Индексы', ['Без индекса каждый вход клиента — перебор всей базы; с индексом — доли миллисекунды.', 'Каждый индекс — дороже регистрация и больше диска: держи только те, что нужны запросам.']],
     ['Изоляция', ['Одновременные операции с одним счётом без защиты теряют деньги клиентов.', 'Защита (Serializable, FOR UPDATE, версия) стоит процентов нагрузки — несравнимо дешевле жалоб.']],
-    ['Сервер', ['Сервер упирается в одно узкое место — его и расширяют.', 'Сначала сервер побольше, потом реплики для чтений, потом шарды.']]
+    ['Сервер', ['Сервер упирается в одно узкое место — его и расширяют.', 'Сначала сервер побольше, потом реплики для чтений, потом шарды.']],
+    ['Кэш', ['Кэш снимает с базы большую часть чтений — это минус серверы базы и рубли.', 'Без инвалидации клиент видит старый баланс — отказы в оплате и жалобы.']],
+    ['Реплики', ['Реплики дёшево умножают чтения, но клиент может не увидеть свою оплату — свои записи читай с primary.', 'Асинхронная репликация экономит миллисекунды, но при сбое теряет оплаченные операции.']]
   ];
 
   /* ================= индексы, изоляция, сервер: общие данные ================= */
@@ -383,7 +389,7 @@
     S.hl = null; S.q = null; S.mig = null; S.dup = null;
   }
   function newState() {
-    const S = { tab: 'table', part: 'none', N: 1, key: 'id', method: 'mod', reps: 0, hist: [], lastMig: null, rps: 10000, ev: 1, pick: null, col: 'email', w: { ri: 5, hot: 0.25, ram: 32, sh: 1 }, qId: 42, qUpd: 17, qC: 'KZ', qD: '2026-07-01', pend: null, ix: ['btree'], ixView: 'btree', ixQ: 'id', ixRes: null, ixBase: null, ixCmp: false, ixSorted: false, ixWord: 'москва', ixGeo: 'Москва', ixIns: null, iso: 'rc', lock: 'none', isc: 'lost', ist: 0, isoSeen: {}, srvLoad: 3000, srvMix: 'shop' };
+    const S = { tab: 'table', part: 'none', N: 1, key: 'id', method: 'mod', reps: 0, hist: [], lastMig: null, rps: 10000, ev: 1, pick: null, col: 'email', w: { ri: 5, hot: 0.25, ram: 32, sh: 1 }, qId: 42, qUpd: 17, qC: 'KZ', qD: '2026-07-01', pend: null, ix: ['btree'], ixView: 'btree', ixQ: 'id', ixRes: null, ixBase: null, ixCmp: false, ixSorted: false, ixWord: 'москва', ixGeo: 'Москва', ixIns: null, iso: 'rc', lock: 'none', isc: 'lost', ist: 0, isoSeen: {}, srvLoad: 3000, srvMix: 'shop', c: { mem: 8, nodes: 1, ttl: '1m', ev: 'lru', pol: 'aside', inv: true, prot: 'none', t: 0, cells: [], log: [], pend: [], hit: 0, miss: 0, db: 0, stale: 0, evicted: 0, evSeen: {}, stSeen: {}, sawStale: false, sawFix: false, play: false, flash: null, burst: null, gone: null, afterUpd: null }, r: { mode: 'async', ryw: false } };
     resetData(S);
     return S;
   }
@@ -398,6 +404,19 @@
     if (['rc', 'rr', 'ser'].includes(o.isolation)) { S.iso = o.isolation; S.ist = 0; }
     if (['none', 'optimistic', 'pessimistic'].includes(o.locking)) { S.lock = o.locking; S.ist = 0; }
     if (SIZE_BY_K[o.size]) S.w.ram = SIZE_BY_K[o.size];
+    if (S.c) {
+      if ([4, 8, 16, 32, 64].includes(+o.cacheMem)) S.c.mem = +o.cacheMem;
+      if (o.cacheNodes != null) S.c.nodes = Math.max(1, Math.min(6, Math.round(+o.cacheNodes) || 1));
+      if (['10s', '1m', '10m', '1h'].includes(o.ttl)) S.c.ttl = o.ttl;
+      if (['lru', 'lfu', 'ttl'].includes(o.eviction)) S.c.ev = o.eviction;
+      if (['aside', 'through', 'behind'].includes(o.policy)) S.c.pol = o.policy;
+      if (typeof o.invalidate === 'boolean') S.c.inv = o.invalidate;
+      if (typeof o.stampede === 'boolean') S.c.prot = o.stampede ? 'single' : 'none'; else if (['none', 'single', 'early'].includes(o.stampede)) S.c.prot = o.stampede;
+    }
+    if (S.r) {
+      if (['async', 'semisync', 'sync'].includes(o.replMode)) S.r.mode = o.replMode;
+      if (typeof o.ryw === 'boolean') S.r.ryw = o.ryw;
+    }
     if (o.tab && TAB_IDS.includes(o.tab)) S.tab = o.tab;
   }
   const readDone = () => { try { const st = JSON.parse(localStorage.getItem(LKEY) || '{}'); return (st.done && st.done.table) || []; } catch (e) { return []; } };
@@ -488,6 +507,8 @@
         idx: 'Страница 8 КБ с SSD вразброс — 0,1 мс, подряд — 0,016 мс; в странице индекса ≈ 300 ключей; хранение — 10 ₽ за ГБ SSD в месяц; вход по номеру — ≈ 30 % обращений.',
         iso: 'Баланс меняется при каждом заказе; 0,05 % операций совпадают по времени с другой операцией того же клиента; среднее столкновение — 500 ₽; защита стоит ≈ 1–3 % повторов и ожиданий.',
         srvm: 'Ресурсы серверов: S — 2 ядра, 3 000 IOPS, 1 Гбит/с; M — 8 ядер, 10 000 IOPS, 5 Гбит/с; L — 16 ядер, 20 000 IOPS, 10 Гбит/с; XL — 32 ядра, 40 000 IOPS, 25 Гбит/с. Потолок процессора — как на площадке (2 500 / 5 000 / 9 000 / 16 000 оп/с). Промах мимо памяти — 2 чтения с диска, запись — журнал и 0,5 IOPS на каждый индекс.',
+        cache: 'Ключ в Redis ≈ 400 Б, под данные — 75 % памяти; популярность клиентов неравномерна (закон Ципфа); TTL срезает долю попаданий: 10 с — до 55 %, 1 мин — 80 %, 10 мин — 93 %, 1 ч — 98 % от возможной; Redis — $12 за ГБ в месяц, как на площадке; клиент с изменённым балансом смотрит его ≈ 5 раз за час, 1 % увидевших старый баланс получают отказ и пишут в поддержку (300 ₽).',
+        repl: 'Реплика 1 в том же дата-центре: получает журнал за 30 мс, применяет за 120 мс; реплика 2 в другом: 90 и 450 мс. 20 % клиентов открывают кабинет в первую секунду после оплаты, 5 % увидевших старое пишут в поддержку (300 ₽); при сбое теряется то, что не успело доехать до лучшей реплики; «+100 мс к оформлению — минус 1 % конверсии».',
         mem: `Под кэш — 75 % памяти сервера; горячая доля таблицы — ${pc(S.w.hot)}; индексы — целиком в памяти.`
       })[k];
     }
@@ -1627,7 +1648,7 @@
       h += `<div id="ltSrvOpt">${srvOptHTML(load)}</div>`;
       if (Bz) h += A(['scale', 'load', 'srv', 'srvm', 'mem']);
       return h + memo(Bz ? 'сервер упирается в одно узкое место — его и расширяют. Сначала сервер побольше, потом реплики для чтений, потом шарды.' : 'ресурсы — ядра, память, диск, сеть; упираемся в самое узкое. Не влезло горячее в память — нагрузка уходит на диск. Вертикально — проще, пока хватает; реплики — для чтений; шарды — для записей и объёма.')
-        + `<div class="row-btns">${next('memo', 'Итоги: что запомнить')}</div>`;
+        + `<div class="row-btns">${next('cache', 'Дальше: кэш')}</div>`;
     }
     function stageSrv() {
       const load = srvLoadNow(), X = srvCalc(load, S.w.ram, S.N, S.reps), z = X.z;
@@ -1647,6 +1668,277 @@
         </div>
         <div class="lt-ruler"><b>При какой нагрузке кончится каждый ресурс</b>${ruler}<small>зелёная черта — сейчас ${nf(load)} оп/с; клиентов ${human(ROWSTEPS[S.w.ri])} (вкладка «Вес»), индексов ${S.ix.length} (вкладка «Индексы»)</small></div>
         <div class="lt-card ${v[0]}">${v[1]}</div></div>`;
+    }
+
+    /* ================= Кэш ================= */
+    const TTLS = { '10s': 10, '1m': 60, '10m': 600, '1h': 3600 };
+    const TTLN = { '10s': '10 с', '1m': '1 мин', '10m': '10 мин', '1h': '1 ч' };
+    const CPOP = [[42, 30], [7, 18], [17, 12], [3, 9], [25, 7], [31, 6], [12, 5], [48, 4], [5, 3], [9, 3], [20, 2], [33, 2]];
+    const EVN = { lru: 'LRU', lfu: 'LFU', ttl: 'TTL' }, POLN = { aside: 'cache-aside', through: 'write-through', behind: 'write-behind' };
+    const rubS = v => nf(v) + ' ₽';
+    const secS = s => s < 60 ? Math.max(0, Math.round(s)) + ' с' : s < 3600 ? Math.round(s / 60) + ' мин' : Math.round(s / 3600) + ' ч';
+    const dbRow = id => S.rows.find(r => r.id === id);
+    const cCap = () => { const g = S.c.mem * S.c.nodes; return g >= 64 ? 12 : g >= 32 ? 10 : g >= 16 ? 8 : g >= 8 ? 6 : 4; };
+    const cIds = () => CPOP.map(x => x[0]).filter(id => dbRow(id));
+    function cLog(cls, h) { const c = S.c; c.log.unshift({ t: c.t, cls, h }); c.log = c.log.slice(0, 8); }
+    function cExpire() {
+      const c = S.c;
+      c.cells = c.cells.filter(x => { if (x.exp <= c.t) { cLog('exp', `<b>user:${x.id}</b> — истёк TTL, ключ удалён`); return false; } return true; });
+      c.pend = c.pend.filter(p => { if (p.due <= c.t) { const r = dbRow(p.id); if (r) r.balance = p.val; cLog('wb', `write-behind: запись <b>user:${p.id} = ${rubS(p.val)}</b> ушла в базу пачкой`); return false; } return true; });
+    }
+    function cVictim() {
+      const cs = S.c.cells.slice();
+      if (S.c.ev === 'lfu') return cs.sort((a, b) => a.hits - b.hits || a.last - b.last)[0];
+      if (S.c.ev === 'ttl') return cs.sort((a, b) => a.exp - b.exp)[0];
+      return cs.sort((a, b) => a.last - b.last)[0];
+    }
+    function cPut(id, bal) {
+      const c = S.c;
+      if (c.cells.length >= cCap()) {
+        const ev = cVictim(); c.cells = c.cells.filter(x => x !== ev); c.evicted++; c.evSeen[c.ev] = 1;
+        const why = c.ev === 'lfu' ? `его читали реже всех (${ev.hits} ${plural(ev.hits, 'раз', 'раза', 'раз')})` : c.ev === 'ttl' ? `его TTL кончался раньше всех (через ${secS(ev.exp - c.t)})` : `его дольше всех не читали (${secS(c.t - ev.last)})`;
+        cLog('ev', `память кончилась — вытеснен <b>user:${ev.id}</b>: ${EVN[c.ev]}, ${why}`);
+        c.gone = ev.id;
+      }
+      c.cells.push({ id, bal, exp: c.t + TTLS[c.ttl], hits: 1, last: c.t });
+    }
+    function cGet(id) {
+      const c = S.c; c.t += 1; c.gone = null; cExpire();
+      const r = dbRow(id); if (!r) return;
+      const cell = c.cells.find(x => x.id === id);
+      const after = c.afterUpd === id; c.afterUpd = null;
+      if (cell) {
+        cell.hits++; cell.last = c.t; c.hit++;
+        if (cell.bal !== r.balance) { c.stale++; c.sawStale = true; c.flash = { id, kind: 'stale' }; cLog('stale', `GET user:${id} → попадание, но <b>старое</b>: в кэше ${rubS(cell.bal)}, в базе ${rubS(r.balance)}`); }
+        else { c.flash = { id, kind: 'hit' }; if (after) c.sawFix = true; cLog('hit', `GET user:${id} → <b>попадание</b>, ${rubS(cell.bal)} за 0,3 мс`); }
+        if (c.prot === 'early' && cell.exp - c.t < TTLS[c.ttl] * 0.25) { cell.exp = c.t + TTLS[c.ttl]; cell.bal = r.balance; c.db++; cLog('early', `ранний перерасчёт user:${id}: TTL почти кончился — обновили в фоне, читатели не ждали`); }
+      } else {
+        c.miss++; c.db++; c.flash = { id, kind: 'miss' }; if (after) c.sawFix = true;
+        cLog('miss', `GET user:${id} → <b>промах</b>: SELECT в базу (≈ 5 мс), ответ ${rubS(r.balance)} положили в кэш на ${TTLN[c.ttl]}`);
+        cPut(id, r.balance);
+      }
+    }
+    function cUpdate(id) {
+      const c = S.c; c.t += 1; c.gone = null; cExpire();
+      const r = dbRow(id); if (!r) return;
+      const cell = c.cells.find(x => x.id === id), val = 0;
+      c.flash = { id, kind: 'upd' }; c.afterUpd = id;
+      if (c.pol === 'behind') {
+        if (cell) { cell.bal = val; cell.last = c.t; } else cPut(id, val);
+        c.pend.push({ id, val, due: c.t + 5 });
+        cLog('upd', `UPDATE user:${id} = 0 ₽ (оплатил заказ всем балансом): записали только в кэш, в базу — пачкой через 5 с`);
+        return;
+      }
+      r.balance = val; c.db++;
+      if (c.pol === 'through') { if (cell) cell.bal = val; else cPut(id, val); cLog('upd', `UPDATE user:${id} = 0 ₽: write-through — база и кэш обновлены вместе`); }
+      else if (c.inv) { if (cell) c.cells = c.cells.filter(x => x !== cell); cLog('upd', `UPDATE user:${id} = 0 ₽: база обновлена, ключ удалён (DEL user:${id}) — следующий GET возьмёт свежее`); }
+      else cLog('bad', `UPDATE user:${id} = 0 ₽: база обновлена, а в кэше ${cell ? `осталось ${rubS(cell.bal)} ещё ${secS(cell.exp - c.t)}` : 'ключа нет — но если появится старый, проживёт до TTL'}`);
+    }
+    function cStorm() {
+      const c = S.c, r = dbRow(42) || S.rows[0], n = 40; c.t += 1; c.gone = null; cExpire();
+      let db, wait, hit;
+      if (c.prot === 'early') { db = 1; wait = 0; hit = n; c.cells = c.cells.filter(x => x.id !== r.id); cPut(r.id, r.balance); cLog('early', `ранний перерасчёт: user:${r.id} обновили за пару секунд до истечения — все ${n} запросов попали в кэш`); }
+      else { c.cells = c.cells.filter(x => x.id !== r.id); if (c.prot === 'single') { db = 1; wait = n - 1; hit = 0; cLog('ok', `лавина: ключ user:${r.id} истёк, пришло ${n} запросов — single flight пустил в базу один, ${n - 1} подождали его ответ`); } else { db = n; wait = 0; hit = 0; cLog('bad', `<b>лавина:</b> популярный user:${r.id} истёк, и все ${n} одновременных запросов пошли в базу за одним и тем же`); } cPut(r.id, r.balance); }
+      c.db += db; c.flash = { id: r.id, kind: db > 1 ? 'miss' : 'hit' };
+      c.burst = { n, db, wait, hit };
+      c.stSeen[c.prot === 'none' ? 'none' : 'prot'] = 1;
+      if (c.stSeen.none && c.stSeen.prot) done('cache-stampede');
+    }
+    function cJudge() {
+      const c = S.c, tot = c.hit + c.miss;
+      if (tot >= 20 && c.hit / tot >= 0.7) done('cache-hit');
+      if (Object.keys(c.evSeen).length >= 2) done('cache-evict');
+      if (c.sawStale && c.sawFix) done('cache-stale');
+    }
+    function cPick() { const ids = CPOP.filter(([id]) => dbRow(id)), tot = ids.reduce((a, x) => a + x[1], 0); let x = Math.random() * tot; for (const [id, w] of ids) { x -= w; if (x <= 0) return id; } return ids[0][0]; }
+    function cLoop() {
+      if (S.tab !== 'cache' || !S.c.play || !EL.isConnected) { S.c.play = false; return; }
+      const id = cPick(); if (Math.random() < 0.06) cUpdate(id); else cGet(id);
+      cJudge(); drawStage();
+      later(cLoop, 380);
+    }
+    function cAct(a) {
+      const c = S.c;
+      if (a === 'play') { c.play = !c.play; renderPanel(); if (c.play) cLoop(); else drawStage(); return; }
+      if (a === 'upd') cUpdate(42);
+      else if (a === 't5') { c.t += 5; c.gone = null; cExpire(); c.flash = null; }
+      else if (a === 't60') { c.t += 60; c.gone = null; cExpire(); c.flash = null; }
+      else if (a === 'storm') cStorm();
+      else if (a === 'crash') { const lost = c.pend.length; c.cells = []; c.pend = []; c.flash = null; cLog('bad', `<b>Redis упал:</b> кэш пуст${lost ? `, и ${lost} ${plural(lost, 'запись', 'записи', 'записей')} write-behind так и не дошли до базы — потеряны` : ''}`); }
+      else if (a === 'reset') { Object.assign(c, { t: 0, cells: [], log: [], pend: [], hit: 0, miss: 0, db: 0, stale: 0, evicted: 0, flash: null, burst: null, gone: null, afterUpd: null }); }
+      cJudge(); drawStage();
+    }
+    function cModel() {
+      const c = S.c, b = biz(), keysCap = c.mem * c.nodes * 1e9 * 0.75 / 400, N = b.C;
+      const z = keysCap >= N ? 0.995 : Math.min(0.995, Math.log(keysCap) / Math.log(N));
+      const tf = { '10s': 0.55, '1m': 0.8, '10m': 0.93, '1h': 0.98 }[c.ttl] * (c.ev === 'lfu' ? 1.02 : 1);
+      return { keysCap, h: Math.min(0.995, z * tf) };
+    }
+    function cacheReal() {
+      const M = cModel(), b = biz(), reads = b.rpsPeak * 0.8;
+      return `<div class="lt-card"><b>В масштабе:</b> на ${human(b.C)} клиентов в Redis ${S.c.mem * S.c.nodes} ГБ влезает ≈ ${human(M.keysCap)} ключей (≈ 400 Б на ключ). Популярность клиентов неравномерна, поэтому по модели доля попаданий ≈ <b>${pc(M.h)}</b>: из ${nf(reads)} чтений в секунду в базу доходят ≈ ${nf(reads * (1 - M.h))}.</div>`;
+    }
+    function cacheBiz() {
+      const b = biz(), c = S.c, M = cModel(), ops = SIZE[S.w.ram].ops, cacheRub = c.mem * c.nodes * 12 * BIZ.usdRub;
+      const row = ev => { const T = b.rpsPeak * ev, rd = T * 0.8, wr = T * 0.2, no = Math.ceil((rd + wr) / ops), yes = Math.ceil((rd * (1 - M.h) + wr) / ops); return { ev, rd, no, yes, ln: (rd + wr) / (no * ops), ly: (rd * (1 - M.h) + wr) / (yes * ops) }; };
+      const R1 = row(1), R4 = row(4), reads = R1.rd, savedRub = Math.max(0, R4.no - R4.yes) * srvRub(S.w.ram);
+      const staleDay = c.pol === 'aside' && !c.inv ? b.ordersDay * 5 * Math.min(1, TTLS[c.ttl] / 3600) : 0;
+      const tr = (x, nm) => `<tr><td>${nm}</td><td class="r">${srvW(x.no)}<small>загрузка ${pc(x.ln)}</small></td><td class="r ok">${srvW(x.yes)}<small>загрузка ${pc(x.ly)}</small></td></tr>`;
+      return `<div class="lt-card biz"><b>Что даёт кэш.</b> Вечером ≈ ${nf(reads)} чтений в секунду; с долей попаданий ≈ ${pc(M.h)} до базы доходят ≈ ${nf(reads * (1 - M.h))} — остальное отвечает Redis за доли миллисекунды.<table class="lt-bt"><thead><tr><th>вечер</th><th class="r">база без кэша</th><th class="r">с кэшем</th></tr></thead><tbody>${tr(R1, 'обычный')}${tr(R4, 'чёрная пятница ×4')}</tbody></table><p class="lt-sub">${savedRub ? `В чёрную пятницу кэш экономит ≈ <b>${rub(savedRub)} в месяц</b> на серверах базы при цене Redis ≈ ${rub(cacheRub)}.` : `Серверов столько же, но база загружена меньше — запас на распродажи. Redis стоит ≈ ${rub(cacheRub)} в месяц.`}</p></div>
+        <div class="lt-card biz ${staleDay ? 'bad' : 'ok'}"><b>Цена «старого баланса».</b> ${staleDay ? `Без инвалидации клиент, только что потративший бонусы, ещё ${TTLN[c.ttl]} видит прежний баланс: «показали 500 ₽, а на счету 0». Это ≈ ${human(staleDay)} показов старого баланса в день; если 1 % из них заканчиваются отказом в оплате и обращением, это ≈ ${rub(staleDay * 0.01 * BIZ.ticketRub * 30)} в месяц на поддержку — не считая ушедших клиентов.` : `Сейчас ${c.pol === 'aside' ? 'ключ удаляется при каждом изменении' : c.pol === 'through' ? 'кэш обновляется вместе с базой' : 'пишем в кэш, база догоняет'} — клиент видит свой новый баланс сразу.${c.pol === 'behind' ? ' Но если Redis упадёт до сброса в базу, последние изменения пропадут.' : ''}`}</div>`;
+    }
+    const CPOLT = {
+      aside1: '<b>Cache-aside с инвалидацией.</b> Читаем из кэша; промах — идём в базу и кладём ответ в кэш. При UPDATE удаляем ключ — следующий GET возьмёт свежее из базы.',
+      aside0: '<b>Cache-aside без инвалидации.</b> После UPDATE в кэше остаётся старое значение до конца TTL. Нажми UPDATE и сразу GET user:42 — увидишь «старый баланс».',
+      through: '<b>Write-through.</b> Пишем в базу и в кэш одной операцией: кэш всегда свежий, но запись чуть дольше, и в кэш попадает даже то, что никто не прочитает.',
+      behind: '<b>Write-behind.</b> Пишем только в кэш, в базу — пачкой позже. Запись мгновенная, но если Redis упадёт до сброса, изменения пропадут: нажми «Упал Redis».'
+    };
+    function panelCache() {
+      const Bz = isBiz(), c = S.c;
+      let h = Bz ? ana(LIFE.cache) + bizBar() + cacheBiz() : ana(LIFE.cache, 'Приложение сначала спрашивает кэш; нет ответа — идёт в базу и кладёт результат в кэш.', '<b>Кэш</b> (Redis) — хранилище «ключ → значение» в памяти. <b>Доля попаданий</b> (hit ratio) — главная метрика. <b>TTL</b> — срок жизни ключа, <b>вытеснение</b> — кого выкинуть, когда память кончилась, <b>инвалидация</b> — удаление ключа при изменении данных.');
+      h += `<div class="lt-ckeys"><b>GET</b>${cIds().slice(0, 9).map(id => `<button type="button" class="lt-ixt" data-cget="${id}">user:${id}</button>`).join('')}</div>`;
+      h += `<div class="row-btns"><button type="button" class="btn primary" data-cact="play">${c.play ? '❚❚ Остановить поток' : '▶ Поток запросов'}</button><button type="button" class="btn" data-cact="upd">UPDATE user:42 → 0 ₽</button><button type="button" class="btn" data-cact="storm">Лавина на user:42</button></div>`;
+      h += `<div class="row-btns"><button type="button" class="btn ghost" data-cact="t5">+5 с</button><button type="button" class="btn ghost" data-cact="t60">+1 мин</button>${c.pol === 'behind' ? '<button type="button" class="btn danger" data-cact="crash">Упал Redis</button>' : ''}<button type="button" class="btn ghost" data-cact="reset">Очистить кэш</button></div>`;
+      h += ctl('Память Redis (ячеек на схеме: ' + cCap() + ')', seg('cmem', [[4, '4 ГБ'], [8, '8 ГБ'], [16, '16 ГБ'], [32, '32 ГБ'], [64, '64 ГБ']], c.mem));
+      h += ctl('TTL ключа', seg('cttl', [['10s', '10 с'], ['1m', '1 мин'], ['10m', '10 мин'], ['1h', '1 ч']], c.ttl));
+      h += ctl('Вытеснение, когда память кончилась', seg('cev', [['lru', 'LRU'], ['lfu', 'LFU'], ['ttl', 'TTL']], c.ev));
+      h += ctl('Стратегия записи', seg('cpol', [['aside', 'cache-aside'], ['through', 'write-through'], ['behind', 'write-behind']], c.pol));
+      if (c.pol === 'aside') h += ctl('Удалять ключ при UPDATE (инвалидация)', seg('cinv', [['1', 'Да'], ['0', 'Нет']], c.inv ? '1' : '0'));
+      h += ctl('Защита от лавины (stampede)', seg('cprot', [['none', 'Нет'], ['single', 'Single flight'], ['early', 'Ранний перерасчёт']], c.prot));
+      h += `<div class="lt-card${Bz ? ' biz' : ''}">${CPOLT[c.pol === 'aside' ? 'aside' + (c.inv ? 1 : 0) : c.pol]} <span class="lt-sub">Вытеснение: LRU выкидывает ключ, который дольше всех не читали; LFU — который читают реже всех; TTL — у которого срок кончается раньше.</span></div>`;
+      if (!Bz) h += cacheReal();
+      if (Bz) h += A(['scale', 'cache', 'load', 'srv']);
+      return h + memo(Bz ? 'кэш снимает с базы большую часть чтений — это минус серверы и рубли. Но без инвалидации клиент видит старый баланс, а истёкший популярный ключ может разом обрушить базу.' : 'главная метрика — доля попаданий. Изменил данные — удали ключ или пиши в кэш и базу вместе. Популярный ключ истёк — лавина в базу: single flight или ранний перерасчёт.')
+        + `<div class="row-btns">${next('repl', 'Дальше: реплики')}</div>`;
+    }
+    function stageCache() {
+      const c = S.c, cap = cCap(), tt = TTLS[c.ttl], tot = c.hit + c.miss, hr = tot ? c.hit / tot : 0, fl = c.flash || {};
+      const cell = x => {
+        const r = dbRow(x.id), stale = r && x.bal !== r.balance, left = Math.max(0, x.exp - c.t), f = Math.min(1, left / tt), k = fl.id === x.id ? ' fl-' + fl.kind : '';
+        return `<div class="lt-cc2${stale ? ' stale' : ''}${k}" data-cid="${x.id}"><svg class="lt-ttl" viewBox="0 0 28 28" aria-hidden="true"><circle cx="14" cy="14" r="11" class="bg"/><circle cx="14" cy="14" r="11" class="fg${f < 0.25 ? ' low' : ''}" pathLength="100" style="stroke-dashoffset:${(100 - f * 100).toFixed(1)}"/></svg><b>user:${x.id}</b><span>${rubS(x.bal)}</span><small>TTL ${secS(left)} · чтений ${x.hits} · ${c.t - x.last ? secS(c.t - x.last) + ' назад' : 'сейчас'}</small>${stale ? `<em>в базе ${rubS(r.balance)}</em>` : ''}</div>`;
+      };
+      const cells = c.cells.slice().sort((a, b) => a.id - b.id).map(cell).join('') + seq(Math.max(0, cap - c.cells.length)).map(() => '<div class="lt-cc2 empty"><small>свободно</small></div>').join('');
+      const st = fl.kind === 'hit' ? ['ok', `попадание · 0,3 мс`] : fl.kind === 'miss' ? ['bad', 'промах → база · 5 мс'] : fl.kind === 'stale' ? ['bad', 'попадание, но старое!'] : fl.kind === 'upd' ? ['warn', 'UPDATE'] : ['', 'ждёт запроса'];
+      const burst = c.burst ? `<div class="lt-burst"><b>Лавина: ${c.burst.n} одновременных запросов user:42</b><div class="lt-dots2">${seq(c.burst.n).map(i => `<i class="${i < c.burst.db ? 'db' : i < c.burst.db + c.burst.wait ? 'wt' : 'ht'}"></i>`).join('')}</div><small><i class="lt-sw b-db"></i>в базу: ${c.burst.db} · <i class="lt-sw b-wt"></i>ждали чужой ответ: ${c.burst.wait} · <i class="lt-sw b-ht"></i>из кэша: ${c.burst.hit}</small></div>` : '';
+      return `<div class="lt-sin lt-cas" id="ltSIn"><div class="lt-sh"><b>Redis перед таблицей users</b><span>${cap} ячеек · ${c.mem * c.nodes} ГБ</span><span>TTL ${TTLN[c.ttl]}</span><span>${EVN[c.ev]}</span><span>${POLN[c.pol]}${c.pol === 'aside' ? (c.inv ? ' + DEL' : ' без DEL') : ''}</span><span>время ${secS(c.t)}${c.play ? ' · поток идёт' : ''}</span></div>
+        <div class="lt-cflow">
+          <div class="lt-cbx app"><b>Приложение</b><small>${fl.id ? (fl.kind === 'upd' ? 'UPDATE' : 'GET') + ' user:' + fl.id : '—'}</small><span class="lt-cst ${st[0]}">${st[1]}</span></div>
+          <div class="lt-cbx redis"><b>Redis · ключ → строка</b><div class="lt-cgrid">${cells}</div>${c.gone ? `<small class="lt-gone">вытеснен: user:${c.gone}</small>` : ''}</div>
+          <div class="lt-cbx db${fl.kind === 'miss' || fl.kind === 'upd' ? ' on' : ''}"><b>БД users</b><small>${S.rows.length} строк</small><span>запросов в базу: <b>${c.db}</b></span>${c.pend.length ? `<span class="lt-cst warn">ждут сброса: ${c.pend.length}</span>` : ''}</div>
+        </div>
+        <div class="lt-tiles lt-t5"><div><small>попаданий</small><b>${c.hit}</b></div><div><small>промахов</small><b>${c.miss}</b></div><div><small>доля попаданий</small><b class="${hr >= 0.7 ? 'ok' : hr >= 0.4 ? 'warn' : 'bad'}">${tot ? pc(hr) : '—'}</b></div><div><small>запросов в базу</small><b>${c.db}</b></div><div><small>старых ответов</small><b class="${c.stale ? 'bad' : ''}">${c.stale}</b></div><div><small>вытеснено</small><b>${c.evicted}</b></div></div>
+        ${burst}
+        <ol class="lt-clog">${c.log.map(l => `<li class="${l.cls}"><small>${secS(l.t)}</small> ${l.h}</li>`).join('') || '<li>Нажми GET или «Поток запросов».</li>'}</ol>
+        <div class="lt-tklg"><span><i class="lt-sw ttl"></i>кольцо — сколько осталось жить ключу</span><span><i class="lt-sw hit2"></i>попадание</span><span><i class="lt-sw miss2"></i>промах / старое</span></div></div>`;
+    }
+
+    /* ================= Реплики ================= */
+    const RD = [{ net: 30, d: 120, name: 'Реплика 1', where: 'тот же дата-центр' }, { net: 90, d: 450, name: 'Реплика 2', where: 'другой дата-центр' }];
+    const RIDS = [7, 17, 25, 42, 48];
+    const rN = () => Math.max(1, Math.min(2, S.reps || 1));
+    function rInit() { const r = S.r; Object.assign(r, { t: 0, lsn: 100, wal: [], base: {}, down: false, prom: null, best: null, lost: [], log: [], res: null, lastW: null }); RIDS.forEach(id => { const row = dbRow(id); if (row) r.base[id] = row.balance; }); }
+    const rPrim = id => { let v = S.r.base[id]; S.r.wal.forEach(w => { if (w.id === id) v = w.v; }); return v; };
+    const rVal = (id, k, T) => { let v = S.r.base[id]; S.r.wal.forEach(w => { if (w.id === id && w.t + RD[k].d <= T) v = w.v; }); return v; };
+    const rRecv = (w, k, T) => w.t + RD[k].net <= T;
+    const rLatFor = m => { const n = rN(), ks = seq(n); return m === 'async' ? 1 : m === 'semisync' ? Math.min(...ks.map(k => RD[k].net)) + 1 : Math.max(...ks.map(k => RD[k].d)) + 1; };
+    function rLog(cls, h) { const r = S.r; r.log.unshift({ t: r.t, cls, h }); r.log = r.log.slice(0, 8); }
+    function rUpdate(id) {
+      const r = S.r;
+      if (r.down && r.prom == null) { r.res = { c: 'bad', h: '<b>Записи не принимаются:</b> primary лежит. Нужен failover — перевести реплику в primary.' }; rLog('bad', 'UPDATE отклонён: primary недоступен'); return; }
+      const v = rPrim(id) + 500, lat = rLatFor(r.mode); r.lsn++;
+      r.wal.push({ lsn: r.lsn, id, v, t: r.t }); r.t += lat; r.lastW = { id, t: r.t };
+      r.res = { c: 'ok', h: `<b>COMMIT за ${lat} мс.</b> ${r.mode === 'async' ? 'Подтвердили сразу — реплики получат журнал позже.' : r.mode === 'semisync' ? 'Ждали, пока ближайшая реплика получит журнал.' : 'Ждали, пока все реплики применят запись.'}` };
+      rLog('upd', `UPDATE id ${id}: пополнение +500 ₽ → ${rubS(v)} · LSN ${r.lsn} · COMMIT за ${lat} мс`);
+    }
+    function rRead(id, k) {
+      const r = S.r, routed = k !== 'p' && r.ryw && r.lastW && r.lastW.id === id && r.t - r.lastW.t < 2000;
+      if (k === 'p' || routed || r.prom === k) {
+        if (r.down && r.prom == null && k === 'p') { r.res = { c: 'bad', h: '<b>Primary недоступен</b> — чтение не прошло.' }; rLog('bad', 'чтение с primary: он лежит'); return; }
+        const v = rPrim(id); if (routed) r.sawRyw = true;
+        r.res = { c: 'ok', h: routed ? `<b>Read-your-writes:</b> клиент сам только что писал id ${id}, поэтому его чтение ушло на primary — ${rubS(v)}, свежее.` : `<b>${rubS(v)}</b> — с primary всегда свежее.` };
+        rLog('ok', `SELECT id ${id} ${routed ? '→ на primary (свои записи)' : 'с primary'}: ${rubS(v)}`); return;
+      }
+      const v = rVal(id, k, r.t), pv = rPrim(id);
+      if (v !== pv) {
+        const wait = Math.max(...r.wal.filter(w => w.id === id && w.t + RD[k].d > r.t).map(w => w.t + RD[k].d - r.t));
+        r.sawStale = true; r.res = { c: 'bad', h: `<b>Старое значение:</b> ${RD[k].name.toLowerCase()} вернула ${rubS(v)}, а на primary уже ${rubS(pv)}. Журнал ещё в пути — догонит через ${wait} мс. Клиент оплатил пополнение и не видит денег на счёте.` };
+        rLog('bad', `SELECT id ${id} с ${RD[k].name.toLowerCase()}: <b>${rubS(v)} — старое</b> (догонит через ${wait} мс)`);
+      } else { r.res = { c: 'ok', h: `${RD[k].name} вернула ${rubS(v)} — уже догнала primary.` }; rLog('ok', `SELECT id ${id} с ${RD[k].name.toLowerCase()}: ${rubS(v)}`); }
+      if (r.sawStale && r.sawRyw) done('repl-ryw');
+    }
+    function rCrash() {
+      const r = S.r; if (r.down) return;
+      const T = r.t, n = rN(), recv = seq(n).map(k => r.wal.filter(w => rRecv(w, k, T)).length), best = recv.indexOf(Math.max(...recv));
+      r.down = true; r.best = best; r.lost = r.wal.filter(w => !rRecv(w, best, T));
+      if (r.mode !== 'async' && r.wal.length && !r.lost.length) r.safeOk = true;
+      if (r.mode === 'async' && r.lost.length) r.asyncLost = true;
+      if (r.asyncLost && r.safeOk) done('repl-loss');
+      r.res = { c: r.lost.length ? 'bad' : 'ok', h: r.lost.length ? `<b>Primary упал.</b> Клиентам подтвердили ${r.wal.length} ${plural(r.wal.length, 'запись', 'записи', 'записей')}, но ${RD[best].name.toLowerCase()} (самая свежая) получила только ${recv[best]}. <b>Потеряно ${r.lost.length}:</b> ${r.lost.map(w => `LSN ${w.lsn} (id ${w.id} → ${rubS(w.v)})`).join(', ')} — клиенту подтвердили пополнение, а в базе его нет.` : `<b>Primary упал, но ничего не потеряно:</b> ${r.mode === 'async' ? 'реплики успели получить весь журнал.' : 'COMMIT ждал реплику, поэтому всё подтверждённое уже на ней.'}` };
+      rLog(r.lost.length ? 'bad' : 'ok', `primary упал: подтверждено ${r.wal.length}, у ${RD[best].name.toLowerCase()} — ${recv[best]}, потеряно ${r.lost.length}`);
+    }
+    function rFail() {
+      const r = S.r; if (!r.down || r.prom != null) return;
+      const k = r.best, T = r.t, nb = {};
+      Object.keys(r.base).forEach(id => { let v = r.base[id]; r.wal.forEach(w => { if (+id === w.id && rRecv(w, k, T)) v = w.v; }); nb[id] = v; });
+      r.base = nb; r.wal = []; r.prom = k; r.t += 30000;
+      r.res = { c: 'warn', h: `<b>Failover:</b> ${RD[k].name.toLowerCase()} стала primary примерно за 30 с — всё это время записи не принимались.${r.lost.length ? ` Потерянные ${r.lost.length} ${plural(r.lost.length, 'запись', 'записи', 'записей')} не вернуть.` : ''} Приложение и вторая реплика переключились на новый primary.` };
+      rLog('warn', `failover: ${RD[k].name.toLowerCase()} — новый primary, простой записи ≈ 30 с`);
+      done('repl-failover');
+    }
+    function rAct(a) {
+      const r = S.r; if (!r.base) rInit();
+      if (a === 'upd') rUpdate(42); else if (a === 'r0') rRead(42, 0); else if (a === 'r1') rRead(42, 1); else if (a === 'rp') rRead(42, 'p');
+      else if (a === 't50') r.t += 50; else if (a === 't300') r.t += 300; else if (a === 't1000') r.t += 1000;
+      else if (a === 'crash') rCrash(); else if (a === 'fail') rFail(); else if (a === 'reset') rInit();
+      renderPanel(); drawStage();
+    }
+    const RMODT = {
+      async: d => `<b>Асинхронная:</b> COMMIT отвечает сразу (≈ 1 мс), журнал догоняет реплики потом — отставание до ${d} мс. Упадёт primary — хвост подтверждённых записей, не доехавших до реплик, пропадёт.`,
+      semisync: (d, net) => `<b>Полусинхронная:</b> COMMIT ждёт, пока хотя бы одна реплика получит журнал (≈ ${net} мс). Если в primary переводить её — потерь нет. Читать с реплик всё равно можно старое: применяют позже.`,
+      sync: d => `<b>Синхронная</b> (remote_apply): COMMIT ждёт, пока все реплики применят запись (≈ ${d} мс). Ни потерь, ни старых чтений — но каждая запись медленнее, а зависшая реплика останавливает запись.`
+    };
+    function replBiz() {
+      const b = biz(), r = S.r, n = rN(), lag = Math.max(...seq(n).map(k => RD[k].d)), writes = b.rpsPeak * 0.2;
+      const staleDay = r.ryw || r.mode === 'sync' ? 0 : b.ordersDay * 0.2 * Math.min(1, lag / 1000);
+      const lostPer = r.mode === 'async' ? writes * Math.min(...seq(n).map(k => RD[k].net)) / 1000 : 0;
+      const slow = rLatFor(r.mode) - 1, convLoss = b.rubDay * 0.01 * slow / 100;
+      return `<div class="lt-card biz ${staleDay ? 'bad' : 'ok'}"><b>«Клиент оплатил и не видит денег».</b> ${staleDay ? `≈ ${nf(staleDay)} ${plural(Math.round(staleDay), 'клиент', 'клиента', 'клиентов')} в день открывают кабинет сразу после оплаты и попадают на реплику, которая ещё не догнала: старый баланс, будто оплаты не было. Если 5 % из них пишут в поддержку — ≈ ${rub(staleDay * 0.05 * BIZ.ticketRub * 30)} в месяц.` : r.ryw ? 'Read-your-writes включён: свои записи клиент читает с primary и сразу видит оплату.' : 'Синхронная репликация: реплики применяют запись до ответа клиенту — старого не бывает.'}</div>
+        <div class="lt-card biz ${lostPer >= 1 ? 'bad' : 'ok'}"><b>Падение primary.</b> ${r.mode === 'async' ? `В пик пишется ≈ ${nf(writes)} ${plural(Math.round(writes), 'изменение', 'изменения', 'изменений')} в секунду; при сбое пропадает хвост, который не успел уехать, — ≈ ${nf(lostPer)} ${plural(Math.round(lostPer), 'подтверждённая операция', 'подтверждённые операции', 'подтверждённых операций')} ≈ ${rub(lostPer * BIZ.check)} за один сбой (≈ 2 сбоя в год), плюс разбор и компенсации.` : `COMMIT ждёт реплику — подтверждённое не теряется. Цена — каждая запись дольше на ≈ ${slow} мс: по правилу «+100 мс к оформлению — минус 1 % конверсии» это ≈ ${rub(convLoss)} выручки в день.`}</div>`;
+    }
+    function panelRepl() {
+      const Bz = isBiz(), r = S.r, n = rN(); if (!r.base) rInit();
+      const d = Math.max(...seq(n).map(k => RD[k].d)), net = Math.min(...seq(n).map(k => RD[k].net));
+      let h = Bz ? ana(LIFE.repl) + bizBar() + replBiz() : ana(LIFE.repl, 'Все записи идут в primary, а он пересылает журнал изменений репликам. Читать можно с реплик — но они чуть отстают.', '<b>Репликация</b> — копирование журнала (WAL) с primary на реплики. <b>Асинхронная</b> — подтверждаем запись, не дожидаясь реплик; <b>синхронная</b> — ждём их. <b>Read-your-writes</b> — пользователь видит свои записи; <b>failover</b> — перевод реплики в primary.');
+      h += `<div class="row-btns"><button type="button" class="btn primary" data-ract="upd"${r.down && r.prom == null ? ' disabled' : ''}>UPDATE id 42: пополнение +500 ₽</button></div>`;
+      h += `<div class="lt-ckeys"><b>Прочитать id 42</b><button type="button" class="lt-ixt" data-ract="r0">с реплики 1</button>${n > 1 ? '<button type="button" class="lt-ixt" data-ract="r1">с реплики 2</button>' : ''}<button type="button" class="lt-ixt" data-ract="rp">с primary</button></div>`;
+      h += `<div class="lt-ckeys"><b>Время</b><button type="button" class="lt-ixt" data-ract="t50">+50 мс</button><button type="button" class="lt-ixt" data-ract="t300">+300 мс</button><button type="button" class="lt-ixt" data-ract="t1000">+1 с</button></div>`;
+      h += `<div class="row-btns"><button type="button" class="btn danger" data-ract="crash"${r.down ? ' disabled' : ''}>Уронить primary</button><button type="button" class="btn" data-ract="fail"${!r.down || r.prom != null ? ' disabled' : ''}>Failover: реплику в primary</button><button type="button" class="btn ghost" data-ract="reset">Сначала</button></div>`;
+      h += ctl('Реплик', seg('reps', [[1, '1'], [2, '2']], n));
+      h += ctl('Режим репликации', seg('rmode', [['async', 'асинхронная'], ['semisync', 'полусинхронная'], ['sync', 'синхронная']], r.mode));
+      h += ctl('Читать свои записи с primary (read-your-writes)', seg('rryw', [['0', 'Нет'], ['1', 'Да']], r.ryw ? '1' : '0'));
+      h += `<div class="lt-card${Bz ? ' biz' : ''}">${RMODT[r.mode](d, net)}</div>`;
+      if (Bz) h += A(['scale', 'repl', 'orders']);
+      return h + memo(Bz ? 'реплики дёшево умножают чтения, но клиент может не увидеть свою оплату — свои записи читай с primary. Асинхронная репликация быстрее, но при сбое теряет оплаченные операции.' : 'реплики отстают: сразу после записи читай с primary (read-your-writes). Асинхронная — быстрая запись и риск потерять хвост, синхронная — без потерь, но запись ждёт реплики. Failover — секунды или минуты без записи.')
+        + `<div class="row-btns">${next('memo', 'Итоги: что запомнить')}</div>`;
+    }
+    function stageRepl() {
+      const r = S.r; if (!r.base) rInit();
+      const n = rN(), T = r.t, ids = RIDS.filter(id => r.base[id] != null);
+      const tbl = (getV, cmpK) => `<table class="lt-rtab"><tbody>${ids.map(id => { const v = getV(id), pv = rPrim(id), st = cmpK != null && v !== pv, wait = st ? Math.max(...r.wal.filter(w => w.id === id && w.t + RD[cmpK].d > T).map(w => w.t + RD[cmpK].d - T)) : 0; return `<tr class="${st ? 'stale' : ''}${id === 42 ? ' cur' : ''}"><td>id ${id}</td><td class="r">${rubS(v)}${st ? `<em>старое · догонит через ${wait} мс</em>` : ''}</td></tr>`; }).join('')}</tbody></table>`;
+      const applied = k => { const l = r.wal.filter(w => w.t + RD[k].d <= T); return l.length ? l[l.length - 1].lsn : (r.wal.length ? r.wal[0].lsn - 1 : r.lsn); };
+      const prim = `<div class="lt-rbx prim${r.down ? ' down' : ''}" style="grid-row:1 / span ${n}"><b>Primary</b><small>${r.down ? (r.prom != null ? 'выведен после сбоя' : 'упал') : `пишет журнал · LSN ${r.lsn}`}</small>${r.down && r.prom != null ? '<p class="lt-sub">роль primary перешла к реплике</p>' : tbl(rPrim, null)}</div>`;
+      const rows = seq(n).map(k => {
+        const pend = r.wal.filter(w => w.t + RD[k].d > T), isP = r.prom === k;
+        const lane = `<div class="lt-lane${r.down && r.prom == null ? ' cut' : ''}"><small>WAL → ${RD[k].name.toLowerCase()} · ${RD[k].where}</small><div class="lt-laneb">${pend.map(w => { const f = Math.max(0, Math.min(1, (T - w.t) / RD[k].d)), rc = rRecv(w, k, T), lost = r.down && r.lost.includes(w) && !rc; return `<span class="lt-walc${rc ? ' rc' : ''}${lost ? ' lost' : ''}" style="left:${(f * 82).toFixed(1)}%" title="LSN ${w.lsn}: id ${w.id} → ${rubS(w.v)}">${w.lsn}</span>`; }).join('') || '<em>догнала</em>'}</div><small>получит за ${RD[k].net} мс, применит за ${RD[k].d} мс</small></div>`;
+        const box = `<div class="lt-rbx rep${isP ? ' prom' : ''}"><b>${isP ? 'Новый primary' : RD[k].name}</b><small>${isP ? 'бывшая ' + RD[k].name.toLowerCase() : `применён LSN ${applied(k)} · в пути ${pend.length}`}</small>${tbl(id => isP ? rPrim(id) : rVal(id, k, T), isP ? null : k)}</div>`;
+        return lane + box;
+      }).join('');
+      const modes = ['async', 'semisync', 'sync'].map(m => `<tr${m === r.mode ? ' class="now"' : ''}><td>${m === 'async' ? 'асинхронная' : m === 'semisync' ? 'полусинхронная' : 'синхронная'}</td><td class="r">${rLatFor(m)} мс</td><td class="r ${m === 'async' ? 'bad' : 'ok'}">${m === 'async' ? 'хвост' : 'нет'}</td><td class="r ${m === 'sync' ? 'ok' : 'warn'}">${m === 'sync' ? 'нет' : 'бывают'}</td></tr>`).join('');
+      return `<div class="lt-sin lt-rps" id="ltSIn"><div class="lt-sh"><b>Primary и ${n} ${plural(n, 'реплика', 'реплики', 'реплик')}</b><span>${r.mode === 'async' ? 'асинхронная' : r.mode === 'semisync' ? 'полусинхронная' : 'синхронная'}</span><span>read-your-writes: ${r.ryw ? 'да' : 'нет'}</span><span>время ${nf(T)} мс</span></div>
+        <div class="lt-rgrid">${prim}${rows}</div>
+        ${r.res ? `<div class="lt-card ${r.res.c}">${r.res.h}</div>` : '<div class="lt-iso-next">Сделай UPDATE и сразу прочитай id 42 с реплики.</div>'}
+        <table class="lt-bt"><thead><tr><th>репликация</th><th class="r">COMMIT</th><th class="r">потери при сбое</th><th class="r">старые чтения</th></tr></thead><tbody>${modes}</tbody></table>
+        <ol class="lt-clog">${r.log.map(l => `<li class="${l.cls}"><small>${nf(l.t)} мс</small> ${l.h}</li>`).join('')}</ol></div>`;
     }
 
     /* ================= Итоги ================= */
@@ -1718,7 +2010,7 @@
       if (CUSTOM.has(S.tab)) {
         const an = opts.flip && !isCalm() && !!Element.prototype.animate, bf = new Map();
         if (an) box.querySelectorAll('.lt-hr[data-hid]').forEach(e => bf.set(e.dataset.hid, e.getBoundingClientRect()));
-        box.innerHTML = S.tab === 'idx' ? stageIdx() : S.tab === 'iso' ? stageIso() : stageSrv();
+        box.innerHTML = S.tab === 'idx' ? stageIdx() : S.tab === 'iso' ? stageIso() : S.tab === 'cache' ? stageCache() : S.tab === 'repl' ? stageRepl() : stageSrv();
         if (S.tab === 'idx') { ixLines(); settleLines(box); }
         fitStick();
         if (an && bf.size) { let j = 0; box.querySelectorAll('.lt-hr[data-hid]').forEach(e => { const b = bf.get(e.dataset.hid); if (!b) return; const a = e.getBoundingClientRect(), dx = b.left - a.left, dy = b.top - a.top; if (Math.abs(dx) + Math.abs(dy) < 1) return; e.animate([{ transform: `translate(${dx.toFixed(1)}px, ${dy.toFixed(1)}px)`, zIndex: 5 }, { transform: 'none', zIndex: 5 }], { duration: 440, delay: Math.min(j++ * 6, 140), easing: 'cubic-bezier(.2,.75,.25,1)', fill: 'backwards' }); }); }
@@ -1743,7 +2035,7 @@
     /* ================= вкладки, режим и события ================= */
     function renderPanel() {
       const p = EL.querySelector('#ltPanel'); if (!p) return;
-      p.innerHTML = S.tab === 'part' ? panelPart() : S.tab === 'shard' ? panelShard() : S.tab === 'query' ? panelQuery() : S.tab === 'reshard' ? panelReshard() : S.tab === 'hot' ? panelHot() : S.tab === 'idx' ? panelIdx() : S.tab === 'iso' ? panelIso() : S.tab === 'srv' ? panelSrv() : '';
+      p.innerHTML = S.tab === 'part' ? panelPart() : S.tab === 'shard' ? panelShard() : S.tab === 'query' ? panelQuery() : S.tab === 'reshard' ? panelReshard() : S.tab === 'hot' ? panelHot() : S.tab === 'idx' ? panelIdx() : S.tab === 'iso' ? panelIso() : S.tab === 'srv' ? panelSrv() : S.tab === 'cache' ? panelCache() : S.tab === 'repl' ? panelRepl() : '';
     }
     function renderView() {
       const v = EL.querySelector('#ltView'); if (!v) return;
@@ -1775,6 +2067,12 @@
       if (k.startsWith('w-')) { S.w[k.slice(2)] = +v; rerender(false); return; }
       if (k === 'iso' || k === 'lock') { S[k] = v; S.ist = 0; rerender(false); return; }
       if (k === 'mix') { S.srvMix = v; rerender(false); return; }
+      if (k === 'cmem') { S.c.mem = +v; S.c.cells = S.c.cells.slice(-cCap()); rerender(false); return; }
+      if (k === 'cttl') { S.c.ttl = v; S.c.cells.forEach(x => { x.exp = Math.min(x.exp, S.c.t + TTLS[v]); }); rerender(false); return; }
+      if (k === 'cev' || k === 'cpol' || k === 'cprot') { S.c[k.slice(1) === 'ev' ? 'ev' : k.slice(1) === 'pol' ? 'pol' : 'prot'] = v; S.c.burst = null; rerender(false); return; }
+      if (k === 'cinv') { S.c.inv = v === '1'; rerender(false); return; }
+      if (k === 'rmode') { S.r.mode = v; rerender(false); return; }
+      if (k === 'rryw') { S.r.ryw = v === '1'; rerender(false); return; }
       if (k === 'ixsort') { S.ixSorted = v === '1'; ixRun(S.ixQ, true); return; }
       if (S.mig) S.mig = null;
       if (k === 'part') S.part = v; else if (k === 'n') S.N = +v; else if (k === 'key') S.key = v; else if (k === 'method') S.method = v; else if (k === 'reps') S.reps = +v;
@@ -1801,7 +2099,7 @@
       if (a.startsWith('pre:')) { S.mig = null; S.key = a.slice(4); S.N = 3; S.method = 'mod'; S.hl = null; S.pick = null; renderPanel(); drawStage({ flip: true }); }
     }
     function onClick(e) {
-      const b = e.target.closest('[data-tab],[data-mode],[data-go],[data-set],[data-q],[data-mig],[data-w],[data-act],[data-col],[data-ixv],[data-ixq],[data-ixt],[data-ixins],[data-isc],[data-isostep],[data-srvapply],tr[data-id],.lt-r,.lt-col');
+      const b = e.target.closest('[data-tab],[data-mode],[data-go],[data-set],[data-q],[data-mig],[data-w],[data-act],[data-col],[data-ixv],[data-ixq],[data-ixt],[data-ixins],[data-isc],[data-isostep],[data-srvapply],[data-cget],[data-cact],[data-ract],tr[data-id],.lt-r,.lt-col');
       if (!b || !EL.contains(b) || b.disabled) return;
       const d = b.dataset;
       if (d.tab) return setTab(d.tab);
@@ -1819,6 +2117,9 @@
       if (d.isc) { S.isc = d.isc; S.ist = 0; renderPanel(); drawStage(); return; }
       if (d.isostep) return isoStep(d.isostep);
       if (d.srvapply) { const [r, n, rp] = d.srvapply.split(':').map(Number); return srvApply(r, n, rp); }
+      if (d.cget) { cGet(+d.cget); cJudge(); return drawStage(); }
+      if (d.cact) return cAct(d.cact);
+      if (d.ract) return rAct(d.ract);
       if (d.col) { S.col = d.col; renderView(); return; }
       if (b.matches('tr[data-id]')) return showRow(+d.id);
       if (b.classList.contains('lt-r')) {
@@ -1922,7 +2223,14 @@
       { id: 'iso-lost', text: 'Получи потерянное обновление и исправь его: уровнем, FOR UPDATE или версией' },
       { id: 'iso-skew', text: 'Перекос записи: проходит на Repeatable Read и ловится на Serializable' },
       { id: 'srv-limit', text: 'Доведи нагрузку до упора и найди ресурс, который кончился первым' },
-      { id: 'srv-fit', text: 'Подбери конфигурацию, которая держит 15 000 оп/с: вертикально, репликами или шардами' }
+      { id: 'srv-fit', text: 'Подбери конфигурацию, которая держит 15 000 оп/с: вертикально, репликами или шардами' },
+      { id: 'cache-hit', text: 'Добейся доли попаданий в кэш не ниже 70 % на потоке запросов' },
+      { id: 'cache-evict', text: 'Посмотри вытеснение при нехватке памяти при двух разных политиках (LRU, LFU или TTL)' },
+      { id: 'cache-stale', text: 'Получи «старый баланс» без инвалидации, а потом почини: инвалидацией или write-through' },
+      { id: 'cache-stampede', text: 'Устрой лавину на популярный ключ и защити базу: single flight или ранний перерасчёт' },
+      { id: 'repl-ryw', text: 'Прочитай с реплики старое значение сразу после записи, а потом почини read-your-writes' },
+      { id: 'repl-loss', text: 'Потеряй подтверждённые записи при падении primary с асинхронной репликацией — и не потеряй с синхронной' },
+      { id: 'repl-failover', text: 'Переведи реплику в primary после сбоя (failover)' }
     ],
     mount(el, api) {
       MODE = readMode();

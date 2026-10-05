@@ -24,11 +24,21 @@
       lesson: 'Автоматическое переключение primary при асинхронной репликации может «разъехать» данные. Решают, что важнее — доступность или согласованность, и проверяют, как ведёт себя переключение при коротких обрывах сети.'
     }
   };
+  INC.cf2019 = { who: 'Cloudflare', when: '2 июля 2019',
+    what: 'Выкатили новое правило защиты (WAF) с регулярным выражением, которое на некоторых запросах уходило в долгий перебор и занимало процессор на 100 %. Правило попало сразу на все серверы по всему миру — и примерно 27 минут сеть отвечала ошибками 502 огромной доле сайтов.',
+    lesson: 'Даже «просто конфиг» выкатывают поэтапно: сначала малая доля трафика, проверка метрик, потом остальные. И всегда держат быстрый откат.' };
+  INC.knight2012 = { who: 'Knight Capital', when: '1 августа 2012',
+    what: 'При выкладке новой версии торговой системы код не попал на один из восьми серверов. Новая функция включалась флагом, который раньше управлял давно заброшенным кодом, — на этом сервере он и ожил. Примерно за 45 минут система отправила миллионы ошибочных заявок; убыток — более 400 млн долларов, компания оказалась на грани банкротства.',
+    lesson: 'Выкладка должна быть автоматической и проверяемой (все ли экземпляры на новой версии), старый код — удалённым, а у флагов — один смысл на всю жизнь.' };
+  const BY_LAB = { deploy: ['cf2019', 'knight2012'], table: ['gh2018'], resil: ['aws2021'] };
+  function labCard(id) {
+    return (BY_LAB[id] || []).map(k => INC[k]).filter(Boolean).map(x => `<details class="inc-card"><summary><span>Как это было в жизни</span><b>${esc(x.who)} · ${esc(x.when)}</b></summary><p>${esc(x.what)}</p><p class="inc-l"><b>Урок:</b> ${esc(x.lesson)}</p><small>По публичному разбору, пересказ.</small></details>`).join('');
+  }
   const BY_LEVEL = { 'f-retrystorm': 'aws2021', cascade: 'aws2021', 'p-retry': 'aws2021', 'f-stampede': 'fb2010', 'k-cache-ttl': 'fb2010', 'c-az': 'aws2011', 'f-spof': 'aws2011', fresh: 'gh2018', 'k-repl': 'gh2018', 'p-replicas': 'gh2018' };
   function card(L) {
     if (!L || (SD.free && !SD.free.hintsOn())) return '';
     const id = BY_LEVEL[L.id] || (L.daily && BY_LEVEL[L.daily.base]) || (L.free && BY_LEVEL[L.free.base]); const x = id && INC[id]; if (!x) return '';
     return `<details class="inc-card"><summary><span>Как это было в жизни</span><b>${esc(x.who)} · ${esc(x.when)}</b></summary><p>${esc(x.what)}</p><p class="inc-l"><b>Урок:</b> ${esc(x.lesson)}</p><small>По публичному разбору компании, пересказ.</small></details>`;
   }
-  SD.incidents = { card, INC, BY_LEVEL };
+  SD.incidents = { card, labCard, INC, BY_LEVEL };
 })();
