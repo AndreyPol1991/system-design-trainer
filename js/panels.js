@@ -60,7 +60,7 @@
     }
     if (L.sandbox) h += sandboxControls(L);
     else {
-      h += `<h3>Нагрузка</h3><div class="traffic">${kinds.map(([k, v]) => `<div><small><i style="background:${SD.kindColor(k)}"></i>${esc(SD.KINDS[k].label)}</small><b>${F().num(v)} /с</b></div>`).join('')}</div>`;
+      h += `<h3>Нагрузка${SD.calc && SD.calc.usable(L) ? ' <button type="button" class="linkish calc-open" data-calcopen>Как посчитать ›</button>' : ''}</h3><div class="traffic">${kinds.map(([k, v]) => `<div><small><i style="background:${SD.kindColor(k)}"></i>${esc(SD.KINDS[k].label)}</small><b>${F().num(v)} /с</b></div>`).join('')}</div>`;
       const extra = [];
       if (L.global) extra.push('пользователи по всему миру: пинг до дата-центра ≈ 140 мс');
       if (L.connections) extra.push(`${F().num(L.connections)} открытых соединений`);

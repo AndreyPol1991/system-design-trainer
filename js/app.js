@@ -320,6 +320,7 @@
     if (SD.walk) SD.walk.mount();
     if (SD.cmd) SD.cmd.mount();
     if (SD.daily) SD.daily.mount();
+    if (SD.calc) SD.calc.mount();
     if (SD.landscape) SD.landscape.mount();
     if (SD.principles) SD.principles.mount();
     if (SD.guide) SD.guide.mount();

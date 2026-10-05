@@ -142,6 +142,7 @@
     if (SD.xray && SD.xray.has(n.type)) h += `<button type="button" class="dive-cta xr-cta" data-act="xray" data-id="${n.id}">${SD.icon(n.type)}<span><b>Провалиться внутрь — вживую</b><small>${esc(SD.XRAY[n.type].cta || 'Что происходит внутри узла прямо сейчас')}. Или двойной клик по узлу.</small></span></button>`;
     if (SD.guide && n.type !== 'client') h += `<button type="button" class="dive-cta" data-act="guide" data-id="${n.id}">${SD.icon(n.type)}<span><b>Как устроен и что дают настройки</b><small>На пальцах, по шагам, со сравнением вариантов на твоей схеме</small></span></button>`;
     h += liveStats(A, n);
+    if (SD.calc && n.type !== 'client') { try { h += SD.calc.nodeBlock(A, n); } catch (e) { /* формула не посчиталась — без неё */ } }
     if (SD.archLens && n.type !== 'client') h += SD.archLens.nodeBlock(n.id, 'node');
     if ((n.type === 'app' || n.type === 'worker') && SD.innerUI) {
       const k = n.props.inner && n.props.inner.nodes ? n.props.inner.nodes.length : 0;

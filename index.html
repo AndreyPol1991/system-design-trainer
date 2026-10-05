@@ -1169,6 +1169,57 @@ html.calm *, html.calm *::before, html.calm *::after { animation-duration: .001s
 .dly-pat:hover { border-color: var(--accent); color: var(--text); }
 .dly-more, .dly-empty { font-size: 12px; color: var(--text-muted); margin: 0; align-self: center; }
 .dly-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--warn); margin-left: 4px; vertical-align: middle; }
+/* ---------- как посчитать ---------- */
+.calc-open { font-size: 12px; margin-left: 6px; text-transform: none; letter-spacing: 0; font-family: var(--f-body); }
+.calc-sheet { width: min(1240px, 100%); height: min(900px, calc(100vh - 32px)); }
+.calc-wrap { display: grid; grid-template-columns: minmax(0, 1fr) 340px; min-height: 0; flex: 1; }
+@media (max-width: 980px) { .calc-wrap { grid-template-columns: 1fr; overflow: auto; } }
+.calc-steps { overflow: auto; padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+.calc-side { overflow: auto; padding: 16px 18px; border-left: 1px solid var(--border); background: var(--surface-2); min-height: 0; display: flex; flex-direction: column; gap: 10px; }
+.calc-side h3 { margin: 0; }
+.calc-lede { margin: 0; font-size: 13px; color: var(--text-2); line-height: 1.5; }
+.calc-step { border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; background: var(--surface); display: flex; flex-direction: column; gap: 6px; }
+.calc-step.exact { border-color: var(--ok); } .calc-step.order { border-color: var(--warn); } .calc-step.miss { border-color: var(--bad); }
+.cs-h { display: flex; align-items: center; gap: 8px; }
+.cs-n { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: var(--surface-3); font: 700 12px var(--f-mono); color: var(--text-2); flex: none; }
+.cs-h b { font-size: 14px; color: var(--text); }
+.cs-st { margin-left: auto; font: 600 12px var(--f-mono); color: var(--text-muted); }
+.calc-step.exact .cs-st { color: var(--ok); } .calc-step.order .cs-st { color: var(--warn); } .calc-step.miss .cs-st { color: var(--bad); }
+.cs-an { margin: 0; font-size: 12.5px; color: var(--text-muted); line-height: 1.5; }
+.cs-q { margin: 0; font-size: 13.5px; color: var(--text); line-height: 1.5; }
+.cs-in { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.cs-in input { width: 150px; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--border-strong); background: var(--bg); color: var(--text); font: 600 14px var(--f-mono); }
+.cs-in input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.cs-in > span { font-size: 12.5px; color: var(--text-muted); }
+.cs-in .btn { padding: 6px 12px; font-size: 12.5px; }
+.cs-ans { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; border-radius: 8px; background: var(--surface-2); font-size: 13px; color: var(--text-2); line-height: 1.55; }
+.cs-ans[hidden] { display: none; }
+.cs-a { color: var(--text); font: 700 13.5px var(--f-mono); }
+.cs-ans ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 2px; }
+.cs-ans b { color: var(--text); }
+.cs-so { margin: 4px 0 0; color: var(--text); }
+.calc-sum { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.calc-sum td { padding: 6px 4px; border-bottom: 1px solid var(--border); color: var(--text-2); vertical-align: top; }
+.calc-sum td:last-child { text-align: right; font-family: var(--f-mono); white-space: nowrap; }
+.calc-sum td:first-child { color: var(--text); }
+.calc-sum tr.tot td { font-weight: 700; color: var(--text); border-bottom: 0; }
+.calc-bud { margin: 0; font-size: 12.5px; } .calc-bud.ok { color: var(--ok); } .calc-bud.bad { color: var(--bad); }
+.calc-note { margin: 0; font-size: 12px; color: var(--text-muted); line-height: 1.5; }
+.calc-act { display: flex; flex-direction: column; gap: 6px; }
+.calc-act .btn { justify-content: center; }
+.calc-res { display: flex; flex-direction: column; gap: 4px; padding: 10px; border-radius: 10px; border: 1px solid var(--warn); font-size: 12.5px; color: var(--text-2); }
+.calc-res.ok { border-color: var(--ok); }
+.calc-res b { color: var(--text); } .calc-res span { font-family: var(--f-mono); }
+.calc-res ul { margin: 0; padding-left: 0; list-style: none; display: flex; flex-direction: column; gap: 2px; }
+.calc-res li.ok { color: var(--ok); } .calc-res li.bad { color: var(--bad); }
+.calc-res small { color: var(--text-muted); }
+.calc-res p { margin: 0; }
+.calc-lab { text-align: left; }
+.calc-node { margin-top: 10px; border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; background: var(--surface-2); font-size: 12.5px; color: var(--text-2); line-height: 1.5; }
+.calc-node > summary { cursor: pointer; font: 600 11px var(--f-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted); }
+.calc-node p { margin: 6px 0 0; }
+.calc-node b { color: var(--text); }
+.cf-v.ok { color: var(--ok); } .cf-v.warn { color: var(--warn); } .cf-v.bad { color: var(--bad); }
 .pred-pop { position: fixed; z-index: 60; width: 300px; display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border-strong); box-shadow: var(--shadow); font-size: 12.5px; line-height: 1.45; color: var(--text-2); animation: chgIn .2s ease-out; }
 .pred-pop[hidden] { display: none; }
 .pred-pop b { color: var(--text); font-size: 13.5px; }
@@ -2035,6 +2086,7 @@ html.calm *, html.calm *::before, html.calm *::after { animation-duration: .001s
 <script src="js/mentor.js"></script>
 <script src="js/bridge.js"></script>
 <script src="js/daily.js"></script>
+<script src="js/calc.js"></script>
 <script src="js/app.js"></script>
 
 </body>
