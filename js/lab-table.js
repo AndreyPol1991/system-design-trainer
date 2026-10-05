@@ -1,0 +1,956 @@
+/* Лаборатория «Таблица вживую»: таблица users с типами, вес строки и таблицы, партиции внутри сервера,
+   шарды между серверами, путь запроса через роутер, решардинг по шагам, горячий шард и уникальность email. */
+(function () {
+  if (!window.SD) return;
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const isCalm = () => document.documentElement.classList.contains('calm');
+
+  /* ---------- хэши, случайность, форматирование ---------- */
+  const fnv = s => { let h = 0x811c9dc5; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; } return h >>> 0; };
+  const fmix = h => { h ^= h >>> 16; h = Math.imul(h, 0x85ebca6b); h ^= h >>> 13; h = Math.imul(h, 0xc2b2ae35); h ^= h >>> 16; return h >>> 0; };
+  const hid = id => fmix(fnv('s3895:' + id));   // hash(id) роутера шардов
+  const hpt = id => fmix(fnv('p31:' + id));    // phash(id) — своя хэш-функция партиций PostgreSQL
+  const mulberry = seed => () => { seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  const pick = (a, R) => a[Math.floor(R() * a.length)];
+  const seq = n => Array.from({ length: n }, (_, i) => i);
+  const nf = v => Math.round(v).toLocaleString('ru-RU');
+  const money = v => v.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const pc = x => Math.round(x * 100) + ' %';
+  const dec = (v, d = 1) => v.toFixed(d).replace('.', ',');
+  const size = b => { const g = b / 1e9; if (g >= 1000) return dec(g / 1000, g >= 1e4 ? 0 : 1) + ' ТБ'; if (g >= 10) return Math.round(g) + ' ГБ'; if (g >= 1) return dec(g) + ' ГБ'; return Math.max(1, Math.round(b / 1e6)) + ' МБ'; };
+  const plural = (n, a, b, c) => { const m10 = n % 10, m100 = n % 100; return m10 === 1 && m100 !== 11 ? a : m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20) ? b : c; };
+  const rowsW = n => n + ' ' + plural(n, 'строка', 'строки', 'строк');
+  const shW = n => n + ' ' + plural(n, 'шард', 'шарда', 'шардов');
+  const p2 = n => String(n).padStart(2, '0');
+  const fts = ts => { const d = new Date(ts); return `${d.getUTCFullYear()}-${p2(d.getUTCMonth() + 1)}-${p2(d.getUTCDate())} ${p2(d.getUTCHours())}:${p2(d.getUTCMinutes())}+03`; };
+  const fdate = ts => fts(ts).slice(0, 10);
+  const qOf = ts => { const d = new Date(ts); return d.getUTCFullYear() + '-Q' + (Math.floor(d.getUTCMonth() / 3) + 1); };
+  const qStart = q => `${q.slice(0, 4)}-${p2((+q.slice(6) - 1) * 3 + 1)}-01`;
+  const qNext = q => { let y = +q.slice(0, 4), n = +q.slice(6) + 1; if (n > 4) { n = 1; y++; } return y + '-Q' + n; };
+  const U8 = window.TextEncoder ? new TextEncoder() : null;
+  const u8 = s => U8 ? U8.encode(s).length : s.length * 2;
+
+  /* ---------- данные: 48 пользователей, детерминированно ---------- */
+  const CC = ['RU', 'KZ', 'BY', 'UZ', 'AM', 'GE'];
+  const CN = { RU: 26, KZ: 7, BY: 5, UZ: 4, AM: 3, GE: 3 };
+  const CCOL = { RU: 'var(--k-read)', KZ: 'var(--k-job)', BY: 'var(--k-geo)', UZ: 'var(--k-search)', AM: 'var(--k-write)', GE: 'var(--k-static)' };
+  const PEOPLE = {
+    RU: { m: ['Иван', 'Алексей', 'Дмитрий', 'Сергей', 'Андрей', 'Михаил', 'Никита', 'Артём', 'Егор', 'Павел', 'Максим', 'Олег', 'Кирилл', 'Роман'], f: ['Анна', 'Мария', 'Елена', 'Ольга', 'Наталья', 'Татьяна', 'Дарья', 'Полина', 'Ксения', 'Алина', 'Екатерина', 'Юлия', 'Вера', 'Софья'], s: ['Иванов', 'Смирнов', 'Кузнецов', 'Попов', 'Соколов', 'Лебедев', 'Козлов', 'Новиков', 'Морозов', 'Волков', 'Соловьёв', 'Васильев', 'Зайцев', 'Павлов', 'Семёнов', 'Голубев', 'Виноградов', 'Богданов', 'Фёдоров', 'Котов', 'Белов', 'Орлов'], c: ['Москва', 'Москва', 'Москва', 'Санкт-Петербург', 'Санкт-Петербург', 'Казань', 'Екатеринбург', 'Новосибирск', 'Нижний Новгород', 'Самара', 'Краснодар', 'Пермь'], d: ['mail.ru', 'yandex.ru', 'gmail.com', 'bk.ru', 'inbox.ru', 'list.ru', 'yandex.ru'] },
+    KZ: { m: ['Нурлан', 'Ерлан', 'Арман', 'Данияр', 'Асхат'], f: ['Айгерим', 'Динара', 'Асель', 'Жанар', 'Мадина'], s: ['Ахметов', 'Жумабаев', 'Касымов', 'Нуртазин', 'Беков', 'Сейтказин'], c: ['Алматы', 'Астана', 'Шымкент', 'Караганда'], d: ['mail.kz', 'gmail.com', 'mail.ru'] },
+    BY: { m: ['Андрей', 'Павел', 'Владимир', 'Денис'], f: ['Наталья', 'Ирина', 'Светлана', 'Анастасия'], s: ['Ковальчук', 'Лукашевич', 'Новик', 'Климович', 'Ярошевич', 'Жук'], c: ['Минск', 'Минск', 'Гомель', 'Брест', 'Гродно'], d: ['tut.by', 'gmail.com', 'mail.ru'] },
+    UZ: { m: ['Тимур', 'Рустам', 'Бахтиёр', 'Шерзод'], f: ['Дильноза', 'Нигора', 'Малика', 'Севара'], s: ['Каримов', 'Юсупов', 'Рахимов', 'Алимов', 'Турсунов'], c: ['Ташкент', 'Ташкент', 'Самарканд', 'Бухара'], d: ['gmail.com', 'mail.ru'] },
+    AM: { m: ['Тигран', 'Арам', 'Давит', 'Ашот'], f: ['Ануш', 'Лусине', 'Гаяне', 'Мариам'], s: ['Петросян', 'Саркисян', 'Акопян', 'Мкртчян', 'Григорян'], c: ['Ереван', 'Ереван', 'Гюмри'], d: ['gmail.com', 'mail.ru'] },
+    GE: { m: ['Гиорги', 'Давид', 'Леван', 'Ираклий'], f: ['Нино', 'Тамара', 'Эка', 'Мариам'], s: ['Беридзе', 'Капанадзе', 'Гелашвили', 'Церетели', 'Махарадзе'], c: ['Тбилиси', 'Тбилиси', 'Батуми', 'Кутаиси'], d: ['gmail.com'] }
+  };
+  const TR = { а: 'a', б: 'b', в: 'v', г: 'g', д: 'd', е: 'e', ё: 'e', ж: 'zh', з: 'z', и: 'i', й: 'y', к: 'k', л: 'l', м: 'm', н: 'n', о: 'o', п: 'p', р: 'r', с: 's', т: 't', у: 'u', ф: 'f', х: 'kh', ц: 'ts', ч: 'ch', ш: 'sh', щ: 'shch', ъ: '', ы: 'y', ь: '', э: 'e', ю: 'yu', я: 'ya' };
+  const tr = s => s.toLowerCase().split('').map(ch => TR[ch] != null ? TR[ch] : /[a-z0-9]/.test(ch) ? ch : '').join('');
+  const fem = s => /(ов|ев|ёв|ин)$/.test(s) ? s + 'а' : s;
+  const BASEQ = ['2025-Q1', '2025-Q2', '2025-Q3', '2025-Q4', '2026-Q1', '2026-Q2', '2026-Q3'];
+  const QCNT = [4, 5, 6, 7, 8, 8, 10];
+  const NOW = Date.UTC(2026, 9, 5, 10, 12);
+
+  function mkUser(id, c, ts, R, used) {
+    const P = PEOPLE[c], w = R() < 0.5;
+    const first = pick(w ? P.f : P.m, R), sur = pick(P.s, R), last = w ? fem(sur) : sur;
+    const f = tr(first), l = tr(last), yy = p2((80 + Math.floor(R() * 25)) % 100);
+    const base = pick([f + '.' + l, f[0] + '.' + l, l + '.' + f, f + l + yy, f + '_' + l, l + yy, f + '.' + l + yy], R), dom = pick(P.d, R);
+    let email = base + '@' + dom, k = 2;
+    while (used.has(email)) email = base + (k++) + '@' + dom;
+    used.add(email);
+    const x = R();
+    const balance = x < 0.14 ? 0 : x < 0.86 ? Math.round(R() * 6000000) / 100 : Math.round((60000 + R() * 190000) * 100) / 100;
+    return { id, email, name: first + ' ' + last, country: c, city: pick(P.c, R), ts, balance, active: R() < 0.86 };
+  }
+  function genBase() {
+    const R = mulberry(20250117), ts = [];
+    QCNT.forEach((n, qi) => { const y = 2025 + (qi >> 2), m0 = (qi & 3) * 3, a = Date.UTC(y, m0, 1), b = Date.UTC(y, m0 + 3, 1) - 60000; for (let i = 0; i < n; i++) ts.push(a + Math.floor(R() * (b - a))); });
+    ts.sort((x, y) => x - y);
+    const cs = []; CC.forEach(c => { for (let i = 0; i < CN[c]; i++) cs.push(c); });
+    for (let i = cs.length - 1; i > 0; i--) { const j = Math.floor(R() * (i + 1)); [cs[i], cs[j]] = [cs[j], cs[i]]; }
+    const used = new Set();
+    return ts.map((t, i) => mkUser(i + 1, cs[i], Math.floor(t / 60000) * 60000, R, used));
+  }
+
+  /* ---------- состояние ---------- */
+  const S = { init: false };
+  let EL = null, API = null, TM = [];
+  const done = id => { if (API) API.done(id); };
+  const later = (f, ms) => { const t = setTimeout(f, ms); TM.push(t); return t; };
+  const pend = (f, ms) => { S.pend = f; later(flush, ms); };
+  function flush() { if (S.pend) { const f = S.pend; S.pend = null; f(); } }
+  function resetData() {
+    S.base = S.base || genBase();
+    S.rows = S.base.map(r => Object.assign({}, r));
+    S.nextId = 49; S.rng2 = mulberry(4242); S.dropped = new Set();
+    S.hl = null; S.q = null; S.mig = null; S.dup = null;
+  }
+  function initState() {
+    if (S.init) return;
+    S.init = true;
+    Object.assign(S, { tab: 'table', part: 'none', N: 1, key: 'id', method: 'mod', reps: 0, hist: [], lastMig: null, rps: 10000, pick: null, col: 'email', w: { ri: 3, hot: 0.25, ram: 32, sh: 1, tight: false }, qId: 42, qUpd: 17, qC: 'KZ', qD: '2026-07-01' });
+    resetData();
+  }
+
+  /* ---------- маршрутизация: шард и партиция строки ---------- */
+  const VN = 48;
+  const cur = () => ({ part: S.part, N: S.N, key: S.key, method: S.method });
+  const RING = {}, CMAP = {};
+  function ringPts(N) {
+    if (!RING[N]) { const p = []; for (let s = 0; s < N; s++) for (let v = 0; v < VN; v++) p.push([fmix(fnv('r89-' + s + '#' + v)), s]); p.sort((a, b) => a[0] - b[0]); RING[N] = p; }
+    return RING[N];
+  }
+  function ringFind(N, h) { const p = ringPts(N); let lo = 0, hi = p.length; while (lo < hi) { const m = (lo + hi) >> 1; if (p[m][0] < h) lo = m + 1; else hi = m; } return p[lo % p.length]; }
+  function cmap(N) {
+    if (!CMAP[N]) { const load = Array(N).fill(0), m = {}; CC.slice().sort((a, b) => CN[b] - CN[a]).forEach(c => { let best = 0; for (let s = 1; s < N; s++) if (load[s] < load[best]) best = s; m[c] = best; load[best] += CN[c]; }); CMAP[N] = m; }
+    return CMAP[N];
+  }
+  function qGroups(N) { const g = [], base = Math.floor(BASEQ.length / N), ex = BASEQ.length % N; let i = 0; for (let s = 0; s < N; s++) { const n = base + (s < ex ? 1 : 0); g.push(BASEQ.slice(i, i + n)); i += n; } return g; }
+  function qShard(N, q) { const i = BASEQ.indexOf(q); if (i < 0) return q < BASEQ[0] ? 0 : N - 1; return qGroups(N).findIndex(x => x.includes(q)); }
+  function shardOf(r, c) {
+    if (c.N <= 1) return 0;
+    if (c.key === 'country') return cmap(c.N)[r.country];
+    if (c.key === 'created_at') return qShard(c.N, qOf(r.ts));
+    const h = hid(r.id);
+    return c.method === 'ring' ? ringFind(c.N, h)[1] : h % c.N;
+  }
+  const LISTP = ['RU', 'KZ', 'BY', 'other'], OTHER = ['UZ', 'AM', 'GE'];
+  function partOf(r, part) { part = part || S.part; if (part === 'none') return 'all'; if (part === 'range') return qOf(r.ts); if (part === 'list') return LISTP.includes(r.country) ? r.country : 'other'; return 'p' + (hpt(r.id) % 4); }
+  const plabel = p => p === 'all' ? 'users' : p === 'other' ? 'прочие' : p;
+  const ptable = p => p === 'all' ? 'users' : 'users_' + p.toLowerCase().replace('-', '_');
+  function quarters() { const s = new Set(BASEQ.filter(q => !S.dropped.has(q))); S.rows.forEach(r => s.add(qOf(r.ts))); return [...s].sort(); }
+  function allParts(part) { return part === 'none' ? ['all'] : part === 'range' ? quarters() : part === 'list' ? LISTP : ['p0', 'p1', 'p2', 'p3']; }
+  function partsFor(s, c) {
+    const all = allParts(c.part);
+    if (c.N <= 1) return all;
+    if (c.part === 'range' && c.key === 'created_at') return all.filter(q => qShard(c.N, q) === s);
+    if (c.part === 'list' && c.key === 'country') { const m = cmap(c.N); return all.filter(p => p === 'other' ? OTHER.some(x => m[x] === s) : m[p] === s); }
+    return all;
+  }
+  function where(r) { const c = cur(); return (c.N > 1 ? 'шард ' + shardOf(r, c) : 'один сервер') + ' · ' + (c.part === 'none' ? 'без партиций' : 'партиция ' + plabel(partOf(r))); }
+  function groups(c) {
+    const G = seq(c.N).map(s => { const m = new Map(); partsFor(s, c).forEach(p => m.set(p, [])); return m; });
+    S.rows.forEach(r => { const s = shardOf(r, c), p = partOf(r, c.part); if (!G[s].has(p)) G[s].set(p, []); G[s].get(p).push(r); });
+    const order = allParts(c.part);
+    return G.map(m => new Map([...m.entries()].sort((a, b) => order.indexOf(a[0]) - order.indexOf(b[0]))));
+  }
+  function ruleText(c) {
+    if (c.N <= 1) return 'один сервер — роутер не нужен, запросы идут прямо в базу';
+    if (c.key === 'country') return 'country → шард по списку стран';
+    if (c.key === 'created_at') return 'created_at → шард по диапазону дат';
+    return c.method === 'ring' ? `hash(id) → кольцо, ${c.N} × ${VN} точек` : `шард = hash(id) % ${c.N}`;
+  }
+  function calcOf(r, c) {
+    if (c.N <= 1) return 'один сервер';
+    const s = shardOf(r, c);
+    if (c.key === 'country') return `country = '${r.country}' → по списку → шард ${s}`;
+    if (c.key === 'created_at') return `created_at = ${fdate(r.ts)} → ${qOf(r.ts)} → шард ${s}`;
+    const h = hid(r.id);
+    return c.method === 'ring' ? `hash(${r.id}) = ${nf(h)} → кольцо → шард ${s}` : `hash(${r.id}) = ${nf(h)} → % ${c.N} = ${s}`;
+  }
+  function shardSub(s, c) {
+    if (c.N <= 1) return '';
+    if (c.key === 'country') return CC.filter(x => cmap(c.N)[x] === s).join(', ');
+    if (c.key === 'created_at') { const g = qGroups(c.N)[s]; return g[0] + (g.length > 1 ? '…' + g[g.length - 1].slice(5) : '') + (s === c.N - 1 ? ' и новее' : ''); }
+    return c.method === 'ring' ? `${VN} точек на кольце` : `hash % ${c.N} = ${s}`;
+  }
+  const partDesc = p => ({ none: 'без партиций', range: 'партиции по кварталам · RANGE', list: 'партиции по стране · LIST', hash: '4 партиции по phash(id) · HASH' })[p];
+
+  /* ---------- раскладка для схемы (с учётом переезда) ---------- */
+  function layout() {
+    const m = S.mig, show = m ? m.newC : cur(), N = show.N, cols = seq(N).map(s => ({ s, items: [], isNew: !!m && s >= m.oldC.N }));
+    S.rows.forEach(r => {
+      const p = partOf(r);
+      if (!m) { cols[shardOf(r, show)].items.push({ k: 'r' + r.id, r, p }); return; }
+      const a = shardOf(r, m.oldC), b = shardOf(r, m.newC);
+      if (a === b) { cols[a].items.push({ k: 'r' + r.id, r, p }); return; }
+      if (m.step >= 4) { cols[b].items.push({ k: 'g' + r.id, r, p, cls: 'moved' }); if (!m.post.has(r.id)) cols[a].items.push({ k: 'r' + r.id, r, p, cls: 'old' }); return; }
+      cols[a].items.push({ k: 'r' + r.id, r, p, cls: 'mv', tag: b });
+      if (m.step >= 2 || m.dual.has(r.id)) cols[b].items.push({ k: 'g' + r.id, r, p, cls: 'ghost' });
+    });
+    const order = allParts(show.part);
+    cols.forEach(col => {
+      const ps = new Set(partsFor(col.s, show)); col.items.forEach(it => ps.add(it.p));
+      col.parts = [...ps].sort((x, y) => order.indexOf(x) - order.indexOf(y)).map(p => ({ p, items: col.items.filter(it => it.p === p) }));
+      col.n = col.items.filter(it => it.cls !== 'ghost' && it.cls !== 'old').length;
+    });
+    return { N, show, cols };
+  }
+
+  /* ---------- нагрузка: 80 % чтений, 20 % записей ---------- */
+  const SRV = { 8: { cpu: 2, ops: 2500, usd: 220 }, 32: { cpu: 8, ops: 5000, usd: 450 }, 64: { cpu: 16, ops: 9000, usd: 850 }, 128: { cpu: 32, ops: 16000, usd: 1600 } };
+  function loadsFor(cnt, c) {
+    const N = cnt.length, n = cnt.reduce((a, b) => a + b, 0) || 1, T = S.rps, R = S.reps;
+    const ns = c.key === 'created_at' && N > 1 ? Math.min(N - 1, shardOf({ id: 0, ts: NOW, country: 'RU' }, Object.assign({}, c, { N }))) : -1;
+    const prim = cnt.map((x, s) => T * (0.8 * x / n / (1 + R) + 0.1 * x / n + 0.1 * (ns < 0 ? x / n : s === ns ? 1 : 0)));
+    const mean = prim.reduce((a, b) => a + b, 0) / N;
+    return { prim, mean, cap: SRV[S.w.ram].ops, ratio: prim.map(p => mean ? p / mean : 0) };
+  }
+  const SHOWLOAD = new Set(['shard', 'reshard', 'hot']);
+
+  /* ---------- подсветка SQL ---------- */
+  const KW = new Set('CREATE TABLE PRIMARY KEY NOT NULL UNIQUE DEFAULT SELECT FROM WHERE INSERT INTO VALUES UPDATE SET DELETE ORDER BY DESC ASC LIMIT PARTITION OF FOR IN WITH MODULUS REMAINDER RANGE LIST HASH ALTER DETACH DROP AND TO'.split(' '));
+  const TY = new Set(['bigint', 'varchar', 'text', 'char', 'timestamptz', 'numeric', 'boolean']);
+  function hlSql(s) {
+    return String(s).replace(/(--[^\n]*)|('(?:[^']|'')*')|(\b\d+(?:\.\d+)?\b)|([A-Za-z_][A-Za-z_0-9]*)|([\s\S])/g, (m, c, st, n, w) => {
+      if (c) return `<span class="c">${esc(c)}</span>`;
+      if (st) return `<span class="s">${esc(st)}</span>`;
+      if (n) return `<span class="n">${n}</span>`;
+      if (w) return KW.has(w) ? `<span class="k">${w}</span>` : TY.has(w) ? `<span class="t">${w}</span>` : esc(w);
+      return esc(m);
+    });
+  }
+
+  /* ---------- общие кусочки разметки ---------- */
+  const ana = (life, plain, term) => `<div class="lt-ana"><p class="lt-life"><span class="lt-tag">Как в жизни</span>${life}</p>${plain ? `<p>${plain}</p>` : ''}${term ? `<p><span class="lt-tag t">Термин</span>${term}</p>` : ''}</div>`;
+  const seg = (name, opts, val, dis) => `<div class="seg lt-seg" role="group">${opts.map(([v, t]) => `<button type="button" data-set="${name}:${v}" aria-selected="${String(v) === String(val)}"${dis ? ' disabled' : ''}>${t}</button>`).join('')}</div>`;
+  const ctl = (label, html) => `<div class="lt-ctl"><b>${label}</b>${html}</div>`;
+  const next = (t, label) => `<button type="button" class="btn lt-next" data-go="${t}">${label} →</button>`;
+  const memo = t => `<p class="lt-mem"><b>Запомни.</b> ${t}</p>`;
+  const INFO0 = 'Наведи на строку — покажу, что в ней и где она лежит. Во вкладке «Запросы» клик по строке ищет её по id.';
+
+  const TABS = [['table', '1', 'Таблица'], ['weight', '2', 'Вес'], ['part', '3', 'Партиции'], ['shard', '4', 'Шарды'], ['query', '5', 'Запросы'], ['reshard', '6', 'Решардинг'], ['hot', '7', 'Горячий шард'], ['memo', '✓', 'Итоги']];
+  const STAGE = new Set(['part', 'shard', 'query', 'reshard', 'hot']);
+
+  /* ================= 1. Таблица и типы ================= */
+  const COLS = [
+    { k: 'id', t: 'bigint', ddl: 'bigint        PRIMARY KEY', life: 'номер карточки', what: 'Целое число, всегда 8 байт, до 9,2 × 10¹⁸ — хватит навсегда. Обычный integer (4 байта) кончится на 2,1 млрд строк — и вставки встанут. PRIMARY KEY — уникальный и обязательный, по нему строится индекс.' },
+    { k: 'email', t: 'varchar(254)', ddl: 'varchar(254)  NOT NULL UNIQUE', life: 'адрес почты', what: 'Строка с потолком 254 символа — это максимум длины адреса по стандарту. Хранится по фактической длине + 1 байт на длину, потолок места не занимает. UNIQUE — база не даст завести два одинаковых адреса (пока таблица на одном сервере).' },
+    { k: 'name', t: 'text', ddl: 'text          NOT NULL', life: 'имя и фамилия', what: 'Строка без потолка. В UTF-8 латиница — 1 байт на букву, кириллица — 2: «Анна Котова» — 11 символов, но 21 байт.' },
+    { k: 'country', t: 'char(2)', ddl: 'char(2)       NOT NULL', life: 'код страны', what: 'Ровно 2 символа — код ISO: RU, KZ, BY. Хранится как 2 байта + 1 байт длины.' },
+    { k: 'city', t: 'text', ddl: 'text', life: 'город', what: 'Строка без потолка. Может быть пустой (NULL) — тогда почти не занимает места: отмечается одним битом.' },
+    { k: 'created_at', t: 'timestamptz', ddl: 'timestamptz   NOT NULL DEFAULT now()', life: 'когда зарегистрировался', what: 'Момент времени. Хранится в UTC как микросекунды от 2000-01-01 — 8 байт, показывается в поясе сессии (у нас +03). Отличный ключ для партиций по времени.' },
+    { k: 'balance', t: 'numeric(12,2)', ddl: 'numeric(12,2) NOT NULL DEFAULT 0', life: 'деньги на счёте', what: 'Точное десятичное число: до 12 цифр, из них 2 после запятой. Для денег — только numeric: float теряет копейки (0,1 + 0,2 ≠ 0,3). Длина переменная, ≈ 8 байт для сумм вроде 12 345,67.' },
+    { k: 'is_active', t: 'boolean', ddl: 'boolean       NOT NULL DEFAULT true', life: 'активен ли', what: 'Да или нет — 1 байт.' }
+  ];
+  function ddlHTML() {
+    return `<span class="k">CREATE TABLE</span> users (\n` + COLS.map((c, i) => `<span class="lt-dl${S.col === c.k ? ' on' : ''}" data-col="${c.k}">  ${c.k.padEnd(11)} ${hlSql(c.ddl)}${i < COLS.length - 1 ? ',' : ''}</span>`).join('') + ');';
+  }
+  function viewTable() {
+    const rc = rowCalc(false), bytes = {}; rc.parts.forEach(p => { if (p.f) bytes[p.f] = p.b; });
+    const sel = COLS.find(c => c.k === S.col) || COLS[0];
+    const head = [['id', 'bigint'], ['email', 'varchar(254)'], ['name', 'text'], ['country', 'char(2)'], ['created_at', 'timestamptz'], ['balance', 'numeric(12,2)']];
+    const rows = S.rows.map(r => `<tr data-id="${r.id}"><td data-c="id" class="num">${r.id}</td><td data-c="email">${esc(r.email)}</td><td data-c="name">${esc(r.name)}</td><td data-c="country"><span class="lt-cc" style="--cc:${CCOL[r.country]}">${r.country}</span></td><td data-c="created_at">${fts(r.ts)}</td><td data-c="balance" class="num">${money(r.balance)}</td><td class="wh">${where(r)}</td></tr>`).join('');
+    return ana('Таблица — это картотека: у всех карточек одинаковые графы. Тип графы говорит, что в неё можно вписать и сколько места это займёт.', 'Ниже — сама картотека: 48 пользователей. В последней колонке видно, где каждая карточка лежит сейчас; раскладку меняешь во вкладках «Партиции» и «Шарды».', '<b>DDL</b> — описание таблицы: колонки, <b>типы данных</b> и ограничения (PRIMARY KEY, UNIQUE, NOT NULL). Кликни по строке DDL или по типу — увидишь, что он хранит.')
+      + `<div class="lt-tw"><pre class="lt-code lt-ddl">${ddlHTML()}</pre>
+        <div class="lt-types">${COLS.map(c => `<button type="button" class="lt-tc${S.col === c.k ? ' on' : ''}" data-col="${c.k}"><b>${c.k}</b><code>${c.t}</code><span>${c.life} · ≈ ${bytes[c.k] || '?'} Б</span></button>`).join('')}
+        <div class="lt-card lt-tcd"><b>${sel.k} · ${sel.t}</b> — ${sel.what}</div></div></div>
+      <div class="lt-tbar"><b>users</b><span>${rowsW(S.rows.length)}</span><span>сейчас: ${S.N > 1 ? shW(S.N) : 'один сервер'}, ${partDesc(S.part)}</span><span class="lt-tip">клик по строке — показать её на схеме</span></div>
+      <div class="lt-tblw"><table class="lt-tbl" data-sel="${S.col}"><thead><tr>${head.map(([k, t]) => `<th data-c="${k}">${k}<small>${t}</small></th>`).join('')}<th>где лежит<small>шард · партиция</small></th></tr></thead><tbody>${rows}</tbody></table></div>`
+      + memo('тип колонки — это и правило («только целые», «ровно 2 символа»), и размер на диске. Деньги — numeric, время — timestamptz, ключ — bigint.')
+      + next('weight', 'Дальше: сколько это весит');
+  }
+
+  /* ================= 2. Сколько весит ================= */
+  const ROWSTEPS = [1e6, 2e6, 5e6, 1e7, 2e7, 5e7, 1e8, 2e8, 5e8, 1e9, 2e9];
+  const rowsLabel = n => n >= 1e9 ? (n / 1e9) + ' млрд' : (n / 1e6) + ' млн';
+  const WSH = [1, 2, 3, 4, 6, 8, 12, 16];
+  function rowCalc(tight) {
+    const B = S.base, n = B.length, avg = f => B.reduce((a, r) => a + f(r), 0) / n;
+    const Le = Math.round(avg(r => r.email.length)), Ln = Math.round(avg(r => u8(r.name))), Lnc = Math.round(avg(r => r.name.length)), Lc = Math.round(avg(r => u8(r.city))), Lcc = Math.round(avg(r => r.city.length));
+    const F = {
+      id: { t: 'bigint', b: 8, al: 8, why: 'целое число — всегда 8 байт' },
+      email: { t: 'varchar(254)', b: 1 + Le, al: 1, why: `в среднем ${Le} символов латиницей + 1 байт длины; 254 — только потолок` },
+      name: { t: 'text', b: 1 + Ln, al: 1, why: `в среднем ${Lnc} букв, кириллица — 2 байта на букву: ${Ln} Б + 1 байт длины` },
+      country: { t: 'char(2)', b: 3, al: 1, why: '2 символа + 1 байт длины' },
+      city: { t: 'text', b: 1 + Lc, al: 1, why: `в среднем ${Lcc} букв → ${Lc} Б + 1 байт длины` },
+      created_at: { t: 'timestamptz', b: 8, al: 8, why: 'микросекунды от 2000-01-01 в UTC — 8 байт' },
+      balance: { t: 'numeric(12,2)', b: 8, al: 1, why: 'цифры хранятся группами по 4; для сумм вроде 12 345,67 — около 8 байт' },
+      is_active: { t: 'boolean', b: 1, al: 1, why: 'да/нет — 1 байт' }
+    };
+    const order = tight ? ['id', 'created_at', 'balance', 'is_active', 'country', 'email', 'name', 'city'] : ['id', 'email', 'name', 'country', 'city', 'created_at', 'balance', 'is_active'];
+    let off = 24;
+    const parts = [{ c: 'hdr', l: 'заголовок', t: '—', b: 24, why: 'служебное: какая транзакция вставила и удалила строку (для MVCC), число полей, флаги. 23 байта, выровнено до 24' }];
+    order.forEach(k => {
+      const f = F[k], pad = (f.al - off % f.al) % f.al;
+      if (pad) { parts.push({ c: 'pad', l: 'выравнивание', t: '—', b: pad, why: `${k} — 8-байтовый тип, он должен начинаться с адреса, кратного 8. Пустые байты` }); off += pad; }
+      parts.push({ c: f.al === 8 ? 'fix' : k === 'is_active' || k === 'country' ? 'fix' : 'var', l: k, f: k, t: f.t, b: f.b, why: f.why }); off += f.b;
+    });
+    const endPad = (8 - off % 8) % 8;
+    if (endPad) { parts.push({ c: 'pad', l: 'выравнивание', t: '—', b: endPad, why: 'строка целиком занимает место, кратное 8 байтам' }); off += endPad; }
+    parts.push({ c: 'lp', l: 'указатель', t: '—', b: 4, why: 'в начале страницы для каждой строки хранится её адрес внутри страницы' });
+    const total = off + 4, rpp = Math.floor((8192 - 24) / total);
+    return { parts, tuple: off, total, rpp, perRow: 8192 / rpp, Le, pad: parts.filter(p => p.c === 'pad').reduce((a, p) => a + p.b, 0) };
+  }
+  function wCalc() {
+    const rc = rowCalc(false), n = ROWSTEPS[S.w.ri];
+    const heap = Math.ceil(n / rc.rpp) * 8192;
+    const pkB = 20 / 0.9 * 1.01, emB = (Math.ceil((8 + 1 + rc.Le) / 8) * 8 + 4) / 0.7 * 1.01;
+    const pk = n * pkB, em = n * emB, idx = pk + em;
+    const hot = heap * S.w.hot + idx, usable = S.w.ram * 0.75 * 1e9, per = hot / S.w.sh, fits = per <= usable;
+    const need = ram => Math.ceil(hot / (ram * 0.75 * 1e9));
+    return { rc, n, heap, pk, em, idx, total: heap + idx, hot, usable, per, fits, need, pkB, emB };
+  }
+  function viewWeight() {
+    const rc = rowCalc(false);
+    const segs = rc.parts.map(p => `<span class="${p.c}" style="flex:${p.b} 0 0" title="${esc(p.l)}: ${p.b} Б">${p.b >= 13 ? `${esc(p.l === 'заголовок' ? 'заг.' : p.l)} ${p.b}` : p.b >= 5 ? p.b : ''}</span>`).join('');
+    return ana('Строка — чемодан: у каждого есть корпус (служебный заголовок), даже если внутри почти пусто, и вещи разной формы (поля). Между вещами остаются пустоты — их съедает выравнивание. Память сервера — багажник: часто нужные чемоданы должны лежать в нём, иначе за каждым бегаешь в гараж (на диск).', 'Посчитаем, сколько весит одна строка, вся таблица и её индексы — и влезет ли «горячее» в память.', '<b>Размер строки</b> (tuple) = заголовок 24 Б + поля по их типам + <b>выравнивание</b>. Строки лежат в <b>страницах по 8 КБ</b>. <b>Рабочий набор</b> (hot set) — данные и индексы, которые читаются постоянно.')
+      + `<div class="lt-wg"><section class="lt-box"><h4 class="lt-h">Одна строка: из чего складывается</h4>
+        <div class="lt-wbar" aria-label="Состав строки">${segs}</div>
+        <div class="lt-tklg"><span><i class="lt-sw hdr"></i>служебное</span><span><i class="lt-sw fix"></i>поля фиксированной длины</span><span><i class="lt-sw var"></i>поля по длине текста</span><span><i class="lt-sw pad"></i>пустоты выравнивания</span></div>
+        <table class="lt-wt"><tbody>${rc.parts.map(p => `<tr class="${p.c === 'pad' ? 'pad' : ''}"><td>${esc(p.l)}</td><td>${esc(p.t)}</td><td class="b">${p.b} Б</td><td>${esc(p.why)}</td></tr>`).join('')}
+        <tr class="tot"><td colspan="2">Итого строка</td><td class="b">${rc.total} Б</td><td>${rc.tuple} Б сама строка + 4 Б указатель; пустоты выравнивания — ${rc.pad} Б</td></tr></tbody></table>
+        <div class="lt-card">В страницу 8 КБ помещается <b>${rc.rpp} строк</b> → на диске каждая строка в среднем стоит <b>${Math.round(rc.perRow)} Б</b>. Пустоты выравнивания уменьшают, ставя 8-байтовые поля (bigint, timestamptz) в начало, — но строка всё равно округляется до 8 байт, так что выигрыш бывает и нулевым.</div></section>
+        <section class="lt-box" id="ltWBox">${weightBox()}</section></div>`
+      + memo('считай вес от типов: 24 Б заголовка + поля + выравнивание, плюс индексы (≈ 20–50 Б на строку каждый). В памяти должны жить горячие данные и индексы, а не вся таблица.')
+      + next('part', 'Дальше: партиции');
+  }
+  function weightBox() {
+    const n = ROWSTEPS[S.w.ri];
+    return `<h4 class="lt-h">Вся таблица: влезет ли в багажник</h4>
+      <div class="lt-rl"><span>Строк в таблице</span><output id="ltRowsOut">${rowsLabel(n)}</output></div>
+      <input type="range" class="lt-range" id="ltRows" min="0" max="${ROWSTEPS.length - 1}" step="1" value="${S.w.ri}" aria-label="Число строк">
+      ${ctl('Горячая доля таблицы — то, что читают постоянно', seg('w-hot', [[0.2, '20 %'], [0.25, '25 %'], [0.3, '30 %']], S.w.hot))}
+      ${ctl('Сервер (как на площадке)', seg('w-ram', [[8, '2 vCPU · 8 ГБ'], [32, '8 vCPU · 32 ГБ'], [64, '16 vCPU · 64 ГБ'], [128, '32 vCPU · 128 ГБ']], S.w.ram))}
+      ${ctl('Шардов (серверов)', seg('w-sh', WSH.map(k => [k, k]), S.w.sh))}
+      <div id="ltWOut">${weightOut()}</div>`;
+  }
+  function weightOut() {
+    const W = wCalc(), n = W.n;
+    const scale = Math.max(W.usable, W.per), wI = W.idx / S.w.sh / scale * 100, wH = W.heap * S.w.hot / S.w.sh / scale * 100, cap = W.usable / scale * 100;
+    const combos = [8, 32, 64, 128].map(r => { const k = W.need(r); return `<button type="button" class="lt-combo${S.w.ram === r && S.w.sh === k ? ' on' : ''}" data-w="combo:${r}:${k}"${k > 16 ? ' disabled' : ''}><b>${r} ГБ × ${shW(k)}</b><small>${k > 16 ? 'слишком много шардов' : '$' + nf(SRV[r].usd * k) + ' в месяц'}</small></button>`; }).join('');
+    if (n === 5e8 && W.fits) done('fit');
+    return `<div class="lt-sz">
+        <div><span>Таблица: ${rowsLabel(n)} × ${Math.round(W.rc.perRow)} Б</span><b>${size(W.heap)}</b></div>
+        <div><span>Индекс PK (id): ≈ ${Math.round(W.pkB)} Б на строку — ключи идут по порядку, страницы полные</span><b>${size(W.pk)}</b></div>
+        <div><span>Индекс UNIQUE (email): ≈ ${Math.round(W.emB)} Б на строку — адреса приходят вразнобой, страницы заполнены на ~70 %</span><b>${size(W.em)}</b></div>
+        <div class="tot"><span>Всего на диске (без журнала и реплик; каждая реплика — ещё столько же)</span><b>${size(W.total)}</b></div>
+        <div><span>Горячее: ${pc(S.w.hot)} таблицы (${size(W.heap * S.w.hot)}) + индексы целиком (${size(W.idx)})</span><b>${size(W.hot)}</b></div>
+        <div><span>Памяти под кэш на сервере: ≈ 75 % от ${S.w.ram} ГБ (остальное — соединения, сортировки, ОС)</span><b>${size(W.usable)}</b></div>
+      </div>
+      <div class="lt-trunk ${W.fits ? 'ok' : 'bad'}" aria-label="Багажник: память сервера"><div class="lt-tk-in"><b class="i" style="width:${wI}%"></b><b class="h" style="width:${wH}%"></b></div><span class="lt-tk-cap" style="left:${cap}%"></span>${W.fits ? '' : `<span class="lt-tk-over" style="left:${cap}%;width:${100 - cap}%"></span>`}</div>
+      <div class="lt-tklg"><span><i class="lt-sw idx"></i>индексы</span><span><i class="lt-sw hotr"></i>горячие строки</span><span><i class="lt-sw cap"></i>граница памяти</span>${W.fits ? '' : '<span><i class="lt-sw over"></i>не влезло → чтение с диска</span>'}</div>
+      <div class="lt-card ${W.fits ? 'ok' : 'bad'}">${W.fits ? `<b>Помещается.</b> На ${S.w.sh > 1 ? 'каждый из ' + S.w.sh + ' серверов' : 'сервер'} приходится ${size(W.per)} горячих данных при ${size(W.usable)} памяти под кэш — запас ${size(W.usable - W.per)}.` : `<b>Не помещается:</b> на ${S.w.sh > 1 ? 'каждый сервер' : 'сервер'} нужно ${size(W.per)}, а памяти под кэш ${size(W.usable)}. Часть запросов пойдёт на диск — это в 100–1000 раз медленнее памяти.`}</div>
+      <div class="lt-ctl"><b>Что подойдёт для ${rowsLabel(n)} строк (клик — применить)</b><div class="lt-combos">${combos}</div></div>`;
+  }
+
+  /* ================= 3. Партиции ================= */
+  const PART_TXT = {
+    none: '<b>Один большой ящик.</b> Любой запрос без подходящего индекса перебирает все строки, а удалить старые данные можно только построчным DELETE.',
+    range: '<b>Ящик на каждый квартал.</b> Запрос «с 1 июля 2026» откроет один ящик — остальные база отсечёт по границам, даже не заглядывая (<i>partition pruning</i>). Старый квартал выбрасывается целиком — DROP. Минус: поиск по id идёт во все ящики, в каждом свой индекс.',
+    list: '<b>Ящик на страну:</b> RU, KZ, BY и «прочие» (DEFAULT — всё, что не попало в список). Запрос по стране открывает один ящик. Минус: ящик RU в разы больше соседних.',
+    hash: '<b>4 ровных ящика:</b> строка попадает в ящик по <code>phash(id) % 4</code> (phash — своя хэш-функция PostgreSQL для партиций). Поиск по id открывает один ящик, но запрос по дате или стране — все четыре.'
+  };
+  function partDDL(p) {
+    if (p === 'none') return '-- одна таблица, без партиций\nCREATE TABLE users ( … );';
+    if (p === 'range') return "CREATE TABLE users ( … )\n  PARTITION BY RANGE (created_at);\nCREATE TABLE users_2025_q1\n  PARTITION OF users FOR VALUES\n  FROM ('2025-01-01') TO ('2025-04-01');\n-- … и так на каждый квартал";
+    if (p === 'list') return "CREATE TABLE users ( … )\n  PARTITION BY LIST (country);\nCREATE TABLE users_ru PARTITION OF users\n  FOR VALUES IN ('RU');\nCREATE TABLE users_kz PARTITION OF users\n  FOR VALUES IN ('KZ');\nCREATE TABLE users_by PARTITION OF users\n  FOR VALUES IN ('BY');\nCREATE TABLE users_other\n  PARTITION OF users DEFAULT;";
+    return 'CREATE TABLE users ( … )\n  PARTITION BY HASH (id);\nCREATE TABLE users_p0 PARTITION OF users\n  FOR VALUES WITH\n  (MODULUS 4, REMAINDER 0);\n-- … p1, p2, p3';
+  }
+  function panelPart() {
+    const cnt = {}; S.rows.forEach(r => { const p = partOf(r); cnt[p] = (cnt[p] || 0) + 1; });
+    const ps = allParts(S.part), vals = ps.map(p => cnt[p] || 0);
+    return ana('Шкаф с документами один, но бумаги разложены по ящикам: по кварталам, по странам или просто поровну по номеру. Ищешь бумаги за лето — открываешь один летний ящик, а не перебираешь весь шкаф.', 'Для запросов таблица остаётся одной — <code>users</code>; в какие ящики заглянуть, база решает сама.', '<b>Партиционирование</b> (секционирование) — деление одной таблицы на подтаблицы-партиции <b>внутри одного сервера</b>: RANGE — по диапазону, LIST — по списку значений, HASH — по хэшу.')
+      + ctl('Как раскладываем строки', seg('part', [['none', 'Нет'], ['range', 'RANGE · created_at'], ['list', 'LIST · country'], ['hash', 'HASH · id на 4']], S.part))
+      + `<div class="lt-card">${PART_TXT[S.part]}${S.part !== 'none' ? `<p class="lt-sub">Ящиков: ${ps.length} · в самом большом ${Math.max(...vals)}, в самом маленьком ${Math.min(...vals)}.</p>` : ''}</div>`
+      + `<pre class="lt-code">${hlSql(partDDL(S.part))}</pre>`
+      + (S.part === 'range' || S.part === 'list' ? `<div class="lt-card warn"><b>Подводный камень.</b> В PostgreSQL уникальный ключ секционированной таблицы обязан включать ключ партиционирования: PRIMARY KEY (id) превращается в PRIMARY KEY (id, ${S.part === 'range' ? 'created_at' : 'country'}), а UNIQUE (email) на всю таблицу не создать — только внутри каждой партиции.</div>` : '')
+      + memo('партиции — внутри одного сервера. Выигрыш есть, только если в WHERE стоит ключ партиционирования, и ещё — быстрый DROP старых данных.')
+      + `<div class="row-btns">${next('shard', 'Дальше: шарды')}<button type="button" class="btn ghost" data-act="try-date">Проверить запросом по дате</button></div>`;
+  }
+
+  /* ================= 4. Шарды ================= */
+  function ruleCard(c) {
+    if (c.N <= 1) return '<div class="lt-card">Сейчас сервер один — делить нечего. Выбери 2, 3 или 4 шарда и посмотри, как строки разъедутся по серверам.</div>';
+    if (c.key === 'id') return `<div class="lt-card"><b>Правило:</b> ${c.method === 'mod' ? `<code>шард = hash(id) % ${c.N}</code> — остаток от деления хэша на число шардов.` : `кольцо хэшей: у каждого шарда ${VN} точек на кольце, строка идёт к ближайшей точке по часовой стрелке.`} Строки ложатся ровно; поиск по id — в один шард, а запросы по дате и стране — во все.</div>`;
+    if (c.key === 'country') { const m = cmap(c.N); return `<div class="lt-card"><b>Правило — список стран:</b> ${seq(c.N).map(s => `шард ${s} ← ${CC.filter(x => m[x] === s).join(', ')}`).join(' · ')}. Запрос по стране идёт в один шард. Но RU — это больше половины пользователей…</div>`; }
+    const g = qGroups(c.N);
+    return `<div class="lt-card"><b>Правило — диапазоны дат:</b> ${g.map((x, s) => `шард ${s} ← ${x[0]}${x.length > 1 ? '…' + x[x.length - 1].slice(5) : ''}${s === c.N - 1 ? ' и новее' : ''}`).join(' · ')}. Запрос «за период» — в один-два шарда, но все новые регистрации пишутся в последний.</div>`;
+  }
+  function nSeg(dis) { const opts = [[1, 'Нет'], [2, '2'], [3, '3'], [4, '4']]; if (S.N > 4) opts.push([S.N, String(S.N)]); return seg('n', opts, S.N, dis); }
+  function methodSeg(dis) { return seg('method', [['mod', 'hash mod N'], ['ring', 'Consistent hashing']], S.method, dis); }
+  function panelShard() {
+    const c = cur();
+    return ana('Один шкаф переполнился — ставим несколько шкафов в разных комнатах и делим карточки между ними. У входа сидит швейцар: по номеру карточки он знает, в какую комнату идти.', 'Каждая комната хранит только свою часть строк и сама отвечает на запросы к ней. Швейцар — роутер — только направляет.', '<b>Шардирование</b> — деление данных между <b>разными серверами</b> (шардами). <b>Ключ шарда</b> — поле, по которому роутер выбирает сервер.')
+      + ctl('Шардов', nSeg(false))
+      + ctl('Ключ шарда', seg('key', [['id', 'id · hash'], ['country', 'country · список'], ['created_at', 'created_at · диапазон']], S.key, c.N <= 1))
+      + ctl('Способ для hash', methodSeg(c.N <= 1 || c.key !== 'id'))
+      + ruleCard(c)
+      + ctl('Реплик у каждого шарда', seg('reps', [[0, '0'], [1, '1'], [2, '2']], S.reps))
+      + `<div class="lt-card">${S.reps ? `<b>Реплика — ксерокопия шкафа.</b> Читать можно из копии, а вписывать новое — только в оригинал (primary): он пишет журнал, реплики его проигрывают с отставанием в миллисекунды. Под каждым шардом — бледные копии.` : '<b>Реплики</b> — копии шарда на других серверах: разгружают чтения и спасают при падении primary. Добавь 1–2 — появятся бледные копии.'}</div>`
+      + `<div class="lt-card"><b>Полоски нагрузки</b> под шардами: весь кластер получает ${nf(S.rps)} оп/с (80 % чтений). Потолок сервера ${SRV[S.w.ram].cpu} vCPU / ${S.w.ram} ГБ ≈ ${nf(SRV[S.w.ram].ops)} оп/с — размер меняется во вкладке «Сколько весит».</div>`
+      + (c.N > 1 && c.key === 'id' ? `<pre class="lt-code">${hlSql("-- Citus (расширение PostgreSQL):\n-- распределить таблицу по ключу id\nSELECT create_distributed_table(\n  'users', 'id');")}</pre>` : '')
+      + memo('ключ шарда выбирают по самому частому запросу и по равномерности. Партиции делят таблицу внутри сервера, шарды — между серверами; их можно сочетать.')
+      + `<div class="row-btns">${next('query', 'Дальше: запросы')}</div>`;
+  }
+
+  /* ================= 5. Запросы ================= */
+  const DATES = ['2025-04-01', '2025-07-01', '2025-10-01', '2026-01-01', '2026-04-01', '2026-07-01'];
+  function panelQuery() {
+    const c = cur();
+    return ana('Запрос — поручение швейцару: «принеси карточку №42». Знает комнату — идёт в одну. Просят «всех, кто пришёл летом», а карточки разложены по номерам, — обходит все комнаты и складывает ответы.', null, '<b>Роутер</b> выбирает шарды по ключу шарда в WHERE, внутри шарда база отсекает лишние партиции (<b>partition pruning</b>). Нет ключа — запрос идёт на все шарды: <b>scatter-gather</b>.')
+      + `<div class="lt-cfg">Сейчас: <b>${c.N > 1 ? shW(c.N) + ' по ' + c.key + (c.key === 'id' ? (c.method === 'mod' ? ' (mod)' : ' (кольцо)') : '') : 'один сервер'}</b> · ${partDesc(c.part)}${S.reps ? ' · реплик ' + S.reps : ''} <button type="button" class="lt-link" data-go="shard">поменять</button></div>
+      <div class="lt-qs">
+        <button type="button" class="lt-qb w" data-q="ins"><b>INSERT</b><span>нового пользователя</span></button>
+        <div class="lt-qrow"><button type="button" class="lt-qb" data-q="id"><b>SELECT</b><span>WHERE id =</span></button><input class="lt-in" id="ltQId" inputmode="numeric" value="${S.qId}" aria-label="id"></div>
+        <div class="lt-qrow"><button type="button" class="lt-qb" data-q="date"><b>SELECT</b><span>WHERE created_at &gt;=</span></button><select class="lt-in" id="ltQD" aria-label="Дата">${DATES.map(d => `<option${d === S.qD ? ' selected' : ''}>${d}</option>`).join('')}</select></div>
+        <div class="lt-qrow"><button type="button" class="lt-qb" data-q="ctry"><b>SELECT</b><span>WHERE country =</span></button><select class="lt-in" id="ltQC" aria-label="Страна">${CC.map(x => `<option${x === S.qC ? ' selected' : ''}>${x}</option>`).join('')}</select></div>
+        <div class="lt-qrow"><button type="button" class="lt-qb w" data-q="upd"><b>UPDATE</b><span>balance + 500 WHERE id =</span></button><input class="lt-in" id="ltQU" inputmode="numeric" value="${S.qUpd}" aria-label="id для UPDATE"></div>
+        <button type="button" class="lt-qb" data-q="top"><b>SELECT</b><span>ORDER BY created_at DESC LIMIT 10</span></button>
+        <div class="lt-qpair"><button type="button" class="lt-qb d" data-q="del"><b>DELETE</b><span>старый квартал построчно</span></button><button type="button" class="lt-qb d" data-q="drop"><b>DROP</b><span>PARTITION старого квартала</span></button></div>
+        <button type="button" class="btn ghost lt-reset" data-q="reset">Вернуть исходные 48 строк</button>
+      </div>
+      <div id="ltOut">${outHTML()}</div>`
+      + memo('есть ключ шарда в WHERE — один шард; нет — все шарды и слияние. Смотри на счётчики: сколько шардов, партиций и строк тронул запрос — это его цена.')
+      + `<div class="row-btns">${next('reshard', 'Дальше: решардинг')}</div>`;
+  }
+  function outHTML() {
+    const q = S.q;
+    if (!q) return '<div class="lt-out lt-empty">Нажми любой запрос — здесь появится SQL, путь через роутер и счётчики, а на схеме справа подсветится маршрут.</div>';
+    const t = q.tiles;
+    return `<div class="lt-out"><pre class="lt-code">${hlSql(q.sql)}</pre>
+      <ol class="lt-route">${q.steps.map(s => `<li>${s}</li>`).join('')}</ol>
+      ${t ? `<div class="lt-tiles"><div><small>шардов затронуто</small><b>${t.sh[0]}<i> из ${t.sh[1]}</i></b></div><div><small>партиций затронуто</small><b>${t.pt[0]}<i> из ${t.pt[1]}</i></b></div><div><small>строк проверено</small><b>${t.chk}</b></div><div><small>${t.retL || 'строк в ответе'}</small><b>${t.ret}</b></div></div>` : ''}
+      ${q.verdict ? `<div class="lt-card ${q.verdict.c}">${q.verdict.h}</div>` : ''}
+      ${q.res && q.res.length ? `<table class="lt-res"><thead><tr><th>id</th><th>email</th><th>country</th><th>created_at</th><th>balance</th></tr></thead><tbody>${q.res.slice(0, 10).map(r => `<tr><td>${r.id}</td><td>${esc(r.email)}</td><td>${r.country}</td><td>${fdate(r.ts)}</td><td>${money(r.balance)}</td></tr>`).join('')}</tbody></table>${q.res.length > 10 ? `<p class="lt-sub">и ещё ${rowsW(q.res.length - 10)}</p>` : ''}` : ''}</div>`;
+  }
+  const mkHl = shards => ({ shards: new Set(shards), parts: new Set(), pruned: new Set(), rows: new Set(), dup: null, fresh: null, calc: '', merge: '', rep: false, sync: false });
+  function scanQ(shards, partOk, match, index) {
+    const c = cur(), G = groups(c), hl = mkHl(shards), per = [], res = [];
+    let checked = 0, tp = 0, tot = 0;
+    G.forEach((m, s) => {
+      tot += m.size;
+      if (!hl.shards.has(s)) return;
+      let k = 0;
+      m.forEach((rows, p) => {
+        const key = s + '|' + p;
+        if (!partOk(p)) { hl.pruned.add(key); return; }
+        k++; hl.parts.add(key);
+        const mm = rows.filter(match);
+        checked += index ? mm.length : rows.length;
+        mm.forEach(r => { hl.rows.add(r.id); res.push(r); });
+      });
+      tp += k; per.push({ s, tp: k, total: m.size });
+    });
+    return { c, hl, per, res, checked, tp, tot };
+  }
+  function judge(per, N) {
+    if (N >= 2 && per.length === N) done('scatter');
+    if (S.part !== 'none' && per.length && per.every(x => x.tp === 1 && x.total > 1)) done('prune');
+  }
+  function repStep(read, c) {
+    if (!S.reps) return null;
+    return read ? `Чтение уходит на <b>реплику</b> ${c.N > 1 ? 'каждого нужного шарда' : 'сервера'} — primary свободен для записей. Цена: реплика может отставать на доли секунды.` : `Запись — только в <b>primary</b>; ${S.reps === 1 ? 'реплика получит' : 'реплики получат'} её из журнала (WAL) через миллисекунды.`;
+  }
+  function finishQ(q, hl, flip) {
+    S.q = q; S.hl = hl; S.dup = null;
+    const o = EL && EL.querySelector('#ltOut'); if (o) o.innerHTML = outHTML();
+    drawStage(flip ? { flip: true } : {});
+  }
+  function qById(id, upd) {
+    const c = cur(), N = c.N, r0 = S.rows.find(r => r.id === id), probe = r0 || { id, ts: NOW, country: 'RU' };
+    const steps = [];
+    let shards;
+    if (N <= 1) { shards = [0]; steps.push('Сервер один — выбирать шард не нужно.'); }
+    else if (c.key === 'id') { shards = [shardOf(probe, c)]; steps.push(`Ключ шарда — id, и он есть в запросе: <code>${esc(calcOf(probe, c))}</code> → <b>шард ${shards[0]}</b>.`); }
+    else { shards = seq(N); steps.push(`Ключ шарда — <code>${c.key}</code>, а в запросе только id. Роутер не знает, где строка, и рассылает запрос на все ${shW(N)} (<b>scatter-gather</b>).`); }
+    const pp = c.part === 'hash' ? 'p' + (hpt(id) % 4) : null;
+    steps.push(c.part === 'none' ? 'Партиций нет: ищем по индексу первичного ключа — сразу нужная строка.' : pp ? `Партиции по phash(id): <code>phash(${id}) % 4 = ${pp.slice(1)}</code> → только <b>${pp}</b>, остальные 3 отсечены.` : `Партиции по <code>${c.part === 'range' ? 'created_at' : 'country'}</code> ничего не говорят про id → смотрим индекс id <b>в каждой</b> партиции шарда.`);
+    const o = scanQ(shards, p => !pp || p === pp, r => r.id === id, true);
+    o.hl.calc = N > 1 ? (c.key === 'id' ? calcOf(probe, c) : `ключа шарда нет → на все ${N}`) : '';
+    if (!r0) steps.push(`Строки с id = ${id} нет — ответ пустой.`);
+    if (upd && r0) { r0.balance = Math.round((r0.balance + 500) * 100) / 100; steps.push(`Нашли строку и записали новый баланс: <b>${money(r0.balance)}</b>. Индексы не меняются — id и email те же.`); }
+    else if (r0) steps.push(`Нашли: <b>${esc(r0.name)}</b>, ${esc(r0.email)}.`);
+    const rs = repStep(!upd, c); if (rs) steps.push(rs);
+    if (S.reps) { if (upd) o.hl.sync = true; else o.hl.rep = true; }
+    if (o.per.length > 1) o.hl.merge = `ответил 1 шард из ${o.per.length}, остальные — пусто`;
+    let v;
+    if (N > 1 && o.per.length === 1) { v = { c: 'ok', h: `<b>Точечный запрос:</b> один шард из ${N}${pp ? ' и одна партиция' : ''}. Так и должно быть для самого частого запроса.` }; if (!upd) done('byid'); }
+    else if (N > 1) v = { c: 'warn', h: `<b>Поиск по id ушёл на все ${shW(N)}.</b> Ключ шарда — ${c.key}, а ищем по id: каждый шард тратит время впустую. Ключ шарда выбирают под самый частый запрос.` };
+    else v = { c: 'info', h: c.part === 'range' || c.part === 'list' ? `Один сервер, но ${o.tp} ${plural(o.tp, 'индекс', 'индекса', 'индексов')} партиций опрошено по очереди. Поиск по id выгоднее при HASH-партициях по id или без партиций.` : 'Один сервер, индекс по id — одна строка. Всё быстро, пока сервер справляется с объёмом и нагрузкой.' };
+    judge(o.per, N);
+    finishQ({ sql: upd ? `UPDATE users\nSET balance = balance + 500.00\nWHERE id = ${id};` : `SELECT * FROM users\nWHERE id = ${id};`, steps, tiles: { sh: [o.per.length, N], pt: [o.tp, o.tot], chk: o.checked, ret: o.res.length, retL: upd ? 'строк изменено' : '' }, verdict: v, res: o.res }, o.hl, false);
+  }
+  function qDate(d) {
+    const c = cur(), N = c.N, qd = d.slice(0, 4) + '-Q' + (Math.floor((+d.slice(5, 7) - 1) / 3) + 1);
+    const steps = [];
+    let shards;
+    if (N <= 1) { shards = [0]; steps.push('Сервер один — выбирать шард не нужно.'); }
+    else if (c.key === 'created_at') { shards = seq(N).filter(s => s >= qShard(N, qd)); steps.push(`Ключ шарда — created_at: даты с ${d} лежат в ${shards.length === 1 ? '<b>шарде ' + shards[0] + '</b>' : 'шардах <b>' + shards.join(', ') + '</b>'} — остальные не трогаем.`); }
+    else { shards = seq(N); steps.push(`Ключ шарда — <code>${c.key}</code>, а условие — по created_at. Роутер не знает, где эти строки, и рассылает запрос на все ${shW(N)} (<b>scatter-gather</b>).`); }
+    const o = scanQ(shards, p => c.part !== 'range' || p >= qd, r => fdate(r.ts) >= d, false);
+    const opened = c.part === 'range' ? [...new Set([...o.hl.parts].map(k => k.split('|')[1]))] : [];
+    steps.push(c.part === 'range' ? `Партиции по кварталам: открываем только ${opened.join(', ') || '—'}, остальные отсечены по границам (<b>partition pruning</b>) — их строки даже не читаем.` : `Партиций по дате нет, индекса по created_at тоже → ${N > 1 ? 'каждый шард перебирает' : 'перебираем'} все строки подряд (seq scan).`);
+    if (o.per.length > 1) { steps.push(`Роутер собирает ответы ${shW(o.per.length)} и склеивает в один список: ${rowsW(o.res.length)}.`); o.hl.merge = `слил ответы ${shW(o.per.length)} → ${rowsW(o.res.length)}`; }
+    o.hl.calc = N > 1 ? (c.key === 'created_at' ? `created_at ≥ ${d} → ${shards.length === 1 ? 'шард ' + shards[0] : 'шарды ' + shards.join(', ')}` : `ключа шарда нет → на все ${N}`) : '';
+    const rs = repStep(true, c); if (rs) { steps.push(rs); o.hl.rep = true; }
+    const all = S.rows.length;
+    let v;
+    if (c.part === 'range' && N > 1 && c.key !== 'created_at') v = { c: 'warn', h: `<b>Партиции сработали:</b> в каждом шарде открыт только нужный ящик, проверено ${o.checked} строк из ${all}. <b>Но шарды выбраны по ${c.key}</b> — запрос всё равно пошёл на все ${N}.` };
+    else if (c.part === 'range') v = { c: 'ok', h: `<b>Partition pruning:</b> проверено ${o.checked} строк вместо ${all}. На миллиардах строк это разница между миллисекундами и минутами.` };
+    else if (N > 1 && c.key === 'created_at') v = { c: 'ok', h: `<b>Шарды по дате:</b> запрос пошёл только туда, где лежат нужные даты.${c.part === 'none' ? ' Внутри шарда — полный перебор; партиции по кварталам сократили бы и его.' : ''}` };
+    else if (N > 1) v = { c: 'bad', h: `<b>Хуже всего:</b> все шарды и все строки — ${o.checked} из ${all}. Помогут партиции по created_at (меньше строк) или индекс по created_at.` };
+    else v = { c: 'info', h: `Перебрали всю таблицу: ${o.checked} строк. Партиции по кварталам (RANGE по created_at) сократили бы это до одного ящика.` };
+    judge(o.per, N);
+    finishQ({ sql: `SELECT id, email, created_at FROM users\nWHERE created_at >= '${d}';`, steps, tiles: { sh: [o.per.length, N], pt: [o.tp, o.tot], chk: o.checked, ret: o.res.length }, verdict: v, res: o.res }, o.hl, false);
+  }
+  function qCountry(cc) {
+    const c = cur(), N = c.N, steps = [];
+    let shards;
+    if (N <= 1) { shards = [0]; steps.push('Сервер один — выбирать шард не нужно.'); }
+    else if (c.key === 'country') { shards = [cmap(N)[cc]]; steps.push(`Ключ шарда — country: <code>'${cc}' → по списку → шард ${shards[0]}</code>.`); }
+    else { shards = seq(N); steps.push(`Ключ шарда — <code>${c.key}</code>, а условие — по стране. Запрос идёт на все ${shW(N)} (<b>scatter-gather</b>).`); }
+    const lp = LISTP.includes(cc) ? cc : 'other';
+    const o = scanQ(shards, p => c.part !== 'list' || p === lp, r => r.country === cc, false);
+    steps.push(c.part === 'list' ? `Партиции по стране: открываем только <b>${plabel(lp)}</b>${lp === 'other' ? ' (DEFAULT: там UZ, AM, GE — их всё равно перебираем)' : ''}, остальные отсечены.` : 'Партиций по стране нет, индекса по country тоже → перебор всех строк в затронутых шардах.');
+    if (o.per.length > 1) { steps.push(`Роутер склеивает ответы ${shW(o.per.length)}: ${rowsW(o.res.length)}.`); o.hl.merge = `слил ответы ${shW(o.per.length)} → ${rowsW(o.res.length)}`; }
+    o.hl.calc = N > 1 ? (c.key === 'country' ? `country = '${cc}' → шард ${shards[0]}` : `ключа шарда нет → на все ${N}`) : '';
+    const rs = repStep(true, c); if (rs) { steps.push(rs); o.hl.rep = true; }
+    const v = N > 1 && o.per.length === 1 ? { c: 'ok', h: `<b>Один шард:</b> страна — ключ шарда. Проверено ${o.checked} строк.` } : c.part === 'list' ? { c: N > 1 ? 'warn' : 'ok', h: `<b>Партиция по стране сработала:</b> проверено ${o.checked} строк из ${S.rows.length}${N > 1 ? `, но шардов — все ${N}` : ''}.` } : { c: N > 1 ? 'bad' : 'info', h: `Проверено ${o.checked} строк из ${S.rows.length}${N > 1 ? ` на всех ${N} шардах` : ''}. LIST-партиции по country или индекс по country сократили бы перебор.` };
+    judge(o.per, N);
+    finishQ({ sql: `SELECT id, email, city FROM users\nWHERE country = '${cc}';`, steps, tiles: { sh: [o.per.length, N], pt: [o.tp, o.tot], chk: o.checked, ret: o.res.length }, verdict: v, res: o.res }, o.hl, false);
+  }
+  function qTop() {
+    const c = cur(), N = c.N, G = groups(c), cnt = G.map(m => [...m.values()].reduce((a, x) => a + x.length, 0)), steps = [];
+    let shards = seq(N);
+    if (N > 1 && c.key === 'created_at') { shards = []; let acc = 0; for (let s = N - 1; s >= 0 && acc < 10; s--) { shards.push(s); acc += cnt[s]; } }
+    const hl = mkHl(shards), per = [], got = [];
+    let checked = 0, tp = 0, tot = 0;
+    G.forEach(m => { tot += m.size; });
+    shards.forEach(s => {
+      const m = G[s];
+      let parts = [...m.keys()], read = [];
+      if (c.part === 'range') { parts.sort().reverse(); const used = []; for (const p of parts) { if (read.length >= 10) break; used.push(p); read = read.concat(m.get(p)); } parts = used; }
+      else read = [...m.values()].flat();
+      m.forEach((_, p) => (parts.includes(p) ? hl.parts : hl.pruned).add(s + '|' + p));
+      tp += parts.length; checked += read.length;
+      const top = read.slice().sort((a, b) => b.ts - a.ts).slice(0, 10);
+      per.push({ s, tp: parts.length, total: m.size, n: top.length }); got.push(...top);
+    });
+    const res = got.sort((a, b) => b.ts - a.ts).slice(0, 10);
+    res.forEach(r => hl.rows.add(r.id));
+    if (N > 1 && c.key === 'created_at') steps.push(`Ключ шарда — created_at: самые новые строки лежат в последнем шарде, роутер идёт туда первым${shards.length > 1 ? ` и добирает из ${shards.slice(1).map(s => 'шарда ' + s).join(', ')}` : ''}.`);
+    else if (N > 1) steps.push(`Порядок по created_at, а шарды — по ${c.key}: новые строки есть в каждом шарде. Запрос идёт на все ${shW(N)}, каждый отдаёт <b>свои</b> 10 самых новых.`);
+    else steps.push('Сервер один: сортируем строки и берём 10 первых.');
+    steps.push(c.part === 'range' ? 'Партиции по кварталам идут по порядку: читаем с самой новой, пока не наберём 10, — старые кварталы не трогаем.' : 'Индекса по created_at нет → каждый шард читает все свои строки и сортирует их.');
+    if (per.length > 1) { steps.push(`Роутер сливает ${per.map(x => x.n).join(' + ')} = ${got.length} строк по created_at (слияние отсортированных списков) и берёт первые 10.`); hl.merge = `слил ${per.map(x => x.n).join(' + ')} = ${got.length} → взял 10`; }
+    hl.calc = N > 1 ? (c.key === 'created_at' ? 'новые даты → последний шард' : `ключа шарда нет → на все ${N}`) : '';
+    const rs = repStep(true, c); if (rs) { steps.push(rs); hl.rep = true; }
+    const v = per.length > 1 ? { c: 'warn', h: `<b>Сбор и слияние:</b> ${shW(per.length)} прислали по 10 строк, роутер выбросил ${got.length - 10}. С LIMIT 10 OFFSET 1000 каждый шард прислал бы по 1 010 строк — глубокая пагинация по шардам дорогая.` } : { c: 'ok', h: `Один ${N > 1 ? 'шард' : 'сервер'} и ${checked} ${plural(checked, 'проверенная строка', 'проверенные строки', 'проверенных строк')}. ${c.part === 'range' ? 'Партиции по времени дали прочитать только свежие кварталы.' : ''}` };
+    judge(per, N);
+    finishQ({ sql: 'SELECT id, email, created_at FROM users\nORDER BY created_at DESC\nLIMIT 10;', steps, tiles: { sh: [per.length, N], pt: [tp, tot], chk: checked, ret: res.length }, verdict: v, res }, hl, false);
+  }
+  function nextUser() {
+    const R = S.rng2, id = S.nextId++;
+    let c = 'RU';
+    if (R() >= 0.55) { const x = R() * 22; let acc = 0; c = 'GE'; for (const k of ['KZ', 'BY', 'UZ', 'AM', 'GE']) { acc += CN[k]; if (x < acc) { c = k; break; } } }
+    const used = new Set(S.rows.map(r => r.email));
+    const u = mkUser(id, c, NOW + (id - 49) * 437000, R, used);
+    u.balance = 0; u.active = true;
+    return u;
+  }
+  function routerRect() { const rt = EL && EL.querySelector('#ltRouter'); return rt ? rt.getBoundingClientRect() : null; }
+  function qInsert() {
+    const m = S.mig, qs0 = quarters(), r = nextUser();
+    const cR = m ? (m.step >= 4 ? m.newC : m.oldC) : cur(), N = cR.N, s = shardOf(r, cR), p = partOf(r);
+    S.rows.push(r);
+    const steps = [`Новая строка: id ${r.id}, ${esc(r.name)}, country ${r.country}, created_at ${fdate(r.ts)}.`];
+    const hl = mkHl([s]);
+    steps.push(N > 1 ? `Роутер считает шард по ключу: <code>${esc(calcOf(r, cR))}</code> → <b>шард ${s}</b>.` : 'Сервер один — строка идёт прямо в него.');
+    if (m && m.step >= 1 && m.step < 4) {
+      const b = shardOf(r, m.newC);
+      if (b !== s) { m.dual.add(r.id); hl.shards.add(b); hl.parts.add(b + '|' + p); steps.push(`Идёт переезд, включена <b>двойная запись</b>: строка пишется и по старому правилу (шард ${s}), и по новому (шард ${b}).`); }
+      else steps.push(`Идёт переезд, двойная запись: по новому правилу строка тоже в шарде ${s} — пишем один раз.`);
+    }
+    if (m && m.step >= 4) m.post.add(r.id);
+    steps.push(S.part === 'none' ? 'Партиций нет — строка ложится в общую таблицу.' : S.part === 'range' ? `Партиция по created_at: ${fdate(r.ts)} → <b>${p}</b>.${qs0.includes(p) ? '' : ` Такой партиции не было — её создают заранее (cron или pg_partman). Без неё вставка упала бы: <code>no partition of relation "users" found for row</code>.`}` : S.part === 'list' ? `Партиция по стране: ${r.country} → <b>${plabel(p)}</b>.` : `Партиция: <code>phash(${r.id}) % 4 = ${p.slice(1)}</code> → <b>${p}</b>.`);
+    steps.push('Обновляются оба индекса этого шарда: PK (id) и UNIQUE (email).');
+    const rs = repStep(false, cR); if (rs) { steps.push(rs); hl.sync = true; }
+    hl.parts.add(s + '|' + p); hl.rows.add(r.id); hl.fresh = r.id; hl.calc = N > 1 ? calcOf(r, cR) : '';
+    const total = groups(cur()).reduce((a, g) => a + g.size, 0);
+    const from = {}, rr = routerRect(); if (rr) { from['r' + r.id] = rr; from['g' + r.id] = rr; }
+    S.q = { sql: `INSERT INTO users (id, email, name, country, city,\n                   created_at, balance, is_active)\nVALUES (${r.id}, '${r.email}', '${r.name}', '${r.country}', '${r.city}',\n        '${fts(r.ts)}', 0.00, true);`, steps, tiles: { sh: [hl.shards.size, N], pt: [hl.parts.size, total], chk: 0, ret: 1, retL: 'строк записано' }, verdict: { c: 'ok', h: `Вставка трогает ровно один шард и одну партицию${hl.shards.size > 1 ? ' (плюс копия по новому правилу)' : ''}: адрес считается по ключу из самой строки.` }, res: [r] };
+    S.hl = hl; S.dup = null;
+    const o = EL && EL.querySelector('#ltOut'); if (o) o.innerHTML = outHTML();
+    drawStage({ flip: true, from });
+    if (S.tab === 'reshard') renderPanel();
+  }
+  function oldestQ() { const qs = S.rows.map(r => qOf(r.ts)).sort(); return qs[0] || null; }
+  function qDelete() {
+    const c = cur(), N = c.N, qd = oldestQ();
+    if (!qd) { finishQ({ sql: '-- таблица пуста', steps: ['Удалять нечего: строк не осталось. Верни исходные 48 строк.'] }, null, false); return; }
+    const d1 = qStart(qNext(qd)), steps = [];
+    const shards = N > 1 && c.key === 'created_at' ? [qShard(N, qd)] : seq(N);
+    const o = scanQ(shards, p => c.part !== 'range' || p === qd, r => qOf(r.ts) === qd, false);
+    steps.push(N > 1 ? (c.key === 'created_at' ? `Ключ шарда — created_at: ${qd} лежит в <b>шарде ${shards[0]}</b>.` : `Условие по дате, ключ шарда — ${c.key} → DELETE идёт на все ${shW(N)}.`) : 'Сервер один.');
+    steps.push(c.part === 'range' ? `Партиции по кварталам: открываем только <b>${qd}</b>.` : 'Партиций по дате нет → перебираем все строки, чтобы найти старые.');
+    steps.push(`Каждую из ${rowsW(o.res.length)} база удаляет <b>по одной</b>: находит, помечает удалённой, пишет запись в журнал (WAL). Место освободит только VACUUM, индексы тоже распухли.`);
+    const v = { c: 'warn', h: `<b>Удалено ${rowsW(o.res.length)}, проверено ${o.checked}, записей в журнал ≈ ${o.res.length}.</b> На 50 млн строк это часы работы, десятки гигабайт журнала, отставание реплик и раздутая таблица до VACUUM. ${c.part === 'range' ? 'Попробуй DROP PARTITION.' : 'С партициями по кварталам это делается одной командой DROP.'}` };
+    judge(o.per, N);
+    const q = { sql: `DELETE FROM users\nWHERE created_at < '${d1}';`, steps, tiles: { sh: [o.per.length, N], pt: [o.tp, o.tot], chk: o.checked, ret: o.res.length, retL: 'строк удалено' }, verdict: v };
+    const ids = new Set(o.res.map(r => r.id));
+    const apply = () => { S.rows = S.rows.filter(r => !ids.has(r.id)); o.hl.rows = new Set(); finishQ(q, o.hl, true); };
+    S.hl = o.hl; drawStage();
+    if (isCalm() || !ids.size) { apply(); return; }
+    let i = 0;
+    EL.querySelectorAll('#ltStage .lt-r').forEach(e => { if (ids.has(+e.dataset.id)) { e.style.setProperty('--d', Math.min(i++ * 60, 360) + 'ms'); e.classList.add('gone'); } });
+    pend(apply, Math.min(i * 60, 360) + 320);
+  }
+  function qDrop() {
+    const c = cur(), N = c.N;
+    if (c.part !== 'range') { finishQ({ sql: '-- DROP PARTITION недоступен', steps: [`Сейчас ${c.part === 'none' ? 'партиций нет' : 'партиции не по дате, а ' + (c.part === 'list' ? 'по стране' : 'по hash(id)')}: старые строки разбросаны по всем ящикам, выбросить «ящик старого квартала» нельзя.`, 'Включи RANGE по created_at — тогда каждый квартал станет отдельным ящиком.'], verdict: { c: 'info', h: '<button type="button" class="btn" data-act="range-drop">Включить RANGE по created_at и удалить квартал</button>' } }, null, false); return; }
+    const qs = quarters();
+    if (qs.length < 2) { finishQ({ sql: '-- осталась одна партиция', steps: ['Остался один квартал — выбрасывать последний ящик не будем. Верни исходные строки.'] }, null, false); return; }
+    const qd = qs[0], G = groups(c);
+    const shards = seq(N).filter(s => G[s].has(qd));
+    const hl = mkHl(shards); shards.forEach(s => hl.parts.add(s + '|' + qd));
+    const n = S.rows.filter(r => qOf(r.ts) === qd).length, tot = G.reduce((a, g) => a + g.size, 0);
+    hl.calc = N > 1 ? (shards.length === N ? `DDL → на все ${N} шарда` : `DDL → шард ${shards.join(', ')}`) : '';
+    const steps = [`Не ищем строки по одной: отцепляем ящик <b>${ptable(qd)}</b> от таблицы (DETACH) и выбрасываем его файл целиком (DROP).`, N > 1 ? (shards.length === N ? `У каждого шарда своя партиция ${qd} — команда выполняется на всех ${shW(N)}.` : `Квартал ${qd} есть только в шарде ${shards.join(', ')}.`) : 'Сервер один.', 'В журнал пишется пара записей об изменении схемы. Место возвращается сразу, VACUUM не нужен.'];
+    const q = { sql: `ALTER TABLE users DETACH PARTITION ${ptable(qd)};\nDROP TABLE ${ptable(qd)};`, steps, tiles: { sh: [shards.length, N], pt: [shards.length, tot], chk: 0, ret: n, retL: 'строк удалено' }, verdict: { c: 'ok', h: `<b>Удалено ${rowsW(n)} одной операцией</b> — за миллисекунды и на 50 млн строк тоже. Поэтому журналы, события и заказы почти всегда режут на партиции по времени.` } };
+    const apply = () => { S.dropped.add(qd); S.rows = S.rows.filter(r => qOf(r.ts) !== qd); done('drop'); finishQ(q, Object.assign(hl, { parts: new Set() }), true); };
+    S.hl = hl; drawStage();
+    if (isCalm()) { apply(); return; }
+    EL.querySelectorAll(`#ltStage .lt-part[data-p="${qd}"]`).forEach(e => e.classList.add('gone'));
+    pend(apply, 360);
+  }
+  function runQ(k) {
+    flush();
+    if (k === 'reset') { resetData(); S.pick = null; renderPanel(); drawStage({ flip: true }); return; }
+    if (S.mig && k !== 'ins') { S.q = { sql: '-- идёт переезд на новый шард', steps: ['Сначала закончи шаги во вкладке «Решардинг» или отмени переезд. Пока идёт переезд, здесь доступен только INSERT — он покажет двойную запись.'] }; const o = EL.querySelector('#ltOut'); if (o) o.innerHTML = outHTML(); return; }
+    if (k === 'ins') qInsert(); else if (k === 'id') qById(S.qId, false); else if (k === 'upd') qById(S.qUpd, true); else if (k === 'date') qDate(S.qD); else if (k === 'ctry') qCountry(S.qC); else if (k === 'top') qTop(); else if (k === 'del') qDelete(); else if (k === 'drop') qDrop();
+  }
+
+  /* ================= 6. Решардинг ================= */
+  const MSTEPS = [
+    ['Двойная запись', 'Роутер пишет каждую новую или изменённую строку и по старому, и по новому правилу. Читаем пока по старому. Сделай INSERT во вкладке «Запросы» — строка ляжет в оба места.'],
+    ['Копирование старых строк', 'Фоновая задача копирует строки, которые меняют адрес, на новые места — пачками и с ограничением скорости, чтобы не задушить рабочую нагрузку.'],
+    ['Сверка', 'Сравниваем число строк и контрольные суммы каждого куска: старое место = новое. Расхождения докопируем.'],
+    ['Переключение роутера', 'Роутер переходит на новое правило — чтения и записи идут по новым адресам. Обычно это флаг в конфигурации или пауза записи на секунды.'],
+    ['Удаление старых копий', 'Старые копии больше никто не читает — удаляем их пачками и освобождаем место.']
+  ];
+  function startMig() {
+    if (S.mig || S.N >= 6) return;
+    const oldC = cur(), newC = Object.assign({}, oldC, { N: oldC.N + 1 });
+    S.mig = { oldC, newC, step: 0, dual: new Set(), post: new Set() };
+    S.hl = null; S.q = null; S.pick = null;
+    renderPanel(); drawStage({ flip: true });
+  }
+  function finishMig() {
+    const m = S.mig; if (!m) return;
+    const moved = S.rows.filter(r => shardOf(r, m.oldC) !== shardOf(r, m.newC));
+    const total = S.rows.length;
+    const doIt = () => {
+      const alias = {};
+      if (m.step >= 2) moved.forEach(r => { alias['r' + r.id] = 'g' + r.id; });
+      else m.dual.forEach(id => { alias['r' + id] = 'g' + id; });
+      S.N = m.newC.N; S.mig = null; S.hl = null;
+      const rec = { method: m.oldC.method, key: m.oldC.key, from: m.oldC.N, to: m.newC.N, moved: moved.length, total };
+      S.hist.push(rec); S.lastMig = rec;
+      const ok = S.hist.filter(h => h.key === 'id' && h.from >= 2);
+      if (ok.some(h => h.method === 'mod') && ok.some(h => h.method === 'ring')) done('reshard');
+      renderPanel(); drawStage({ flip: true, alias });
+    };
+    if (m.step >= 4 && !isCalm()) { EL.querySelectorAll('#ltStage .lt-r.old').forEach(e => e.classList.add('gone')); pend(doIt, 320); }
+    else doIt();
+  }
+  function migAct(a) {
+    flush();
+    if (a === 'add') { startMig(); return; }
+    const m = S.mig; if (!m) return;
+    if (a === 'cancel') { if (m.step >= 4) return; S.mig = null; S.hl = null; renderPanel(); drawStage({ flip: true }); return; }
+    if (a === 'fast') { finishMig(); return; }
+    if (a === 'step') {
+      if (m.step >= 4) { finishMig(); return; }
+      m.step++;
+      S.hl = m.step === 4 ? Object.assign(mkHl([]), { calc: 'новое правило: ' + ruleText(m.newC) }) : null;
+      renderPanel(); drawStage({ flip: true });
+    }
+  }
+  function ringSVG(m) {
+    const cx = 120, R = 92, ang = h => h / 4294967296 * Math.PI * 2 - Math.PI / 2, oldN = m.oldC.N;
+    const ticks = ringPts(m.newC.N).map(([h, s]) => { const a = ang(h), nw = s >= oldN, r1 = R - (nw ? 9 : 5), r2 = R + (nw ? 9 : 5); return `<line class="tk${nw ? ' nw' : ''}" x1="${(cx + Math.cos(a) * r1).toFixed(1)}" y1="${(cx + Math.sin(a) * r1).toFixed(1)}" x2="${(cx + Math.cos(a) * r2).toFixed(1)}" y2="${(cx + Math.sin(a) * r2).toFixed(1)}"/>`; }).join('');
+    const keys = S.rows.map(r => { const a = ang(hid(r.id)), mv = shardOf(r, m.oldC) !== shardOf(r, m.newC); return `<circle class="kd${mv ? ' mv' : ''}" cx="${(cx + Math.cos(a) * (R - 20)).toFixed(1)}" cy="${(cx + Math.sin(a) * (R - 20)).toFixed(1)}" r="${mv ? 4 : 3}"/>`; }).join('');
+    return `<svg class="lt-ring" viewBox="0 0 240 240" role="img" aria-label="Кольцо хэшей: точки старых и нового шарда"><circle class="rg" cx="${cx}" cy="${cx}" r="${R}"/>${ticks}${keys}<text x="${cx}" y="${cx - 2}" text-anchor="middle">кольцо</text><text x="${cx}" y="${cx + 16}" text-anchor="middle" class="sm">${oldN} → ${m.newC.N} шардов</text></svg>
+      <div class="lt-tklg"><span><i class="lt-sw tko"></i>точки старых шардов</span><span><i class="lt-sw tkn"></i>точки нового</span><span><i class="lt-sw kmv"></i>строки, которые переедут</span></div>`;
+  }
+  function migHTML(m) {
+    const total = S.rows.length, mv = S.rows.filter(r => shardOf(r, m.oldC) !== shardOf(r, m.newC));
+    const exp = m.oldC.N <= 1 ? 0.5 : m.oldC.key !== 'id' ? null : m.oldC.method === 'mod' ? m.oldC.N / m.newC.N : 1 / m.newC.N;
+    const sum = mv.reduce((a, r) => (a + hid(r.id)) >>> 0, 0).toString(16).padStart(8, '0');
+    const sorted = S.rows.slice().sort((a, b) => a.id - b.id);
+    let h = `<div class="lt-card ${mv.length / total > 0.5 ? 'bad' : 'ok'}"><b>Переедет ${mv.length} из ${total} (${pc(mv.length / total)}).</b> ${exp != null ? `Теория для ${m.oldC.method === 'mod' ? 'hash mod N' : 'кольца'}: ≈ ${pc(exp)}${m.oldC.method === 'mod' && m.oldC.N > 1 ? ` — у остатка от деления на ${m.newC.N} почти всё не совпадает с остатком от деления на ${m.oldC.N}` : ''}.` : `Ключ ${m.oldC.key}: правило ${m.oldC.key === 'country' ? 'списка стран' : 'диапазонов дат'} пересчитано под ${m.newC.N} шардов.`} На схеме переезжающие строки — оранжевые, со стрелкой «→ новый шард».</div>
+      <div class="lt-strip" aria-label="Строки по id: оранжевые переедут">${sorted.map(r => { const a = shardOf(r, m.oldC), b = shardOf(r, m.newC); return `<i class="${a !== b ? 'mv' : ''}" title="id ${r.id}: шард ${a}${a !== b ? ' → ' + b : ' остаётся'}"></i>`; }).join('')}</div>`;
+    if (m.oldC.key === 'id' && m.oldC.method === 'mod' && m.oldC.N > 1) h += `<table class="lt-mt"><thead><tr><th>id</th><th>hash(id) % ${m.oldC.N}</th><th>hash(id) % ${m.newC.N}</th><th></th></tr></thead><tbody>${sorted.slice(0, 6).map(r => { const a = hid(r.id) % m.oldC.N, b = hid(r.id) % m.newC.N; return `<tr><td>${r.id}</td><td>${a}</td><td class="${a !== b ? 'mv' : ''}">${b}</td><td>${a !== b ? 'переедет' : 'остаётся'}</td></tr>`; }).join('')}</tbody></table>`;
+    if (m.oldC.key === 'id' && m.oldC.method === 'ring') h += ringSVG(m);
+    h += `<ol class="lt-msteps">${MSTEPS.map(([t, d], i) => { const st = i + 1, cls = m.step >= st ? 'done' : m.step + 1 === st ? 'cur' : ''; return `<li class="${cls}"><span class="st">${m.step >= st ? '✓' : st}</span><span><b>${t}</b>${cls ? d : ''}${st === 3 && m.step >= 3 ? ` <code>${mv.length} строк · сумма ${sum} = ${sum} ✓</code>` : ''}</span></li>`; }).join('')}</ol>
+      <div class="row-btns"><button type="button" class="btn primary" data-mig="step">Шаг ${Math.min(m.step + 1, 5)}: ${MSTEPS[Math.min(m.step, 4)][0].toLowerCase()} →</button>${m.step < 4 ? '<button type="button" class="btn" data-mig="fast">Переложить сразу</button><button type="button" class="btn ghost" data-mig="cancel">Отменить</button>' : ''}</div>`;
+    return h;
+  }
+  function panelReshard() {
+    const m = S.mig, c = cur();
+    let h = ana('Поставили ещё один шкаф. Если правило раскладки — «номер карточки по модулю числа шкафов», с новым шкафом почти у каждой карточки меняется адрес — переносить приходится почти всё. Если правило — кольцо, новый шкаф забирает понемногу у каждого соседа.', 'Чем меньше строк переезжает, тем дешевле и безопаснее рост кластера.', '<b>Решардинг</b> — перераспределение строк при изменении числа шардов. <b>hash mod N</b> переносит ≈ N/(N+1) строк, <b>consistent hashing</b> — ≈ 1/(N+1).');
+    h += ctl('Сейчас шардов', nSeg(!!m)) + ctl('Способ (для ключа id)', methodSeg(!!m || c.key !== 'id'));
+    if (c.key !== 'id') h += `<div class="lt-card warn">Ключ шарда сейчас <b>${c.key}</b>. Сравнение mod и кольца имеет смысл для ключа id — <button type="button" class="lt-link" data-act="key-id">переключить на id</button>.</div>`;
+    h += `<div class="row-btns"><button type="button" class="btn primary" data-mig="add"${m || c.N >= 6 ? ' disabled' : ''}>+ Добавить шард</button>${c.N >= 6 ? '<span class="lt-sub">максимум 6 шардов</span>' : ''}</div>`;
+    if (m) h += migHTML(m);
+    else if (S.lastMig) { const L = S.lastMig; h += `<div class="lt-card ${L.moved / L.total > 0.5 ? 'bad' : 'ok'}"><b>Переехало ${L.moved} из ${L.total} (${pc(L.moved / L.total)})</b> при ${L.key === 'id' ? (L.method === 'mod' ? 'hash mod N' : 'consistent hashing') : 'ключе ' + L.key}, ${L.from} → ${L.to} шардов.</div>`; }
+    if (S.hist.length) {
+      const last = k => S.hist.filter(x => x.key === 'id' && x.method === k && x.from >= 2).pop();
+      const a = last('mod'), b = last('ring');
+      h += `<table class="lt-mt"><thead><tr><th>способ</th><th>шардов</th><th>переехало</th></tr></thead><tbody>${S.hist.slice(-6).map(x => `<tr><td>${x.key === 'id' ? (x.method === 'mod' ? 'hash mod N' : 'кольцо') : 'ключ ' + x.key}</td><td>${x.from} → ${x.to}</td><td class="${x.moved / x.total > 0.5 ? 'mv' : ''}">${x.moved} из ${x.total} · ${pc(x.moved / x.total)}</td></tr>`).join('')}</tbody></table>`;
+      if (a && b) h += `<div class="lt-card ok"><b>Сравнение:</b> hash mod N — ${pc(a.moved / a.total)}, кольцо — ${pc(b.moved / b.total)}. Кольцо переносит в ${dec(a.moved / Math.max(1, b.moved))} раза меньше строк.</div>`;
+      else h += `<div class="lt-card">Чтобы сравнить, добавь шард и при <b>${a ? 'consistent hashing' : 'hash mod N'}</b> (при 2+ шардах, ключ id). Убрать лишний шард — кнопками «Сейчас шардов».</div>`;
+    }
+    return h + memo('рост «по модулю» почти полный переезд. Поэтому берут кольцо или сразу много виртуальных шардов (например, 256) на немногих серверах — тогда добавление сервера переносит целые виртуальные шарды. Переезд — онлайн: двойная запись → копия → сверка → переключение → чистка.')
+      + `<div class="row-btns">${next('hot', 'Дальше: горячий шард')}</div>`;
+  }
+
+  /* ================= 7. Горячий шард и уникальность ================= */
+  function counts(c) { const cnt = Array(c.N).fill(0); S.rows.forEach(r => cnt[shardOf(r, c)]++); return cnt; }
+  function pickCard() {
+    const c = cur();
+    if (c.N <= 1) return '<div class="lt-card">Сейчас сервер один — горячему шарду взяться неоткуда. Выбери раскладку кнопками выше.</div>';
+    if (S.pick == null || S.pick >= c.N) return '<div class="lt-card info"><b>Найди горячий шард:</b> кликни по шарду, который перегружен сильнее остальных.</div>';
+    const cnt = counts(c), ld = loadsFor(cnt, c), s = S.pick, r = ld.ratio[s], hot = r >= 1.5, n = S.rows.length;
+    return `<div class="lt-card ${hot ? 'bad' : 'ok'}"><b>Шард ${s}:</b> ${rowsW(cnt[s])} (${pc(cnt[s] / n)}), нагрузка ${nf(ld.prim[s])} оп/с — <b>${dec(r)}×</b> от средней по кластеру. ${hot ? `Это <b>горячий шард</b>: ${c.key === 'country' ? 'на нём ' + CC.filter(x => cmap(c.N)[x] === s).join(', ') + ', а RU — больше половины пользователей' : c.key === 'created_at' ? 'все новые регистрации пишутся сюда — даты растут' : 'на него выпало больше ключей'}. Другие серверы при этом простаивают, а добавлять серверы бесполезно — RU всё равно один.` : 'Не горячий: нагрузка близка к средней. Ищи шард с самой длинной полоской.'}</div>`;
+  }
+  function panelHot() {
+    const c = cur(), cnt = c.N > 1 ? counts(c) : [S.rows.length], ld = loadsFor(cnt, c), hotS = ld.ratio.map((r, s) => r >= 1.5 ? s : -1).filter(s => s >= 0);
+    let h = ana('Если раскладывать карточки по городам, а половина клиентов — из Москвы, московская комната завалена работой, а остальные скучают. Сервер, на который приходится непропорционально много, — «горячий».', 'Нагрузка идёт туда, где лежат данные: больше строк — больше запросов.', '<b>Горячий шард</b> (hot spot) — шард, который получает заметно больше нагрузки, чем остальные, из-за перекоса ключа шарда.');
+    h += `<div class="lt-ctl"><b>Готовые раскладки</b><div class="lt-presets"><button type="button" class="btn" data-act="pre:country">По country · 3 шарда</button><button type="button" class="btn" data-act="pre:created_at">По created_at · 3 шарда</button><button type="button" class="btn" data-act="pre:id">По hash(id) · 3 шарда</button></div></div>`;
+    h += `<div class="lt-rl"><span>Нагрузка на весь кластер</span><output id="ltRpsOut">${nf(S.rps)} оп/с</output></div><input type="range" class="lt-range" id="ltRps" min="2000" max="30000" step="1000" value="${S.rps}" aria-label="Нагрузка на кластер">`;
+    h += `<div id="ltPick">${pickCard()}</div>`;
+    if (c.N > 1 && hotS.length) h += `<div class="lt-card warn"><b>Лечение:</b> ${c.key === 'created_at' ? 'дата всё время растёт, поэтому все записи бьют в последний шард.' : 'перекос в самом ключе: 55 % пользователей — из RU.'} Шардируй по <code>hash(id)</code> — строки разойдутся ровно, независимо от страны и даты. Если запросы «по стране» важны — составной ключ (country, hash(id)) или партиции по стране внутри шардов. <button type="button" class="btn" data-act="pre:id">Шардировать по hash(id)</button></div>`;
+    h += `<div class="lt-sep"></div><h4 class="lt-h">Почему UNIQUE (email) больше не спасает</h4>`
+      + ana('Каждая комната проверяет «нет ли у нас уже такого email» только в своём шкафу. Про соседнюю комнату она не знает — и дубль проскакивает.', null, '<b>Уникальный индекс</b> работает только внутри одного шарда (и даже внутри одной партиции). Глобальную уникальность по всем шардам база сама уже не гарантирует.')
+      + '<div class="row-btns"><button type="button" class="btn primary" data-act="dup">Вставить пользователя с email, который уже есть</button></div>'
+      + (S.dup ? `<div class="lt-card ${S.dup.c}">${S.dup.h}</div>` : '')
+      + '<div class="lt-card"><b>Как вернуть уникальность:</b><ul><li>Таблица-справочник <code>emails (email PRIMARY KEY, user_id)</code>, шардированная по hash(email): сначала занимаем email там (это один шард — уникальность работает), потом вставляем пользователя.</li><li>Шардировать сам users по email — но тогда поиск по id уйдёт на все шарды.</li><li>Распределённая СУБД с глобальными индексами (CockroachDB, YugabyteDB, Spanner) — проверяет весь кластер, но запись дороже.</li></ul></div>';
+    return h + memo('ключ шарда с перекосом (страна, дата) даёт горячий шард — лечится hash(id). UNIQUE и внешние ключи работают только внутри шарда: глобальные правила держи отдельной таблицей-справочником.')
+      + `<div class="row-btns">${next('memo', 'Итоги: что запомнить')}</div>`;
+  }
+  function actDup() {
+    if (S.mig) { S.dup = { c: 'warn', h: 'Сначала закончи решардинг во вкладке «Решардинг».' }; renderPanel(); return; }
+    const c = cur(), r = nextUser(), s = shardOf(r, c), p = partOf(r);
+    const victim = S.rows.find(x => shardOf(x, c) !== s) || S.rows.find(x => partOf(x) !== p) || S.rows[0];
+    if (!victim) return;
+    r.email = victim.email;
+    const vs = shardOf(victim, c), vp = partOf(victim), same = vs === s && (S.part === 'none' || vp === p);
+    const hl = mkHl(same ? [s] : [s, vs]); hl.parts.add(vs + '|' + vp); hl.dup = new Set([victim.id]);
+    hl.calc = c.N > 1 ? calcOf(r, c) : '';
+    if (same) {
+      S.dup = { c: 'ok', h: `<b>База поймала дубль:</b> <code>ERROR: duplicate key value violates unique constraint "users_email_key"</code>. Новый пользователь id ${r.id} с адресом ${esc(r.email)} попал туда же, где лежит id ${victim.id}, — уникальный индекс один и видит обоих. ${c.N <= 1 ? 'Раздели таблицу на шарды во вкладке «Шарды» и попробуй снова.' : ''}` };
+    } else {
+      S.rows.push(r); hl.parts.add(s + '|' + p); hl.dup.add(r.id);
+      const loc = (sh, pp) => (c.N > 1 ? 'шард ' + sh : 'сервер') + (S.part !== 'none' ? ', партиция ' + plabel(pp) : '');
+      S.dup = { c: 'bad', h: `<b>Дубль проскочил:</b> в таблице две строки с адресом <code>${esc(r.email)}</code> — id ${victim.id} (${loc(vs, vp)}) и id ${r.id} (${loc(s, p)}). ${c.N > 1 ? `Роутер отправил новую строку в шард ${s}: <code>${esc(calcOf(r, c))}</code>. Шард ${s} проверил свой индекс по email — у него такого адреса нет — и вставил. Про шард ${vs} он не знает.` : 'Сервер один, но таблица разделена на партиции: в PostgreSQL UNIQUE (email) на секционированной таблице не создать, если email не входит в ключ партиционирования, — поэтому индекс есть только внутри каждой партиции.'}` };
+      if (c.N > 1) done('email');
+    }
+    S.hl = hl; S.q = null;
+    renderPanel(); drawStage({ flip: true, from: (() => { const rr = routerRect(); return rr ? { ['r' + r.id]: rr } : {}; })() });
+  }
+  function pickShard(s) {
+    S.pick = s;
+    const c = cur();
+    if (c.N > 1) { const ld = loadsFor(counts(c), c); if (ld.ratio[s] >= 1.5) done('hot'); }
+    const pk = EL.querySelector('#ltPick'); if (pk) pk.innerHTML = pickCard();
+    EL.querySelectorAll('#ltStage .lt-col').forEach(e => e.classList.toggle('lt-pk', +e.dataset.s === s));
+  }
+
+  /* ================= Что запомнить ================= */
+  const MEMO = [
+    ['Типы и вес', ['Тип — это правило и размер: bigint и timestamptz по 8 Б, boolean 1 Б, текст — по длине + 1 Б, кириллица — 2 Б на букву.', 'У каждой строки есть «корпус» — заголовок 24 Б, а между полями — пустоты выравнивания.', 'Индексы весят ощутимо: PK ≈ 22 Б на строку, индекс по email ≈ 50 Б.', 'В память должны помещаться горячие данные и индексы, а не вся таблица.']],
+    ['Партиции', ['Ящики внутри одного шкафа: сервер один, для запросов таблица одна.', 'Ускоряют, только если в WHERE есть ключ партиционирования — тогда работает partition pruning.', 'Старое удаляется DROP PARTITION мгновенно, а не DELETE часами.', 'Уникальный ключ обязан включать ключ партиционирования.']],
+    ['Шарды и реплики', ['Шарды — разные серверы, у каждого своя часть строк; роутер выбирает сервер по ключу шарда.', 'Ключ шарда выбирают под самый частый запрос и под равномерность.', 'Реплики разгружают чтения, но не записи: писать можно только в primary.']],
+    ['Запросы', ['Есть ключ шарда в WHERE — один шард; нет — все шарды (scatter-gather) и слияние.', 'ORDER BY … LIMIT по шардам: каждый отдаёт свой топ, роутер сливает; глубокий OFFSET — дорого.', 'Цена запроса — сколько шардов, партиций и строк он тронул (смотри EXPLAIN).']],
+    ['Решардинг', ['hash mod N при N → N+1 переносит ≈ N/(N+1) строк, кольцо — ≈ 1/(N+1).', 'Онлайн-переезд: двойная запись → копирование → сверка → переключение роутера → удаление старых копий.', 'Заранее заводят много виртуальных шардов на немногих серверах — тогда растут переносом целых кусков.']],
+    ['Горячий шард и уникальность', ['Ключ с перекосом (страна, 55 % RU) даёт горячий шард; дата как ключ — все записи в последний шард.', 'Лечение — hash(id) или составной ключ.', 'UNIQUE работает только внутри шарда: глобальная уникальность — таблица-справочник email → id, шардированная по email.']]
+  ];
+  function viewMemo() {
+    return ana('Как после экскурсии по складу: коротко — что где лежит и почему.', null, null)
+      + `<div class="lt-memo">${MEMO.map(([t, l]) => `<section><h4>${t}</h4><ul>${l.map(x => `<li>${x}</li>`).join('')}</ul></section>`).join('')}</div>`
+      + '<div class="row-btns"><button type="button" class="btn" data-go="query">Вернуться к запросам</button><button type="button" class="btn ghost" data-go="table">К началу</button></div>';
+  }
+
+  /* ================= схема: роутер → шарды → партиции → строки ================= */
+  function chipHTML(it, hl) {
+    const r = it.r, c = ['lt-r'];
+    if (it.cls) c.push(it.cls);
+    if (hl && it.cls !== 'ghost' && it.cls !== 'old') { if (hl.rows.has(r.id)) c.push('hit'); if (hl.dup && hl.dup.has(r.id)) c.push('dup'); }
+    return `<span class="${c.join(' ')}" data-k="${it.k}" data-id="${r.id}" style="--cc:${CCOL[r.country]}" title="id ${r.id} · ${esc(r.email)} · ${r.country} · ${fdate(r.ts)}">${r.id}${it.tag != null ? `<i>→${it.tag}</i>` : ''}</span>`;
+  }
+  function stageHTML() {
+    const L = layout(), c = L.show, N = L.N, hl = S.hl, m = S.mig;
+    const ld = SHOWLOAD.has(S.tab) ? loadsFor(L.cols.map(x => x.n), c) : null;
+    const rule = !m ? ruleText(c) : m.step < 4 ? `старое правило: ${ruleText(m.oldC)}${m.step >= 1 ? ' · двойная запись' : ''}` : `новое правило: ${ruleText(m.newC)}`;
+    const head = `<div class="lt-sh"><b>${N > 1 ? shW(N) : 'Один сервер'}</b><span>${partDesc(c.part)}</span><span>${rowsW(S.rows.length)}</span>${S.reps ? `<span>${S.reps} ${plural(S.reps, 'реплика', 'реплики', 'реплик')} у каждого</span>` : ''}<span class="lt-lgs">${CC.map(x => `<i class="lt-lg" style="--cc:${CCOL[x]}">${x}</i>`).join('')}</span></div>`;
+    const router = `<div class="lt-router${hl ? ' on' : ''}${m && m.step >= 1 && m.step < 4 ? ' dual' : ''}" id="ltRouter"><b>${N > 1 || m ? 'Роутер' : 'Приложение'}</b><small>${esc(rule)}</small>${hl && hl.calc ? `<code class="lt-calc">${esc(hl.calc)}</code>` : ''}${hl && hl.merge ? `<span class="lt-merge">${esc(hl.merge)}</span>` : ''}</div>`;
+    const cols = L.cols.map(col => {
+      const s = col.s, on = !!hl && hl.shards.has(s), dim = !!hl && hl.shards.size > 0 && !on && N > 1;
+      const sub = m && m.step < 4 && s < m.oldC.N ? shardSub(s, m.oldC) : shardSub(s, c);
+      const parts = col.parts.map(pt => {
+        const key = s + '|' + pt.p, pon = !!hl && hl.parts.has(key), pr = !!hl && hl.pruned.has(key);
+        const n = pt.items.filter(it => it.cls !== 'ghost' && it.cls !== 'old').length;
+        return `<div class="lt-part${pon ? ' on' : ''}${pr ? ' pr' : ''}" data-p="${esc(pt.p)}"><div class="lt-ph"><span>${esc(plabel(pt.p))}</span>${pr ? '<em>отсечена</em>' : `<small>${n || 'пусто'}</small>`}</div><div class="lt-chips">${pt.items.map(it => chipHTML(it, hl)).join('')}</div></div>`;
+      }).join('');
+      const live = col.items.filter(it => it.cls !== 'ghost' && it.cls !== 'old');
+      const reps = seq(S.reps).map(i => `<div class="lt-rep${on && hl.rep && i === 0 ? ' on' : ''}${on && hl.sync ? ' sync' : ''}"><span>реплика ${i + 1} · только чтение</span><span class="lt-dots">${live.map(it => `<i style="--cc:${CCOL[it.r.country]}"></i>`).join('')}</span></div>`).join('');
+      let load = '';
+      if (ld) { const p = ld.prim[s], f = p / ld.cap, rt = N > 1 ? ld.ratio[s] : 1, cls = f >= 1 || rt >= 1.5 ? 'bad' : f >= 0.75 || rt >= 1.25 ? 'warn' : 'ok'; load = `<div class="lt-load ${cls}"><div><span>нагрузка</span><b>${nf(p)} оп/с</b></div><i><b style="width:${Math.min(100, f * 100).toFixed(1)}%"></b></i><small>${pc(f)} потолка${N > 1 ? ` · ${dec(ld.ratio[s])}× средней` : ''}</small></div>`; }
+      return `<div class="lt-col${on ? ' on' : ''}${dim ? ' dim' : ''}${S.tab === 'hot' && S.pick === s ? ' lt-pk' : ''}" data-s="${s}"><div class="lt-shard${col.isNew ? ' new' : ''}" data-s="${s}"><div class="lt-shh"><b>${N > 1 ? 'шард ' + s : 'сервер БД'}</b>${col.isNew ? '<em>новый</em>' : ''}<small>${rowsW(col.n)}</small></div>${sub ? `<div class="lt-shs">${esc(sub)}</div>` : ''}<div class="lt-parts${c.part === 'none' ? ' one' : ''}">${parts}</div></div>${reps}${load}</div>`;
+    }).join('');
+    const q = S.q, qbar = S.tab === 'query' && q && q.tiles ? `<div class="lt-qbar"><code>${esc(q.sql.replace(/\s+/g, ' ').replace(/\( /g, '(').slice(0, 96))}</code><span><b>${q.tiles.sh[0]}</b> из ${q.tiles.sh[1]} ${plural(q.tiles.sh[1], 'шарда', 'шардов', 'шардов')}</span><span><b>${q.tiles.pt[0]}</b> из ${q.tiles.pt[1]} ${plural(q.tiles.pt[1], 'партиции', 'партиций', 'партиций')}</span><span><b>${q.tiles.chk}</b> ${plural(q.tiles.chk, 'строка проверена', 'строки проверено', 'строк проверено')}</span></div>` : '';
+    return `<div class="lt-sin" id="ltSIn"><svg class="lt-wires" aria-hidden="true"></svg>${head}${qbar}<div class="lt-rt">${router}</div><div class="lt-cols" style="--cols:${N}">${cols}</div><div class="lt-info" id="ltInfo">${INFO0}</div></div>`;
+  }
+  function wires(move) {
+    const box = EL && EL.querySelector('#ltSIn'); if (!box) return;
+    const svg = box.querySelector('.lt-wires'), rt = box.querySelector('#ltRouter'); if (!svg || !rt) return;
+    const B = box.getBoundingClientRect(), R = rt.getBoundingClientRect(); if (!B.width) return;
+    svg.setAttribute('width', B.width); svg.setAttribute('height', B.height); svg.setAttribute('viewBox', `0 0 ${B.width.toFixed(1)} ${B.height.toFixed(1)}`);
+    const x0 = R.left + R.width / 2 - B.left, y0 = R.bottom - B.top, hl = S.hl, shards = [...box.querySelectorAll('.lt-shard')];
+    if (move === true && svg.childElementCount) {
+      shards.forEach(sh => { const r = sh.getBoundingClientRect(), x1 = r.left + r.width / 2 - B.left, y1 = r.top - B.top; const d = `M${x0.toFixed(1)} ${y0.toFixed(1)} C${x0.toFixed(1)} ${(y0 + (y1 - y0) * 0.6).toFixed(1)} ${x1.toFixed(1)} ${(y0 + (y1 - y0) * 0.4).toFixed(1)} ${x1.toFixed(1)} ${y1.toFixed(1)}`; svg.querySelectorAll(`path[data-s="${sh.dataset.s}"]`).forEach(p => p.setAttribute('d', d)); });
+      return;
+    }
+    svg.innerHTML = shards.map(sh => {
+      const r = sh.getBoundingClientRect(), s = +sh.dataset.s, x1 = r.left + r.width / 2 - B.left, y1 = r.top - B.top;
+      const d = `M${x0.toFixed(1)} ${y0.toFixed(1)} C${x0.toFixed(1)} ${(y0 + (y1 - y0) * 0.6).toFixed(1)} ${x1.toFixed(1)} ${(y0 + (y1 - y0) * 0.4).toFixed(1)} ${x1.toFixed(1)} ${y1.toFixed(1)}`;
+      const on = hl && hl.shards.has(s);
+      return `<path data-s="${s}" d="${d}" class="lt-w${sh.classList.contains('new') ? ' nw' : ''}"/>${on ? `<path data-s="${s}" d="${d}" class="lt-w on" pathLength="100"/>` : ''}`;
+    }).join('');
+  }
+  function fitStick() {
+    const st = EL && EL.querySelector('#ltStage'), main = EL && EL.closest('.lab-main'), tabs = EL && EL.querySelector('.lt-tabs');
+    if (!st || !main) return;
+    st.classList.toggle('lt-stick', st.offsetHeight + (tabs ? tabs.offsetHeight : 50) + 24 < main.clientHeight);
+  }
+  function drawStage(opts) {
+    opts = opts || {};
+    const box = EL && EL.querySelector('#ltStage'); if (!box || EL.querySelector('#ltWork').hidden) return;
+    const anim = opts.flip && !isCalm(), before = new Map();
+    if (anim) { box.querySelectorAll('.lt-r[data-k]').forEach(e => before.set(e.dataset.k, e.getBoundingClientRect())); Object.entries(opts.from || {}).forEach(([k, r]) => before.set(k, r)); }
+    box.innerHTML = stageHTML();
+    wires();
+    fitStick();
+    if (!anim || !box.animate && !Element.prototype.animate) return;
+    let i = 0;
+    box.querySelectorAll('.lt-r[data-k]').forEach(e => {
+      const k = e.dataset.k, al = opts.alias && opts.alias[k], b = al && before.has(al) ? before.get(al) : before.get(k), a = e.getBoundingClientRect();
+      if (!b) { if (before.size) e.animate([{ opacity: 0, transform: 'scale(.5)' }, { opacity: 1, transform: 'none' }], { duration: 280, delay: 160, easing: 'ease-out', fill: 'backwards' }); return; }
+      const dx = (b.left + b.width / 2) - (a.left + a.width / 2), dy = (b.top + b.height / 2) - (a.top + a.height / 2);
+      if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
+      e.animate([{ transform: `translate(${dx.toFixed(1)}px, ${dy.toFixed(1)}px)`, zIndex: 5 }, { transform: 'none', zIndex: 5 }], { duration: 440, delay: Math.min(i++ * 5, 140), easing: 'cubic-bezier(.2,.75,.25,1)', fill: 'backwards' });
+    });
+  }
+
+  /* ================= вкладки и события ================= */
+  function renderPanel() {
+    const p = EL && EL.querySelector('#ltPanel'); if (!p) return;
+    p.innerHTML = S.tab === 'part' ? panelPart() : S.tab === 'shard' ? panelShard() : S.tab === 'query' ? panelQuery() : S.tab === 'reshard' ? panelReshard() : S.tab === 'hot' ? panelHot() : '';
+  }
+  function renderView() {
+    const v = EL && EL.querySelector('#ltView'); if (!v) return;
+    v.innerHTML = S.tab === 'table' ? viewTable() : S.tab === 'weight' ? viewWeight() : viewMemo();
+  }
+  function setTab(t) {
+    if (!EL) return;
+    flush();
+    S.tab = t;
+    EL.querySelectorAll('[data-tab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === t)));
+    const work = EL.querySelector('#ltWork'), view = EL.querySelector('#ltView');
+    if (STAGE.has(t)) { view.hidden = true; view.innerHTML = ''; work.hidden = false; renderPanel(); drawStage(); }
+    else { work.hidden = true; view.hidden = false; renderView(); }
+    const tabs = EL.querySelector('.lt-tabs'), main = EL.closest('.lab-main');
+    if (tabs && main && tabs.getBoundingClientRect().top < main.getBoundingClientRect().top) tabs.scrollIntoView({ block: 'start' });
+  }
+  function setCfg(k, v) {
+    flush();
+    if (S.mig) S.mig = null;
+    if (k === 'part') S.part = v; else if (k === 'n') S.N = +v; else if (k === 'key') S.key = v; else if (k === 'method') S.method = v; else if (k === 'reps') S.reps = +v;
+    else if (k.startsWith('w-')) { S.w[k.slice(2)] = +v; renderView(); return; }
+    if (S.N <= 1 && k === 'n') S.pick = null;
+    S.hl = null; S.q = null;
+    renderPanel(); drawStage({ flip: true });
+  }
+  function showRow(id) {
+    const r = S.rows.find(x => x.id === id); if (!r) return;
+    const c = cur(), s = shardOf(r, c), hl = mkHl([s]);
+    hl.parts.add(s + '|' + partOf(r)); hl.rows.add(id); hl.calc = `id ${id} → ${where(r)}`;
+    S.hl = hl;
+    setTab(c.N > 1 ? 'shard' : 'part');
+    const chip = EL.querySelector(`#ltStage .lt-r[data-id="${id}"]`); if (chip && chip.scrollIntoView) chip.scrollIntoView({ block: 'nearest' });
+    const inf = EL.querySelector('#ltInfo'); if (inf) inf.innerHTML = rowInfo(r);
+  }
+  const rowInfo = r => `<b>id ${r.id}</b> · ${esc(r.name)} · ${esc(r.email)} · ${r.country}, ${esc(r.city)} · ${fts(r.ts)} · баланс ${money(r.balance)} · ${r.active ? 'активен' : 'не активен'} — <span class="lt-where">лежит: ${S.mig ? 'идёт переезд' : where(r)}</span>`;
+  function act(a) {
+    flush();
+    if (a === 'dup') { actDup(); return; }
+    if (a === 'try-date') { S.tab = 'query'; S.qD = '2026-07-01'; setTab('query'); qDate(S.qD); return; }
+    if (a === 'range-drop') { S.part = 'range'; S.hl = null; drawStage({ flip: true }); renderPanel(); later(() => qDrop(), isCalm() ? 0 : 500); return; }
+    if (a === 'key-id') { setCfg('key', 'id'); return; }
+    if (a.startsWith('pre:')) { S.mig = null; S.key = a.slice(4); S.N = 3; S.method = 'mod'; S.hl = null; S.pick = null; renderPanel(); drawStage({ flip: true }); }
+  }
+  function onClick(e) {
+    const b = e.target.closest('[data-tab],[data-go],[data-set],[data-q],[data-mig],[data-w],[data-act],[data-col],tr[data-id],.lt-r,.lt-col');
+    if (!b || !EL || !EL.contains(b) || b.disabled) return;
+    const d = b.dataset;
+    if (d.tab) return setTab(d.tab);
+    if (d.go) return setTab(d.go);
+    if (d.set) { const i = d.set.indexOf(':'); return setCfg(d.set.slice(0, i), d.set.slice(i + 1)); }
+    if (d.q) return runQ(d.q);
+    if (d.mig) return migAct(d.mig);
+    if (d.w) { const [, r, k] = d.w.split(':'); S.w.ram = +r; S.w.sh = Math.max(1, Math.min(16, +k)); if (!WSH.includes(S.w.sh)) S.w.sh = WSH.find(x => x >= S.w.sh) || 16; renderView(); return; }
+    if (d.act) return act(d.act);
+    if (d.col) { S.col = d.col; renderView(); return; }
+    if (b.matches('tr[data-id]')) return showRow(+d.id);
+    if (b.classList.contains('lt-r')) {
+      if (S.tab === 'query' && !S.mig) { S.qId = +d.id; const inp = EL.querySelector('#ltQId'); if (inp) inp.value = d.id; runQ('id'); return; }
+      if (S.tab === 'hot') { const col = b.closest('.lt-col'); if (col) pickShard(+col.dataset.s); return; }
+      const r = S.rows.find(x => x.id === +d.id), inf = EL.querySelector('#ltInfo'); if (r && inf) inf.innerHTML = rowInfo(r);
+      return;
+    }
+    if (b.classList.contains('lt-col') && S.tab === 'hot') pickShard(+d.s);
+  }
+  function onInput(e) {
+    const t = e.target;
+    if (t.id === 'ltQId') S.qId = parseInt(t.value, 10) || 0;
+    else if (t.id === 'ltQU') S.qUpd = parseInt(t.value, 10) || 0;
+    else if (t.id === 'ltQC') S.qC = t.value;
+    else if (t.id === 'ltQD') S.qD = t.value;
+    else if (t.id === 'ltRows') { S.w.ri = +t.value; const o = EL.querySelector('#ltRowsOut'); if (o) o.textContent = rowsLabel(ROWSTEPS[S.w.ri]); const w = EL.querySelector('#ltWOut'); if (w) w.innerHTML = weightOut(); }
+    else if (t.id === 'ltRps') { S.rps = +t.value; const o = EL.querySelector('#ltRpsOut'); if (o) o.textContent = nf(S.rps) + ' оп/с'; drawStage(); const pk = EL.querySelector('#ltPick'); if (pk) pk.innerHTML = pickCard(); }
+  }
+  function onKey(e) {
+    if (e.key === 'Enter' && (e.target.id === 'ltQId' || e.target.id === 'ltQU')) { e.preventDefault(); runQ(e.target.id === 'ltQId' ? 'id' : 'upd'); }
+  }
+  function onHover(e) {
+    const ch = e.target.closest && e.target.closest('.lt-r'); if (!ch || !EL) return;
+    const r = S.rows.find(x => x.id === +ch.dataset.id), inf = EL.querySelector('#ltInfo');
+    if (r && inf) inf.innerHTML = rowInfo(r);
+  }
+
+  SD.LABS = SD.LABS || [];
+  SD.LABS.push({
+    id: 'table', title: 'Таблица вживую', lede: 'Типы, вес, партиции, шарды и путь запроса', dive: 'sharding',
+    intro: 'Одна таблица users: восемь типов полей и 48 живых строк. Посчитай, сколько она весит, разложи её на партиции внутри сервера и на шарды между серверами, запускай запросы и смотри, какой путь они проходят и сколько строк трогают. Добавь шард — и посмотри, сколько строк переедет.',
+    tasks: [
+      { id: 'byid', text: 'Найди пользователя по id при шардировании по id — запрос уходит на один шард' },
+      { id: 'prune', text: 'Выполни запрос, который в каждом шарде трогает только одну партицию' },
+      { id: 'scatter', text: 'Выполни запрос, который идёт на все шарды (scatter-gather)' },
+      { id: 'reshard', text: 'Добавь шард при hash mod N и при consistent hashing — сравни, сколько строк переехало' },
+      { id: 'hot', text: 'Найди горячий шард и кликни по нему' },
+      { id: 'drop', text: 'Удали старый квартал через DROP PARTITION' },
+      { id: 'fit', text: 'Подбери сервер или число шардов, чтобы 500 млн строк с индексами помещались в память' },
+      { id: 'email', text: 'Вставь дубль email в шардированную таблицу и посмотри, почему база его пропустила' }
+    ],
+    mount(el, api) {
+      initState();
+      EL = el; API = api; TM = [];
+      el.innerHTML = `<div class="lt"><div class="lt-tabs" role="tablist" aria-label="Разделы лаборатории">${TABS.map(([k, n, t]) => `<button type="button" role="tab" data-tab="${k}" aria-selected="${S.tab === k}"><b>${n}</b>${t}</button>`).join('')}</div>
+        <div class="lt-view" id="ltView"></div>
+        <div class="lt-work" id="ltWork" hidden><div class="lt-panel" id="ltPanel"></div><div class="lt-stage" id="ltStage"></div></div></div>`;
+      el.addEventListener('click', onClick); el.addEventListener('input', onInput); el.addEventListener('change', onInput); el.addEventListener('keydown', onKey); el.addEventListener('mouseover', onHover);
+      let raf = 0;
+      const ro = window.ResizeObserver ? new ResizeObserver(() => { cancelAnimationFrame(raf); raf = requestAnimationFrame(() => { wires(true); fitStick(); }); }) : null;
+      if (ro) ro.observe(el.querySelector('#ltStage'));
+      setTab(S.tab);
+      return () => {
+        flush();
+        el.removeEventListener('click', onClick); el.removeEventListener('input', onInput); el.removeEventListener('change', onInput); el.removeEventListener('keydown', onKey); el.removeEventListener('mouseover', onHover);
+        if (ro) ro.disconnect(); cancelAnimationFrame(raf);
+        TM.forEach(clearTimeout); TM = []; EL = null; API = null;
+      };
+    }
+  });
+  SD.labTable = { state: () => S };
+})();
