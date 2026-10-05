@@ -324,6 +324,7 @@
     if (SD.free) SD.free.mount();
     if (SD.share) SD.share.mount();
     if (SD.path) SD.path.mount();
+    if (SD.trace) SD.trace.mount();
     if (SD.landscape) SD.landscape.mount();
     if (SD.principles) SD.principles.mount();
     if (SD.guide) SD.guide.mount();
