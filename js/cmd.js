@@ -99,6 +99,7 @@
     add('Открыть', 'Справочник', 'разборы и лаборатории', click('navLib'), 'библиотека');
     if ($('navLand')) add('Открыть', 'Ландшафт', 'CI/CD, Kubernetes, наблюдаемость, данные', click('navLand'), 'devops grafana');
     add('Открыть', 'Песочница', 'свободная сборка без целей', click('navSandbox'), 'sandbox');
+    if (SD.labs) add('Открыть', 'От экрана до сервера', 'загрузка страницы, SSR/CSR, BFF, кэш браузера, офлайн', () => SD.labs.open('front'), 'фронтенд клиент мобильное ssr csr bff lcp лаборатория');
     if (SD.labs) add('Открыть', 'Выкладка вживую', 'rolling, blue-green, канарейка, флаги, миграция базы', () => SD.labs.open('deploy'), 'деплой релиз canary blue-green лаборатория');
     if (SD.labs) add('Открыть', 'SLO и бюджет ошибок', 'SLI, бюджет, burn rate, девятки', () => SD.labs.open('slo'), 'sre slo sli алерты девятки лаборатория');
     if (SD.labs) add('Открыть', 'API и контракты', 'REST, gRPC, события, WebSocket; OpenAPI, protobuf, AsyncAPI по схеме', () => SD.labs.open('api'), 'api rest grpc openapi asyncapi контракт лаборатория');

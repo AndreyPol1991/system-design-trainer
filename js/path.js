@@ -22,11 +22,12 @@
     { id: 'data', name: 'Данные и аналитика', an: 'Склад отчётов отдельно от магазина', items: ['analytics', 'd-reports', 'd-clicks', 'd-columns', 'd-lake', 'f-oltpreports'] },
     { id: 'cloud', name: 'Облако и стоимость', an: 'Аренда вместо своего здания', items: ['c-az', 'c-spot', 'c-storage', 'c-serverless', 'photos', 'video', 'p-cdn', 'p-presigned'] },
     { id: 'rt', name: 'Realtime и особые хранилища', an: 'Рация вместо писем', items: ['chat', 'feed', 'social', 'geo'] },
+    { id: 'front', name: 'Клиентская часть и сеть', an: 'От нажатия до готового экрана', items: ['lab:front', 'photos', 'video', 'p-cdn', 'p-presigned', 'chat'] },
     { id: 'ai', name: 'AI-системы', an: 'Умный помощник с правилами', items: ['support', 'voice', 'aiscale', 'agent', 'p-router'] }
   ];
   const ROLES = [
     { id: 'sa', name: 'Системный аналитик', skills: ['calc', 'db', 'tx', 'async', 'arch', 'data', 'rel'] },
-    { id: 'be', name: 'Бэкенд-разработчик', skills: ['scale', 'cache', 'db', 'tx', 'async', 'rel', 'arch'] },
+    { id: 'be', name: 'Бэкенд-разработчик', skills: ['scale', 'cache', 'db', 'tx', 'async', 'rel', 'arch', 'front'] },
     { id: 'sre', name: 'DevOps / SRE', skills: ['calc', 'scale', 'rel', 'ops', 'cloud', 'cache'] },
     { id: 'de', name: 'Дата-инженер', skills: ['data', 'db', 'async', 'cloud', 'calc'] },
     { id: 'arc', name: 'Архитектор', skills: SK.map(s => s.id) }
