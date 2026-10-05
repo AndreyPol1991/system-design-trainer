@@ -1376,6 +1376,16 @@
       const cmp = S.ixCmp && v !== 'none' && S.ixBase ? cmpHTML(R, S.ixBase) : '';
       return `<div class="lt-sin lt-ixs" id="ltSIn"><svg class="lt-ixsvg" aria-hidden="true"></svg>${head}${bar}${st}${heapHTML(R)}${cmp}<svg class="lt-ixptr" aria-hidden="true"></svg></div>`;
     }
+    /* концы стрелок замеряем, когда строки и страницы доехали: ждём все анимации внутри схемы */
+    function settleLines(box) {
+      const tok = S.ixTok = (S.ixTok || 0) + 1;
+      const again = () => { if (tok === S.ixTok) ixLines(true); };
+      setTimeout(() => {
+        const list = box.getAnimations ? box.getAnimations({ subtree: true }) : [];
+        if (list.length) Promise.all(list.map(x => x.finished.catch(() => null))).then(() => requestAnimationFrame(again)); else again();
+      }, 30);
+      setTimeout(again, 1500);
+    }
     function ixLines(move) {
       const box = EL.querySelector('#ltSIn'); if (!box || S.tab !== 'idx') return;
       const sv = box.querySelector('.lt-ixsvg'), sp = box.querySelector('.lt-ixptr'); if (!sv || !sp) return;
@@ -1709,7 +1719,7 @@
         const an = opts.flip && !isCalm() && !!Element.prototype.animate, bf = new Map();
         if (an) box.querySelectorAll('.lt-hr[data-hid]').forEach(e => bf.set(e.dataset.hid, e.getBoundingClientRect()));
         box.innerHTML = S.tab === 'idx' ? stageIdx() : S.tab === 'iso' ? stageIso() : stageSrv();
-        if (S.tab === 'idx') ixLines();
+        if (S.tab === 'idx') { ixLines(); settleLines(box); }
         fitStick();
         if (an && bf.size) { let j = 0; box.querySelectorAll('.lt-hr[data-hid]').forEach(e => { const b = bf.get(e.dataset.hid); if (!b) return; const a = e.getBoundingClientRect(), dx = b.left - a.left, dy = b.top - a.top; if (Math.abs(dx) + Math.abs(dy) < 1) return; e.animate([{ transform: `translate(${dx.toFixed(1)}px, ${dy.toFixed(1)}px)`, zIndex: 5 }, { transform: 'none', zIndex: 5 }], { duration: 440, delay: Math.min(j++ * 6, 140), easing: 'cubic-bezier(.2,.75,.25,1)', fill: 'backwards' }); }); }
         return;
