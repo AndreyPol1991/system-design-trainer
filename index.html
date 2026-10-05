@@ -2121,6 +2121,340 @@ html.calm .lt *, html.calm .lt *::before, html.calm .lt *::after { animation-del
 .xq-pause { fill: var(--warn); opacity: .55; }
 .xq-step.skip { fill: none; stroke: var(--ok); stroke-dasharray: 5 4; }
 
+/* ---------- «Аналитическая БД изнутри» (xray-olap.js, xo-) ---------- */
+.xo-dyn { pointer-events: none; }
+.xo-badge { fill: var(--surface-2); stroke: var(--border-strong); stroke-width: 1.2; }
+.xo-pf { fill: transparent; stroke: transparent; stroke-width: 1.2; }
+.xo-go { fill: var(--accent); }
+.xo-ok { fill: var(--ok); font-weight: 700; } .xo-warn { fill: var(--warn); font-weight: 700; } .xo-bad { fill: var(--bad); font-weight: 700; }
+.xo-acc { fill: var(--accent); font-weight: 700; } .xo-dim { fill: var(--text-muted); opacity: .75; } .xo-dim2 { fill: var(--text-muted); }
+.xo-off { opacity: .55; }
+.xo-nh { font-size: 12px; }
+.xo-vt { font: 700 15px var(--f-body); fill: var(--text); }
+.xo-ms { font: 500 max(10.5px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-body); fill: var(--text-muted); }
+.xo-pn { font: 600 max(10px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-mono); fill: var(--text); pointer-events: none; }
+.xo-cn { font: 700 max(11px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-mono); fill: var(--text); }
+.xo-cn.sm { font-size: max(10.5px, calc(var(--fsmin, 0px) / var(--sc, 1))); font-weight: 600; fill: var(--text-2); }
+.xo-cn.key { fill: var(--accent); }
+.xo-cv { font: 700 max(11px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-mono); fill: var(--text); }
+.xo-val { font: 500 max(10.5px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-mono); fill: var(--text-2); }
+.xo-val.on { fill: var(--accent); font-weight: 700; } .xo-val.bad { fill: var(--bad); font-weight: 700; }
+.xo-val.rep { fill: var(--warn); font-weight: 700; }
+.xo-mt { font: 700 max(10px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-mono); fill: var(--text); }
+/* SQL и код */
+.xo-code { fill: var(--code-bg); stroke: var(--border); stroke-width: 1; }
+.xo-sql { font: 500 max(11px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-mono); fill: var(--text); white-space: pre; font-variant-ligatures: none; }
+.xo-sql.sm { font-size: max(10.5px, calc(var(--fsmin, 0px) / var(--sc, 1))); }
+.xo-sql.xo-cmt { fill: var(--text-muted); font-style: italic; }
+.xo-kw { fill: var(--tok-k); font-weight: 700; } .xo-st { fill: var(--tok-s); } .xo-nu { fill: var(--tok-n); } .xo-fn { fill: var(--tok-f); }
+/* общая картинка: шарды, партиции, куски */
+.xo-bus { stroke: var(--k-write); stroke-width: 1.4; stroke-dasharray: 5 4; opacity: .55; fill: none; }
+.xo-qbus { stroke: var(--k-read); stroke-width: 1.4; stroke-dasharray: 5 4; opacity: .55; fill: none; }
+.xo-hub { fill: var(--surface-2); stroke: var(--k-write); stroke-width: 1.6; }
+.xo-sh { fill: var(--surface-2); stroke: var(--border-strong); stroke-width: 1.2; }
+.xo-sh.on { stroke: var(--info); stroke-width: 1.8; }
+.xo-sh.hot { stroke: var(--warn); stroke-width: 2.2; }
+.xo-copy { fill: var(--surface); stroke: var(--border-strong); stroke-dasharray: 3 3; }
+.xo-row { fill: var(--surface); stroke: var(--border); stroke-width: 1; }
+.xo-row.rd { fill: var(--info-soft); stroke: var(--info); stroke-width: 1.4; }
+.xo-row.sk { opacity: .4; }
+.xo-row.dl { fill: var(--bad-soft); stroke: var(--bad); stroke-width: 1.6; }
+.xo-pt { stroke-width: 1.2; }
+.xo-pt.l0 { fill: color-mix(in srgb, var(--k-write) 42%, var(--surface)); stroke: var(--k-write); }
+.xo-pt.l1 { fill: color-mix(in srgb, var(--k-write) 24%, var(--surface)); stroke: color-mix(in srgb, var(--k-write) 70%, var(--border-strong)); }
+.xo-pt.l2 { fill: color-mix(in srgb, var(--k-write) 12%, var(--surface-3)); stroke: color-mix(in srgb, var(--k-write) 40%, var(--border-strong)); }
+.xo-pt.l3 { fill: var(--surface-3); stroke: var(--border-strong); }
+.xo-pt.rd { fill: color-mix(in srgb, var(--info) 28%, var(--surface)); stroke: var(--info); }
+.xo-pt.sk { opacity: .4; }
+.xo-pt.mg { stroke: var(--accent); stroke-width: 2.2; stroke-dasharray: 4 3; }
+.xo-pt.mu { fill: var(--warn-soft); stroke: var(--warn); stroke-width: 2.2; }
+.xo-pt.fl { stroke: var(--accent); stroke-width: 2.6; stroke-dasharray: none; }
+.xo-sweep { fill: var(--info); opacity: .22; pointer-events: none; }
+.xo-ghost { fill: var(--bad-soft); stroke: var(--bad); stroke-width: 1.6; stroke-dasharray: 4 3; }
+.xo-mubar { fill: var(--warn); }
+.xo-batch { fill: var(--k-write); stroke: var(--bg); stroke-width: 1.5; }
+.xo-partial { fill: var(--ok); stroke: var(--bg); stroke-width: 1.5; }
+.xo-ring { fill: none; stroke: var(--warn); stroke-width: 1.6; stroke-dasharray: 3 3; }
+.xo-ring.ok { stroke: var(--ok); stroke-dasharray: none; }
+.xo-flb { fill: var(--accent); }
+/* мини-схема модели данных */
+.xo-mbox { fill: var(--surface-2); stroke: var(--border-strong); stroke-width: 1.1; }
+.xo-mbox.f { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.4; }
+.xo-mbox.sub { stroke-dasharray: 3 2; }
+.xo-ml { stroke: var(--border-strong); stroke-width: 1.3; }
+.xo-tick { stroke: var(--border-strong); stroke-width: 1; }
+/* блоки изнутри: общие */
+.xo-backb { fill: var(--surface-2); stroke: var(--border-strong); }
+.xo-back { fill: var(--accent); font-weight: 600; }
+.xo-panel { fill: var(--surface); stroke: var(--border); stroke-width: 1.2; }
+.xo-panel.on { stroke: var(--accent); stroke-width: 2; }
+.xo-panel.okb { stroke: var(--ok); stroke-width: 1.8; } .xo-panel.badb { stroke: var(--bad); stroke-width: 1.8; }
+.xo-note { fill: var(--surface-2); stroke: var(--border); }
+.xo-note.on { stroke: var(--accent); stroke-width: 1.8; fill: var(--accent-soft); }
+.xo-ar { stroke: var(--text-muted); stroke-width: 1.6; fill: none; } .xo-ah { fill: var(--text-muted); }
+.xo-ar.on, .xo-ar.acc { stroke: var(--accent); stroke-width: 2; } .xo-ah.on, .xo-ah.acc { fill: var(--accent); }
+.xo-chip { fill: var(--surface-2); stroke: var(--border); }
+.xo-chip.need { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.6; }
+.xo-chip.need + text { fill: var(--accent); }
+/* строки и колонки */
+.xo-page { fill: var(--surface-2); stroke: var(--border-strong); }
+.xo-page.on { stroke: var(--warn); stroke-width: 2; }
+.xo-row-t { font: 500 max(10.5px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-mono); fill: var(--text-muted); white-space: pre; font-variant-ligatures: none; }
+.xo-need { fill: var(--accent); font-weight: 700; }
+.xo-pg { fill: var(--surface-3); stroke: none; }
+.xo-pg.rd { fill: color-mix(in srgb, var(--warn) 55%, var(--surface)); }
+.xo-pg.on { fill: var(--warn); }
+.xo-fn2 { font: 600 max(10.5px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-mono); fill: var(--text-2); }
+.xo-fn2.need { fill: var(--accent); font-weight: 700; } .xo-fn2.dim { fill: var(--text-muted); opacity: .8; }
+.xo-bar0 { fill: var(--border-strong); opacity: .7; }
+/* сжатие и min/max */
+.xo-cell { fill: var(--surface-2); stroke: var(--border-strong); stroke-width: 1; }
+.xo-cell.on { stroke: var(--accent); stroke-width: 2.2; fill: var(--accent-soft); }
+.xo-cell.code { fill: var(--accent-soft); stroke: var(--accent); }
+.xo-cell.e { fill: none; stroke: var(--border); stroke-dasharray: 3 3; }
+.xo-cell.dim { opacity: .45; }
+.xo-run { fill: var(--info-soft); stroke: var(--info); stroke-width: 1.6; }
+.xo-blk { fill: var(--surface-2); stroke: var(--border-strong); stroke-width: 1.1; }
+.xo-blk.rd { fill: var(--ok-soft); stroke: var(--ok); stroke-width: 1.8; }
+.xo-blk.sk { opacity: .45; stroke-dasharray: 4 3; }
+.xo-blk.on { stroke: var(--accent); stroke-width: 2.6; }
+.xo-x { stroke: var(--text-muted); stroke-width: 1.4; }
+/* звезда, снежинка, широкая таблица */
+.xo-card { fill: var(--surface); stroke: var(--border-strong); stroke-width: 1.2; }
+.xo-card.on { stroke: var(--accent); stroke-width: 1.8; }
+.xo-cardh { fill: var(--surface-3); stroke: none; }
+.xo-krow { fill: var(--accent-soft); stroke: none; }
+.xo-link { fill: none; stroke: var(--border-strong); stroke-width: 1.4; stroke-dasharray: 4 4; }
+.xo-link.on { stroke: var(--accent); stroke-width: 2.2; }
+/* история (SCD2) */
+.xo-axis { stroke: var(--border-strong); stroke-width: 2; }
+.xo-move { stroke: var(--warn); stroke-width: 2; stroke-dasharray: 5 4; }
+.xo-ord { fill: var(--surface-3); stroke: var(--border-strong); stroke-width: 1.4; }
+.xo-ord.on { fill: var(--k-read); stroke: var(--bg); stroke-width: 2; }
+.xo-cur { fill: var(--accent); }
+.xo-tr { fill: var(--surface-2); stroke: var(--border); }
+.xo-tr.on { fill: var(--accent-soft); stroke: var(--accent); }
+.xo-tr.upd { fill: var(--warn-soft); stroke: var(--warn); }
+/* шарды изнутри */
+.xo-phase { fill: var(--surface-2); stroke: var(--border); }
+.xo-phase.on { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.6; }
+.xo-phase.past { stroke: var(--border-strong); }
+.xo-fan { stroke: var(--ok); stroke-width: 1; opacity: .35; }
+.xo-sep { stroke: var(--border-strong); stroke-width: 1; stroke-dasharray: 3 3; }
+/* вставка и куски, партиции */
+.xo-thr { stroke: var(--warn); stroke-width: 2; } .xo-thr.bad { stroke: var(--bad); }
+.xo-fold { fill: transparent; stroke: none; }
+.xo-fold.rd { fill: var(--info-soft); stroke: var(--info); stroke-width: 1.2; }
+.xo-fold.sk { opacity: .45; }
+.xo-fold.dl, .xo-fold.gh { fill: var(--bad-soft); stroke: var(--bad); stroke-width: 1.2; stroke-dasharray: 4 3; }
+.xo-fold.mu { fill: var(--warn-soft); stroke: var(--warn); stroke-width: 1.4; }
+.xo-fold.fl { fill: var(--ok-soft); stroke: var(--ok); stroke-width: 1.4; }
+/* легенда */
+.xr-legend .xr-sw.xo-sw0 { background: color-mix(in srgb, var(--k-write) 42%, var(--surface)); border: 1.5px solid var(--k-write); }
+.xr-legend .xr-sw.xo-sw3 { background: var(--surface-3); border: 1.5px solid var(--border-strong); }
+.xr-legend .xr-sw.xo-swr { background: color-mix(in srgb, var(--info) 28%, var(--surface)); border: 1.5px solid var(--info); }
+.xr-legend .xr-sw.xo-swk { background: var(--surface-2); border: 1.5px dashed var(--border-strong); opacity: .6; }
+.xo-arc { fill: none; stroke: var(--k-job); stroke-width: 1.4; stroke-dasharray: 3 4; opacity: .7; }
+.xo-pill { fill: var(--warn-soft); stroke: var(--warn); stroke-width: 1; }
+
+/* ---------- «Озеро данных изнутри» (xray-lake.js, xk2-) ---------- */
+.xk2-dyn { pointer-events: none; }
+.xk2-badge { fill: var(--surface-2); stroke: var(--border-strong); stroke-width: 1.2; }
+.xk2-pf { fill: transparent; stroke: transparent; stroke-width: 1.2; }
+.xk2-go { fill: var(--accent); }
+.xk2-ok { fill: var(--ok); font-weight: 700; } .xk2-warn { fill: var(--warn); font-weight: 700; } .xk2-bad { fill: var(--bad); font-weight: 700; } .xk2-acc { fill: var(--accent); font-weight: 700; }
+.xk2-off { opacity: .6; }
+.xk2-vt { font: 700 15px var(--f-body); fill: var(--text); }
+.xk2-ms { font: 500 max(10.5px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-body); fill: var(--text-muted); }
+.xk2-fn { font: 600 max(10px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-mono); fill: var(--text); }
+.xk2-fn.sm { font-weight: 500; fill: var(--text-2); }
+.xk2-path { font: 700 max(10.5px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-mono); fill: var(--text-2); }
+.xk2-path.on { fill: var(--accent); }
+.xk2-mono { font: 500 max(10px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-mono); fill: var(--text-2); white-space: pre; font-variant-ligatures: none; }
+.xk2-mono.on { fill: var(--accent); font-weight: 700; } .xk2-mono.dim { fill: var(--text-muted); opacity: .7; }
+.xk2-mono.strike { text-decoration: line-through; fill: var(--text-muted); opacity: .75; }
+.xk2-need { fill: var(--accent); font-weight: 700; }
+.xk2-val { font: 500 max(10.5px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-mono); fill: var(--text-2); }
+.xk2-val.on { fill: var(--accent); font-weight: 700; } .xk2-val.bad { fill: var(--bad); font-weight: 700; } .xk2-val.mut { fill: var(--text-muted); font-style: italic; }
+.xk2-code { fill: var(--code-bg); stroke: var(--border); stroke-width: 1; }
+.xk2-sql { font: 500 max(11px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-mono); fill: var(--text); white-space: pre; font-variant-ligatures: none; }
+.xk2-sql.sm { font-size: max(10.5px, calc(var(--fsmin, 0px) / var(--sc, 1))); }
+.xk2-kw { fill: var(--tok-k); font-weight: 700; } .xk2-st { fill: var(--tok-s); } .xk2-nu { fill: var(--tok-n); } .xk2-fx { fill: var(--tok-f); }
+/* бакет, папки, файлы */
+.xk2-row { fill: var(--surface); stroke: var(--border); stroke-width: 1; }
+.xk2-row.rd { fill: var(--info-soft); stroke: var(--info); stroke-width: 1.5; }
+.xk2-row.sc { stroke: var(--warn); stroke-dasharray: 4 3; }
+.xk2-row.bad { fill: var(--bad-soft); stroke: var(--bad); }
+.xk2-file { stroke-width: 1.2; }
+.xk2-file.p { fill: color-mix(in srgb, var(--k-write) 16%, var(--surface-2)); stroke: color-mix(in srgb, var(--k-write) 60%, var(--border-strong)); }
+.xk2-file.j { fill: color-mix(in srgb, var(--warn) 14%, var(--surface-2)); stroke: color-mix(in srgb, var(--warn) 60%, var(--border-strong)); }
+.xk2-file.rd { fill: color-mix(in srgb, var(--info) 26%, var(--surface)); stroke: var(--info); }
+.xk2-file.fl { stroke: var(--accent); stroke-width: 2.4; }
+.xk2-file.bad { fill: var(--bad-soft); stroke: var(--bad); stroke-width: 1.8; }
+.xk2-file.v2 { stroke: var(--warn); stroke-width: 2; stroke-dasharray: 4 3; }
+.xk2-file.unc { stroke-dasharray: 3 3; opacity: .85; }
+.xk2-file.cmp { fill: var(--ok-soft); stroke: var(--ok); stroke-width: 2.2; }
+.xk2-file.ghost { opacity: .35; stroke-dasharray: 4 3; }
+.xk2-sm { fill: color-mix(in srgb, var(--warn) 45%, var(--surface)); stroke: var(--warn); stroke-width: .8; }
+.xk2-sm.rd { fill: var(--info); stroke: var(--info); }
+.xk2-sm.cmp { fill: var(--accent); stroke: var(--accent); }
+.xk2-sm.gone { opacity: .12; }
+.xk2-fdot { fill: var(--k-write); stroke: var(--bg); stroke-width: 1.5; }
+.xk2-rdbar { fill: var(--info); }
+/* Iceberg и движок */
+.xk2-meta { fill: var(--surface-2); stroke: var(--border-strong); stroke-width: 1.1; }
+.xk2-meta.on { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.6; }
+.xk2-meta.fl { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 2.4; }
+.xk2-meta.new { fill: var(--ok-soft); stroke: var(--ok); stroke-width: 1.6; stroke-dasharray: 4 3; }
+.xk2-meta.old { opacity: .45; stroke-dasharray: 4 3; }
+.xk2-tree { stroke: var(--border-strong); stroke-width: 1.2; }
+.xk2-cat { fill: var(--surface-2); stroke: var(--accent); stroke-width: 1.6; }
+.xk2-cat.fl { fill: var(--accent-soft); stroke-width: 2.6; }
+.xk2-step { fill: var(--surface-2); stroke: var(--border); }
+.xk2-step.on { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.4; }
+.xk2-step.done { stroke: var(--ok); }
+/* слои */
+.xk2-layer { fill: var(--surface-2); stroke: var(--border-strong); stroke-width: 1.3; }
+.xk2-layer.br { stroke: color-mix(in srgb, var(--warn) 70%, var(--border-strong)); }
+.xk2-layer.si { stroke: var(--info); }
+.xk2-layer.go { stroke: var(--k-job); }
+/* блоки изнутри */
+.xk2-backb { fill: var(--surface-2); stroke: var(--border-strong); }
+.xk2-back { fill: var(--accent); font-weight: 600; }
+.xk2-panel { fill: var(--surface); stroke: var(--border); stroke-width: 1.2; }
+.xk2-panel.on { stroke: var(--accent); stroke-width: 1.8; }
+.xk2-panel.okb { stroke: var(--ok); stroke-width: 1.6; } .xk2-panel.badb { stroke: var(--bad); stroke-width: 1.8; }
+.xk2-panel.br { stroke: color-mix(in srgb, var(--warn) 70%, var(--border-strong)); }
+.xk2-panel.si { stroke: var(--info); } .xk2-panel.go { stroke: var(--k-job); }
+.xk2-krow { fill: var(--accent-soft); stroke: none; }
+.xk2-ar { stroke: var(--text-muted); stroke-width: 1.6; fill: none; } .xk2-ah { fill: var(--text-muted); }
+.xk2-ar.acc, .xk2-ar.now { stroke: var(--accent); stroke-width: 2; } .xk2-ah.acc, .xk2-ah.now { fill: var(--accent); }
+.xk2-ar.ok { stroke: var(--ok); } .xk2-ah.ok { fill: var(--ok); }
+.xk2-ar.dim { stroke-dasharray: 3 3; opacity: .6; }
+.xk2-ar.fut, .xk2-ah.fut, .xk2-sl.fut { opacity: .22; }
+.xk2-life { stroke: var(--border-strong); stroke-width: 1.2; stroke-dasharray: 4 4; }
+.xk2-sl { font: 600 max(10.5px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-mono); fill: var(--text-2); white-space: pre; }
+.xk2-sl.now { fill: var(--accent); font-weight: 700; }
+.xk2-sl.xk2-ok { fill: var(--ok); } .xk2-sl.xk2-acc { fill: var(--accent); }
+.xk2-pg { fill: var(--surface-3); }
+.xk2-pg.rd { fill: color-mix(in srgb, var(--warn) 55%, var(--surface)); }
+.xk2-pq { fill: var(--surface-2); stroke: var(--border-strong); stroke-width: 1; }
+.xk2-pq.m { fill: var(--surface-3); }
+.xk2-pq.g.sk { opacity: .35; stroke-dasharray: 4 3; }
+.xk2-pq.g.sel { stroke: var(--accent); stroke-width: 2; }
+.xk2-pq.c { fill: var(--surface-3); stroke: var(--border); }
+.xk2-pq.c.rd { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.8; }
+.xk2-pq.f { fill: var(--info-soft); stroke: var(--info); }
+.xk2-pq.on { stroke: var(--accent); stroke-width: 2.4; } .xk2-pq.f.rd { stroke: var(--ok); stroke-width: 1.6; }
+.xk2-fold { fill: transparent; stroke: none; }
+.xk2-fold.rd { fill: var(--info-soft); stroke: var(--info); stroke-width: 1.3; }
+.xk2-fold.sc { fill: var(--warn-soft); stroke: var(--warn); stroke-width: 1; stroke-dasharray: 3 3; }
+.xk2-sep { stroke: var(--border); stroke-width: 1; }
+.xk2-axis { stroke: var(--border-strong); stroke-width: 2; }
+.xk2-snap { fill: var(--surface-3); stroke: var(--info); stroke-width: 2; }
+.xk2-snap.bad { stroke: var(--bad); fill: var(--bad-soft); }
+.xk2-snap.cur { fill: var(--accent); stroke: var(--bg); stroke-width: 2.5; }
+.xk2-curm { fill: var(--accent); }
+.xk2-q { stroke: var(--accent); stroke-width: 2; stroke-dasharray: 5 4; }
+/* легенда */
+.xr-legend .xr-sw.xk2-swf { background: color-mix(in srgb, var(--k-write) 16%, var(--surface-2)); border: 1.5px solid color-mix(in srgb, var(--k-write) 60%, var(--border-strong)); }
+.xr-legend .xr-sw.xk2-swj { background: color-mix(in srgb, var(--warn) 14%, var(--surface-2)); border: 1.5px solid color-mix(in srgb, var(--warn) 60%, var(--border-strong)); }
+.xr-legend .xr-sw.xk2-swr { background: color-mix(in srgb, var(--info) 26%, var(--surface)); border: 1.5px solid var(--info); }
+.xr-legend .xr-sw.xk2-sws { background: color-mix(in srgb, var(--warn) 45%, var(--surface)); border: 1px solid var(--warn); width: 8px; height: 8px; }
+
+/* ---------- «Конвейер ETL/ELT изнутри» (xray-etl.js, xe-) ---------- */
+.xe-dyn { pointer-events: none; }
+.xe-badge { fill: var(--surface-2); stroke: var(--border-strong); stroke-width: 1.2; }
+.xe-go { fill: var(--accent); }
+.xe-ok { fill: var(--ok); font-weight: 700; } .xe-warn { fill: var(--warn); font-weight: 700; } .xe-bad { fill: var(--bad); font-weight: 700; } .xe-acc { fill: var(--accent); font-weight: 700; }
+.xe-vt { font: 700 15px var(--f-body); fill: var(--text); }
+.xe-big { font: 700 26px var(--f-mono); fill: var(--text); }
+.xe-ms { font: 500 max(10.5px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-body); fill: var(--text-muted); }
+.xe-fn { font: 600 max(10.5px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-mono); fill: var(--text); }
+.xe-fn.sm { font-weight: 500; fill: var(--text-2); font-size: max(10px, calc(var(--fsmin, 0px) / var(--sc, 1))); }
+.xe-zl { font: 600 max(10.5px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-mono); fill: var(--text-muted); letter-spacing: .03em; }
+.xe-dl { font: 700 max(10px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-mono); fill: var(--text); paint-order: stroke; stroke: var(--bg); stroke-width: 3px; }
+.xe-val { font: 500 max(10.5px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-mono); fill: var(--text-2); }
+.xe-val.bad { fill: var(--bad); font-weight: 700; }
+.xe-val.opc { fill: var(--ok); font-weight: 700; } .xe-val.opu { fill: var(--k-write); font-weight: 700; } .xe-val.opd { fill: var(--bad); font-weight: 700; } .xe-val.opr { fill: var(--info); font-weight: 700; }
+.xe-mono { font: 500 max(10px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-mono); fill: var(--text-2); white-space: pre; font-variant-ligatures: none; }
+.xe-mono.on { fill: var(--accent); font-weight: 700; } .xe-mono.bad { fill: var(--bad); } .xe-mono.warn { fill: var(--warn); } .xe-mono.ok { fill: var(--ok); }
+/* код */
+.xe-codebg { fill: var(--code-bg); stroke: var(--border); stroke-width: 1; }
+.xe-codebg.on { stroke: var(--accent); stroke-width: 1.8; }
+.xe-code { font: 500 max(11px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-mono); fill: var(--text); white-space: pre; font-variant-ligatures: none; }
+.xe-code.sm { font-size: max(10.5px, calc(var(--fsmin, 0px) / var(--sc, 1))); }
+.xe-code.hlt { fill: var(--accent); font-weight: 700; }
+.xe-kw { fill: var(--tok-k); font-weight: 700; } .xe-st { fill: var(--tok-s); } .xe-nu { fill: var(--tok-n); } .xe-jj { fill: var(--tok-f); } .xe-cm { fill: var(--text-muted); font-style: italic; }
+/* граф задач */
+.xe-half { stroke: none; }
+.xe-half.conv { fill: var(--surface); opacity: .9; }
+.xe-half.dwh { fill: color-mix(in srgb, var(--info) 7%, var(--surface)); stroke: color-mix(in srgb, var(--info) 35%, var(--border)); stroke-dasharray: 5 4; stroke-width: 1; }
+.xe-task { fill: var(--surface-2); stroke: var(--border-strong); stroke-width: 1.3; }
+.xe-task.ok { fill: var(--ok-soft); stroke: var(--ok); }
+.xe-task.run { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 2; }
+.xe-task.retry { fill: var(--warn-soft); stroke: var(--warn); stroke-width: 2; stroke-dasharray: 5 3; }
+.xe-task.fail { fill: var(--bad-soft); stroke: var(--bad); stroke-width: 2.2; }
+.xe-task.up { fill: var(--surface-2); stroke: color-mix(in srgb, var(--bad) 60%, var(--border-strong)); stroke-dasharray: 3 3; opacity: .8; }
+.xe-task.none { fill: var(--surface-2); stroke: var(--border-strong); stroke-dasharray: 4 3; opacity: .85; }
+.xe-prog { fill: var(--accent); }
+.xe-ring { fill: none; stroke: var(--warn); stroke-width: 2.4; stroke-linecap: round; }
+.xe-art { fill: var(--surface); stroke: var(--border); }
+.xe-art.on { stroke: var(--info); fill: var(--info-soft); }
+.xe-art.bad { stroke: var(--bad); fill: var(--bad-soft); stroke-dasharray: 4 3; }
+.xe-ar { stroke: var(--text-muted); stroke-width: 1.6; fill: none; } .xe-ah { fill: var(--text-muted); }
+.xe-ar.ok { stroke: var(--ok); } .xe-ah.ok { fill: var(--ok); }
+.xe-ar.acc { stroke: var(--accent); stroke-width: 2; } .xe-ah.acc { fill: var(--accent); }
+.xe-ar.bad { stroke: var(--bad); stroke-dasharray: 4 3; } .xe-ah.bad { fill: var(--bad); }
+.xe-sep { stroke: var(--border); stroke-width: 1; }
+.xe-barrier { stroke: var(--accent); stroke-width: 2.4; stroke-dasharray: 5 3; }
+/* сетка запусков */
+.xe-cell { fill: var(--surface-3); stroke: var(--border-strong); stroke-width: 1; }
+.xe-cell.ok { fill: var(--ok); stroke: var(--ok); }
+.xe-cell.run { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 2; }
+.xe-cell.retry { fill: var(--warn); stroke: var(--warn); }
+.xe-cell.fail { fill: var(--bad); stroke: var(--bad); }
+.xe-cell.up { fill: color-mix(in srgb, var(--bad) 25%, var(--surface)); stroke: var(--bad); stroke-dasharray: 2 2; }
+.xe-cell.none { fill: none; stroke: var(--border-strong); stroke-dasharray: 3 2; }
+.xe-runbar { fill: var(--surface-3); }
+.xe-runbar.ok { fill: var(--ok); } .xe-runbar.fail { fill: var(--bad); } .xe-runbar.run { fill: var(--accent); } .xe-runbar.none { fill: var(--border-strong); opacity: .6; }
+.xe-krow { fill: var(--accent-soft); stroke: none; }
+/* свежесть */
+.xe-sla { stroke: var(--bad); stroke-width: 2; }
+.xe-sla.dash { stroke-dasharray: 5 4; stroke-width: 1.4; opacity: .8; }
+.xe-spark { fill: none; stroke: var(--info); stroke-width: 2; stroke-linejoin: round; }
+.xe-spark.bad { stroke: var(--bad); }
+.xe-spark.st { stroke: var(--accent); stroke-dasharray: 4 3; }
+.xe-alert { fill: var(--bad); stroke: var(--bg); stroke-width: 2; }
+/* блоки изнутри */
+.xe-backb { fill: var(--surface-2); stroke: var(--border-strong); }
+.xe-back { fill: var(--accent); font-weight: 600; }
+.xe-panel { fill: var(--surface); stroke: var(--border); stroke-width: 1.2; }
+.xe-panel.on { stroke: var(--accent); stroke-width: 1.8; }
+.xe-panel.okb { stroke: var(--ok); stroke-width: 1.6; } .xe-panel.badb { stroke: var(--bad); stroke-width: 1.8; }
+.xe-axis { stroke: var(--border-strong); stroke-width: 1.6; }
+.xe-tick { stroke: var(--border-strong); stroke-width: 1; }
+.xe-grid { stroke: var(--border); stroke-width: 1; stroke-dasharray: 2 4; }
+.xe-iv { fill: var(--surface-2); stroke: var(--border-strong); }
+.xe-iv.on { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.6; }
+.xe-stb { fill: var(--surface-2); stroke: var(--border-strong); stroke-width: 1.1; }
+.xe-stb.ok { stroke: var(--ok); } .xe-stb.warn { stroke: var(--warn); } .xe-stb.bad { stroke: var(--bad); }
+.xe-stb.on { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 2.4; }
+.xe-att { stroke-width: 1.2; }
+.xe-att.fail { fill: var(--bad); } .xe-att.wait { fill: var(--warn-soft); stroke: var(--warn); stroke-dasharray: 3 3; } .xe-att.ok { fill: var(--ok); }
+.xe-cur { fill: var(--accent); }
+.xe-trow { fill: var(--surface-2); stroke: var(--border); }
+.xe-trow.ok { stroke: var(--ok); } .xe-trow.fail { fill: var(--bad-soft); stroke: var(--bad); stroke-width: 1.8; } .xe-trow.run { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.8; } .xe-trow.none { opacity: .6; }
+.xe-bucket { fill: var(--surface-2); stroke: var(--border-strong); stroke-width: 1.4; }
+.xe-fill { fill: color-mix(in srgb, var(--k-write) 40%, var(--surface)); }
+.xe-batch { fill: var(--k-write); stroke: var(--bg); stroke-width: 1.5; }
+/* легенда */
+.xr-legend .xr-sw.xe-swr { background: var(--accent-soft); border: 2px solid var(--accent); }
+.xr-legend .xr-sw.xe-swy { background: var(--warn); }
+.xr-legend .xr-sw.xe-swf { background: var(--bad); }
+.xr-legend .xr-sw.xe-swu { background: color-mix(in srgb, var(--bad) 25%, var(--surface)); border: 1.5px dashed var(--bad); }
+.xr-legend .xr-sw.xe-swn { background: none; border: 1.5px dashed var(--border-strong); }
+
 /* ===== сцены изнутри: конец ===== */
 /* ---------- живой разбор ---------- */
 .lv-card { padding: 12px 14px; border-radius: var(--r); border: 1px solid var(--border); background: var(--surface-2); display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; font-size: 13px; }
@@ -2400,6 +2734,9 @@ html.calm .lt *, html.calm .lt *::before, html.calm .lt *::after { animation-del
 <script src="js/xray-sql.js"></script>
 <script src="js/xray-cache.js"></script>
 <script src="js/xray-queue.js"></script>
+<script src="js/xray-olap.js"></script>
+<script src="js/xray-lake.js"></script>
+<script src="js/xray-etl.js"></script>
 <script src="js/arch-lens.js"></script>
 <script src="js/ops-console.js"></script>
 <script src="js/ops-ui.js"></script>
