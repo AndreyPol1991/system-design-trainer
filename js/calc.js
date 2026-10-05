@@ -184,10 +184,11 @@
 
   /* ---------- окно ---------- */
   let M = null, S = [];
+  const HINT = new Set();
   function open(L) {
     const A = SD.app && SD.app.A; L = L || (A && A.level);
     if (!usable(L)) { SD.app.toast(L && L.ai ? 'Для уровней с AI расчёт по токенам появится позже.' : 'Здесь нечего считать: нет нагрузки.'); return; }
-    M = model(L); S = steps(M);
+    M = model(L); S = steps(M); HINT.clear();
     let m = $('calcModal');
     if (!m) {
       m = document.createElement('div'); m.className = 'modal'; m.id = 'calcModal'; m.hidden = true;
@@ -207,7 +208,8 @@
       const g = st(s.id), open = !!g;
       return `<section class="calc-step ${g || ''}" data-step="${s.id}"><div class="cs-h"><span class="cs-n">${i + 1}</span><b>${esc(s.title)}</b>${g ? `<span class="cs-st">${GL[g]}</span>` : ''}</div>
         <p class="cs-an">${esc(s.an)}</p><p class="cs-q">${esc(s.q)}</p>
-        <div class="cs-in"><input type="text" inputmode="decimal" autocomplete="off" data-calcin="${s.id}" placeholder="твоя оценка" aria-label="${esc(s.title)}: твоя оценка"><span>${esc(s.unit)}</span><button type="button" class="btn" data-calcck="${s.id}">Проверить</button><button type="button" class="linkish" data-calcshow="${s.id}">Показать ответ</button></div>
+        <div class="cs-in"><input type="text" inputmode="decimal" autocomplete="off" data-calcin="${s.id}" placeholder="твоя оценка" aria-label="${esc(s.title)}: твоя оценка"><span>${esc(s.unit)}</span><button type="button" class="btn" data-calcck="${s.id}">Проверить</button><button type="button" class="linkish" data-calchint="${s.id}">${HINT.has(s.id) ? 'Скрыть подсказку' : 'Подсказка: как считать'}</button><button type="button" class="linkish" data-calcshow="${s.id}">Показать ответ</button></div>
+        ${HINT.has(s.id) && !open ? `<div class="cs-hint"><b>Как считать:</b><ul>${s.how.filter(Boolean).map(x => `<li>${x.replace(/<b>[^<]*<\/b>/g, '<b>?</b>').replace(/(=|≈) ?(\d[\d   ,.]*)/g, '$1 ?')}</li>`).join('')}</ul><p>Посчитай то, что под «?», и впиши ответ.</p></div>` : ''}
         <div class="cs-ans" ${open ? '' : 'hidden'}><b class="cs-a">Ответ: ${fmtAns(s.ans)} ${esc(unitOf(s.unit, Math.round(s.ans) === s.ans ? s.ans : 0.5))}</b><ul>${s.how.filter(Boolean).map(x => `<li>${x}</li>`).join('')}</ul>${s.so ? `<p class="cs-so">${esc(s.so)}</p>` : ''}</div></section>`;
     }).join('');
     side();
@@ -263,6 +265,7 @@
     const m = $('calcModal');
     if (e.target === m || e.target.closest('[data-calcx]')) { m.hidden = true; return; }
     const c = e.target.closest('[data-calcck]'); if (c) { check(c.dataset.calcck); return; }
+    const hb = e.target.closest('[data-calchint]'); if (hb) { const id = hb.dataset.calchint, val = (document.querySelector(`[data-calcin="${id}"]`) || {}).value; if (HINT.has(id)) HINT.delete(id); else HINT.add(id); render(); const ni = document.querySelector(`[data-calcin="${id}"]`); if (ni && val) ni.value = val; return; }
     const s = e.target.closest('[data-calcshow]');
     if (s) { const id = s.dataset.calcshow; if (!st(id)) { U[M.L.id] = Object.assign({}, U[M.L.id], { [id]: 'shown' }); save(); } render(); return; }
     if (e.target.closest('[data-calcsim]')) { simCheck(); return; }

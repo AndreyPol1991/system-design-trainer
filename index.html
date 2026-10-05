@@ -1508,6 +1508,49 @@ html.calm .lt *, html.calm .lt *::before, html.calm .lt *::after { animation-del
 @media (max-width: 1100px) { .lt-work, .lt-wg, .lt-tw { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 640px) { .lt-types, .lt-qpair, .lt-tiles { grid-template-columns: 1fr; } .lt-tip { margin-left: 0; } }
 /* ===== таблица вживую: конец ===== */
+/* ---------- оценка на салфетке: по шагам ---------- */
+.est-top { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 10px; align-items: start; }
+@media (max-width: 1100px) { .est-top { grid-template-columns: 1fr; } }
+.est-top .lab-card { line-height: 1.6; font-size: 13.5px; }
+.est-top .lab-card b { color: var(--text); }
+.est-cheat { padding: 10px 12px; border-radius: 10px; border: 1px solid var(--info); background: var(--surface-2); font-size: 12.5px; color: var(--text-2); display: flex; flex-direction: column; gap: 6px; }
+.est-cheat > b { font: 600 11px var(--f-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--info); }
+.est-cheat ul { margin: 0; padding-left: 16px; display: flex; flex-direction: column; gap: 2px; }
+.est-cheat li b { color: var(--text); }
+.est-calc { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
+.est-calc span { font: 600 11px var(--f-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted); }
+.est-calc input { padding: 7px 9px; border-radius: 8px; border: 1px solid var(--border-strong); background: var(--bg); color: var(--text); font: 13px var(--f-mono); }
+.est-calc output { font: 700 14px var(--f-mono); color: var(--accent); min-height: 18px; }
+.est-qs { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.est-q { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; background: var(--surface); display: flex; flex-direction: column; gap: 6px; }
+.est-q.exact { border-color: var(--ok); } .est-q.order { border-color: var(--warn); } .est-q.miss { border-color: var(--bad); }
+.est-h { display: flex; align-items: center; gap: 8px; }
+.est-n { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: var(--surface-3); font: 700 12px var(--f-mono); color: var(--text-2); flex: none; }
+.est-h b { font-size: 14px; color: var(--text); }
+.est-g { margin-left: auto; font: 600 12px var(--f-mono); color: var(--text-muted); }
+.est-q.exact .est-g { color: var(--ok); } .est-q.order .est-g { color: var(--warn); } .est-q.miss .est-g { color: var(--bad); }
+.est-in, .est-step { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.est-in input, .est-step input { width: 140px; padding: 6px 9px; border-radius: 8px; border: 1px solid var(--border-strong); background: var(--bg); color: var(--text); font: 600 13.5px var(--f-mono); }
+.est-in input:focus, .est-step input:focus, .est-calc input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.est-in small, .est-step small { font-size: 12px; color: var(--text-muted); }
+.est-in .btn, .est-step .btn { padding: 5px 11px; font-size: 12.5px; }
+.est-ans { margin: 0; font-size: 12.5px; color: var(--text-2); } .est-ans b { color: var(--text); font-family: var(--f-mono); }
+.est-steps { display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: 8px; background: var(--surface-2); border-left: 3px solid var(--info); }
+.est-idea { margin: 0; font-size: 12.5px; color: var(--text-2); line-height: 1.5; }
+.est-step { padding: 6px 8px; border-radius: 8px; border: 1px solid transparent; }
+.est-step.exact { border-color: var(--ok); } .est-step.order { border-color: var(--warn); } .est-step.miss { border-color: var(--bad); } .est-step.shown { border-color: var(--border); }
+.est-sl { font-size: 12.5px; color: var(--text-muted); }
+.est-f { font: 600 13.5px var(--f-mono); color: var(--text); }
+.est-sg { font: 600 12px var(--f-mono); color: var(--text-muted); }
+.est-step.exact .est-sg { color: var(--ok); } .est-step.order .est-sg { color: var(--warn); } .est-step.miss .est-sg { color: var(--bad); }
+.est-tip { flex-basis: 100%; margin: 2px 0 0; font-size: 12.5px; color: var(--text-2); line-height: 1.5; }
+.est-note { margin: 0; font-size: 12px; color: var(--text-muted); }
+.cs-hint { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; border-radius: 8px; background: var(--surface-2); border-left: 3px solid var(--info); font-size: 13px; color: var(--text-2); line-height: 1.55; }
+.cs-hint ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 2px; }
+.cs-hint b { color: var(--info); } .cs-hint p { margin: 0; color: var(--text-muted); font-size: 12.5px; }
+.xsd-lede { margin: 0 0 10px; font-size: 13px; color: var(--text-2); line-height: 1.5; }
+.xsd-lede b { color: var(--text); }
+.xsd-wrap { min-width: 0; }
 .pred-pop { position: fixed; z-index: 60; width: 300px; display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border-strong); box-shadow: var(--shadow); font-size: 12.5px; line-height: 1.45; color: var(--text-2); animation: chgIn .2s ease-out; }
 .pred-pop[hidden] { display: none; }
 .pred-pop b { color: var(--text); font-size: 13.5px; }
@@ -2377,6 +2420,7 @@ html.calm .lt *, html.calm .lt *::before, html.calm .lt *::after { animation-del
 <script src="js/daily.js"></script>
 <script src="js/calc.js"></script>
 <script src="js/lab-table.js"></script>
+<script src="js/xray-sqldata.js"></script>
 <script src="js/app.js"></script>
 
 </body>

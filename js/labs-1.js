@@ -79,33 +79,135 @@
     return { p, dau, act, size, years, ans: { avg, peak, wps, day, total, servers } };
   }
   const Q = [
-    { k: 'avg', l: 'Средний RPS', u: 'запросов/с' }, { k: 'peak', l: 'Пиковый RPS (пик ×3)', u: 'запросов/с' }, { k: 'wps', l: 'Записей в секунду в пике', u: 'записей/с' },
-    { k: 'day', l: 'Новых данных в сутки', u: 'ГБ' }, { k: 'total', l: 'Данных за весь срок', u: 'ТБ' }, { k: 'servers', l: 'Серверов приложения (2 500 RPS, запас 30 %)', u: 'шт.' }
+    { k: 'avg', l: 'Средний RPS', u: 'запросов/с', idea: 'Сколько всего действий за сутки — и раздели на секунды в сутках. Как посчитать, сколько людей в среднем проходит через турникет в секунду, зная, сколько прошло за день.' },
+    { k: 'peak', l: 'Пиковый RPS (пик ×3)', u: 'запросов/с', idea: 'Люди приходят неравномерно: вечером втрое больше, чем в среднем. Систему строят под пик.' },
+    { k: 'wps', l: 'Записей в секунду в пике', u: 'записей/с', idea: 'Не каждое действие что-то записывает: возьми долю записей от пиковой нагрузки. Это нагрузка на primary базы.' },
+    { k: 'day', l: 'Новых данных в сутки', u: 'ГБ', idea: 'Сколько записей за сутки × сколько весит одна запись. Потом байты перевести в гигабайты.' },
+    { k: 'total', l: 'Данных за весь срок', u: 'ТБ', idea: 'Сутки × 365 × число лет хранения. Потом гигабайты — в терабайты.' },
+    { k: 'servers', l: 'Серверов приложения (2 500 RPS, запас 30 %)', u: 'шт.', idea: 'Пиковую нагрузку делим на то, сколько тянет один сервер, добавляем запас и округляем вверх.' }
   ];
+  /* числа словами — как пишут на салфетке */
+  const W = v => { const a = Math.abs(v); const t = (x, d) => (Math.round(x * Math.pow(10, d)) / Math.pow(10, d)).toString().replace('.', ','); return a >= 1e9 ? t(v / 1e9, 2) + ' млрд' : a >= 1e6 ? t(v / 1e6, 2) + ' млн' : a >= 1e4 ? Math.round(v).toLocaleString('ru-RU') : a >= 100 ? Math.round(v).toLocaleString('ru-RU') : t(v, a >= 10 ? 1 : 2); };
+  /* разбор каждого вопроса на шаги: формула с числами, ожидаемый результат, приём счёта */
+  function stepsOf(T, k) {
+    const A = T.ans, pd = T.dau * T.act, wd = pd * T.p.w, w = Math.round(T.p.w * 100);
+    const S = {
+      avg: [
+        { l: 'Действий за сутки', f: `${W(T.dau)} × ${T.act}`, v: pd, u: 'в сутки', tip: `Перемножь отдельно «значащие» числа и нули: ${W(T.dau)} × ${T.act}. Миллион — 6 нулей, миллиард — 9.` },
+        { l: 'Раздели на секунды в сутках', f: `${'{0}'} ÷ 86 400`, v: A.avg, u: 'запросов/с', tip: 'На салфетке делят на 100 000 (это 10⁵ — просто убрать 5 нулей), ответ потом чуть увеличивают: точное число на ≈ 15 % больше.' }
+      ],
+      peak: [{ l: 'Пик в 3 раза выше среднего', f: `${W(A.avg)} × 3`, v: A.peak, u: 'запросов/с', tip: 'Средний RPS — из прошлого вопроса. Пиковый коэффициент 2–5, здесь договорились о ×3.' }],
+      wps: [{ l: 'Доля записей от пика', f: `${W(A.peak)} × ${w} %`, v: A.wps, u: 'записей/с', tip: `${w} % — это × ${(T.p.w).toString().replace('.', ',')}. Например, 10 % от 30 000 — это 3 000.` }],
+      day: [
+        { l: 'Записей за сутки', f: `${W(pd)} × ${w} %`, v: wd, u: 'записей', tip: 'Действий за сутки (из первого вопроса) × доля записей.' },
+        { l: 'Байт за сутки', f: `${'{0}'} × ${T.size} байт`, v: wd * T.size, u: 'байт', tip: `Умножь на вес одной записи: ${T.size} байт ≈ ${(T.size / 1000).toString().replace('.', ',')} КБ.` },
+        { l: 'В гигабайтах', f: `${'{1}'} ÷ 10⁹`, v: A.day, u: 'ГБ', tip: '1 ГБ = 1 000 000 000 байт (10⁹): убери 9 нулей.' }
+      ],
+      total: [
+        { l: 'За год', f: `${W(A.day)} ГБ × 365`, v: A.day * 365, u: 'ГБ', tip: 'На салфетке 365 ≈ 400 или ≈ 1/3 тысячи × 1 000 — порядок не изменится.' },
+        { l: `За ${T.years} ${T.years === 1 ? 'год' : T.years < 5 ? 'года' : 'лет'}`, f: `${'{0}'} × ${T.years}`, v: A.day * 365 * T.years, u: 'ГБ', tip: 'Умножь на срок хранения из легенды.' },
+        { l: 'В терабайтах', f: `${'{1}'} ÷ 1 000`, v: A.total, u: 'ТБ', tip: '1 ТБ = 1 000 ГБ.' }
+      ],
+      servers: [
+        { l: 'Серверов на пределе', f: `${W(A.peak)} ÷ 2 500`, v: A.peak / 2500, u: 'шт.', tip: 'Один сервер приложения тянет ≈ 2 500 запросов в секунду. Пик — из второго вопроса.' },
+        { l: 'С запасом 30 %', f: `${'{0}'} × 1,3`, v: A.peak / 2500 * 1.3, u: 'шт.', tip: 'Запас нужен, чтобы под пиком не расти в очередь и пережить падение одного сервера.' },
+        { l: 'Округли вверх', f: `${'{1}'} → целое`, v: A.servers, u: 'шт.', tip: 'Полсервера не бывает: 4,2 → 5.' }
+      ]
+    };
+    return S[k];
+  }
+  const gradeOf = (v, a) => { const r = v > 0 && a > 0 ? Math.abs(Math.log10(v / a)) : 9; return r <= Math.log10(1.5) ? 'exact' : r <= Math.log10(3) ? 'order' : 'miss'; };
+  const GR = { exact: '✓ точно', order: '≈ порядок верный', miss: '✗ мимо', shown: 'ответ открыт' };
+  /* ввод: «30 млн», «1,5к», «2e6» */
+  const parseN = s => {
+    s = String(s || '').trim().toLowerCase().replace(/\s/g, '').replace(',', '.');
+    const m = s.match(/^(-?[0-9.]+(?:e[+-]?\d+)?)(млрд|млн|тыс|к|k|m|b)?$/); if (!m) return NaN;
+    return parseFloat(m[1]) * ({ 'млрд': 1e9, b: 1e9, 'млн': 1e6, m: 1e6, 'тыс': 1e3, 'к': 1e3, k: 1e3 }[m[2]] || 1);
+  };
+  /* калькулятор: только числа и + − × ÷ ( ) */
+  const calcExpr = s => {
+    let e = String(s || '').toLowerCase().replace(/(\d),(\d)/g, '$1.$2').replace(/(\d)\s+(?=\d{3}\b)/g, '$1').replace(/млрд/g, '*1e9').replace(/млн/g, '*1e6').replace(/тыс/g, '*1e3').replace(/(\d)\s*к\b/g, '$1*1e3').replace(/×|х(?=\s*\d)/g, '*').replace(/÷|:/g, '/').replace(/\^/g, '**').replace(/\s+/g, '');
+    if (!e || !/^[0-9+\-*/().e]+$/.test(e) || /[a-df-z]/.test(e)) return null;
+    try { const v = Function('"use strict";return (' + e + ')')(); return typeof v === 'number' && isFinite(v) ? v : null; } catch (err) { return null; }
+  };
   SD.LABS.push({
     id: 'estimate', title: 'Оценка на салфетке', lede: 'RPS, объём, серверы по порядку величины', dive: 'estimate',
-    intro: 'Получи легенду продукта и посчитай нагрузку. Засчитывается порядок величины: ответ в пределах ×3 — верный порядок, в пределах ×1,5 — точно. Подсказка: в сутках ≈ 86 400 секунд, для прикидки — 100 000.',
+    intro: 'Получи легенду продукта и посчитай нагрузку. Не знаешь, с чего начать, — нажми «Решать по шагам»: вопрос разложится на шаги с формулой и подсказкой. Считать можно в калькуляторе справа. Засчитывается порядок величины: в пределах ×3 — верный порядок, в пределах ×1,5 — точно.',
     tasks: [{ id: 'one', text: 'Реши одну задачу с верным порядком во всех ответах' }, { id: 'exact', text: 'Получи «точно» во всех шести ответах' }, { id: 'three', text: 'Реши три задачи подряд без промахов' }, { id: 'sort', text: 'Расставь задержки по скорости без ошибок' }],
     mount(el, api) {
       let T = newTask(), streak = 0;
-      const draw = (checked) => {
-        const res = checked ? Q.map(q => { const v = parseFloat(String(el.querySelector('#est_' + q.k).value).replace(',', '.').replace(/\s/g, '')); const r = v > 0 ? Math.abs(Math.log10(v / T.ans[q.k])) : 9; return { q, v, r, grade: r <= Math.log10(1.5) ? 'exact' : r <= Math.log10(3) ? 'order' : 'miss' }; }) : null;
-        const vals = Q.map(q => (el.querySelector('#est_' + q.k) || {}).value || '');
-        el.innerHTML = `<div class="lab-card"><b>Легенда.</b> ${esc(T.p.name[0].toUpperCase() + T.p.name.slice(1))}: ${fmtN(T.dau)} активных пользователей в день, каждый совершает ≈ ${T.act} ${T.p.what} в сутки. Записей среди них — ${Math.round(T.p.w * 100)} %. Одна запись весит ≈ ${T.size} байт. Хранить ${T.years} ${T.years === 1 ? 'год' : T.years < 5 ? 'года' : 'лет'}.</div>
-          <div class="est-grid">${Q.map((q, i) => `<label class="est-row ${res ? res[i].grade : ''}"><span>${esc(q.l)}</span><input id="est_${q.k}" inputmode="decimal" autocomplete="off" value="${esc(vals[i])}" placeholder="?"><small>${q.u}</small>${res ? `<em>${res[i].grade === 'exact' ? 'точно' : res[i].grade === 'order' ? 'верный порядок' : 'мимо'} · ответ ${fmtN(T.ans[q.k])}</em>` : ''}</label>`).join('')}</div>
-          <div class="row-btns"><button type="button" class="btn primary" id="estCheck">Проверить</button><button type="button" class="btn" id="estNew">Новая задача</button><span class="note">Серия без промахов: ${streak}</span></div>
-          ${res ? `<div class="lab-card sol"><b>Решение.</b><br>Средний RPS = ${fmtN(T.dau)} × ${T.act} / 86 400 ≈ <b>${fmtN(T.ans.avg)}</b>.<br>Пик = средний × 3 ≈ <b>${fmtN(T.ans.peak)}</b>.<br>Записи в пике = ${fmtN(T.ans.peak)} × ${Math.round(T.p.w * 100)} % ≈ <b>${fmtN(T.ans.wps)}</b> — это нагрузка на primary базы.<br>Данные в сутки = ${fmtN(T.dau)} × ${T.act} × ${Math.round(T.p.w * 100)} % × ${T.size} Б ≈ <b>${fmtN(T.ans.day)} ГБ</b>; за ${T.years} г. ≈ <b>${fmtN(T.ans.total)} ТБ</b> (без реплик и индексов — с ними ×3–5).<br>Серверы = ${fmtN(T.ans.peak)} / 2 500 × 1,3 ≈ <b>${T.ans.servers}</b>.</div>` : ''}
-          <h4>Цифры: расставь от быстрого к медленному</h4><div id="latSort"></div>`;
-        el.querySelector('#estCheck').onclick = () => {
-          const r = Q.map(q => { const v = parseFloat(String(el.querySelector('#est_' + q.k).value).replace(',', '.').replace(/\s/g, '')); return v > 0 ? Math.abs(Math.log10(v / T.ans[q.k])) : 9; });
-          if (r.every(x => x <= Math.log10(3))) { api.done('one'); streak++; if (streak >= 3) api.done('three'); } else streak = 0;
-          if (r.every(x => x <= Math.log10(1.5))) api.done('exact');
-          draw(true);
-        };
-        el.querySelector('#estNew').onclick = () => { T = newTask(); Q.forEach(q => { const i = el.querySelector('#est_' + q.k); if (i) i.value = ''; }); draw(false); };
-        latSort(el.querySelector('#latSort'), api);
+      el.innerHTML = '<div id="estMain"></div><h4>Цифры: расставь от быстрого к медленному</h4><div id="latSort"></div>';
+      const main = el.querySelector('#estMain');
+      latSort(el.querySelector('#latSort'), api);
+      /* состояние: введённые значения, оценки, раскрытые шаги */
+      let V = {}, G = {}, open = {}, checkedAll = false;
+      const reset = () => { V = {}; G = {}; open = {}; checkedAll = false; };
+      const prevVal = (k, steps, i) => (G[`${k}.${i}`] ? steps[i].v : null);
+      const fText = (k, steps, s) => s.f.replace(/\{(\d)\}/g, (m, j) => { const pv = prevVal(k, steps, +j); return pv == null ? `(шаг ${+j + 1})` : W(pv); });
+      const draw = () => {
+        const act = document.activeElement && document.activeElement.id;
+        const legend = `<b>Легенда.</b> ${esc(T.p.name[0].toUpperCase() + T.p.name.slice(1))}: <b>${W(T.dau)}</b> активных пользователей в день, каждый совершает ≈ <b>${T.act}</b> ${T.p.what} в сутки. Записей среди них — <b>${Math.round(T.p.w * 100)} %</b>. Одна запись весит ≈ <b>${T.size} байт</b>. Храним <b>${T.years} ${T.years === 1 ? 'год' : T.years < 5 ? 'года' : 'лет'}</b>.`;
+        let h = `<div class="est-top"><div class="lab-card">${legend}</div>
+          <aside class="est-cheat"><b>Шпаргалка</b><ul><li>в сутках 86 400 с ≈ <b>10⁵</b></li><li>в году ≈ 3·10⁷ с</li><li>тысяча 10³ · миллион 10⁶ · миллиард 10⁹</li><li>1 КБ = 10³ байт · 1 ГБ = 10⁹ · 1 ТБ = 10¹²</li><li>пик ≈ средний × 3</li><li>сервер приложения ≈ 2 500 запросов/с</li></ul>
+          <label class="est-calc"><span>Калькулятор</span><input id="estCalc" autocomplete="off" placeholder="30 млн × 50 / 86400" value="${esc(V.calc || '')}"><output id="estCalcOut">${V.calc ? (calcExpr(V.calc) != null ? '= ' + W(calcExpr(V.calc)) : 'не понял выражение') : ''}</output></label></aside></div>
+          <div class="est-qs">`;
+        Q.forEach((q, qi) => {
+          const g = checkedAll || G[q.k] ? gradeOf(parseN(V[q.k]), T.ans[q.k]) : null, shown = G[q.k] === 'shown';
+          const steps = stepsOf(T, q.k);
+          h += `<section class="est-q ${shown ? 'shown' : g || ''}"><div class="est-h"><span class="est-n">${qi + 1}</span><b>${esc(q.l)}</b>${g || shown ? `<span class="est-g">${shown ? GR.shown : GR[g]}</span>` : ''}</div>
+            <div class="est-in"><input id="est_${q.k}" inputmode="decimal" autocomplete="off" value="${esc(V[q.k] || '')}" placeholder="твой ответ" aria-label="${esc(q.l)}"><small>${q.u}</small><button type="button" class="btn" data-estck="${q.k}">Проверить</button><button type="button" class="btn ghost" data-estopen="${q.k}" aria-expanded="${!!open[q.k]}">${open[q.k] ? 'Скрыть шаги' : 'Решать по шагам'}</button><button type="button" class="linkish" data-estshow="${q.k}">Ответ</button></div>`;
+          if (g || shown) h += `<p class="est-ans">Ответ: <b>${W(T.ans[q.k])} ${q.u}</b>${g && !shown ? ` · у тебя ${esc(V[q.k] || '—')}` : ''}</p>`;
+          if (open[q.k]) {
+            h += `<div class="est-steps"><p class="est-idea">${esc(q.idea)}</p>`;
+            steps.forEach((s, i) => {
+              const key = `${q.k}.${i}`, sg = G[key], val = V[key] || '';
+              h += `<div class="est-step ${sg || ''}"><span class="est-sl">Шаг ${i + 1}. ${esc(s.l)}:</span><span class="est-f">${esc(fText(q.k, steps, s))} =</span>
+                <input id="est_${q.k}_${i}" inputmode="decimal" autocomplete="off" value="${esc(val)}" placeholder="?" aria-label="Шаг ${i + 1}: ${esc(s.l)}"><small>${esc(s.u)}</small>
+                <button type="button" class="btn" data-estsck="${key}">✓</button><button type="button" class="linkish" data-estsshow="${key}">показать</button>
+                ${sg ? `<span class="est-sg">${sg === 'shown' ? '' : GR[sg]}${sg === 'shown' || sg !== 'exact' ? ` · ответ ${W(s.v)}` : ''}</span>` : ''}
+                ${sg === 'miss' || sg === 'order' ? `<p class="est-tip">Подсказка: ${esc(s.tip)}</p>` : ''}</div>`;
+            });
+            h += `<p class="est-note">Результат последнего шага — ответ на вопрос. Впиши его в поле выше и нажми «Проверить».</p></div>`;
+          }
+          h += `</section>`;
+        });
+        h += `</div><div class="row-btns"><button type="button" class="btn primary" id="estCheck">Проверить всё</button><button type="button" class="btn" id="estNew">Новая задача</button><span class="note">Серия без промахов: ${streak}</span></div>`;
+        if (checkedAll) h += `<div class="lab-card sol"><b>Решение целиком.</b><br>Средний RPS = ${W(T.dau)} × ${T.act} / 86 400 ≈ <b>${W(T.ans.avg)}</b>.<br>Пик = средний × 3 ≈ <b>${W(T.ans.peak)}</b>.<br>Записи в пике = ${W(T.ans.peak)} × ${Math.round(T.p.w * 100)} % ≈ <b>${W(T.ans.wps)}</b> — это нагрузка на primary базы.<br>Данные в сутки = ${W(T.dau * T.act)} × ${Math.round(T.p.w * 100)} % × ${T.size} байт ≈ <b>${W(T.ans.day)} ГБ</b>.<br>За ${T.years} ${T.years === 1 ? 'год' : T.years < 5 ? 'года' : 'лет'} ≈ <b>${W(T.ans.total)} ТБ</b> (без реплик и индексов — с ними ×2–3).<br>Серверов = ${W(T.ans.peak)} / 2 500 × 1,3 ≈ <b>${T.ans.servers}</b>.</div>`;
+        main.innerHTML = h;
+        if (act) { const f = document.getElementById(act); if (f) { f.focus(); const n = f.value.length; try { f.setSelectionRange(n, n); } catch (e) { /* не текстовое поле */ } } }
       };
-      draw(false);
+      el.addEventListener('input', e => {
+        const t = e.target; if (!t.id || !t.id.startsWith('est')) return;
+        if (t.id === 'estCalc') { V.calc = t.value; const o = el.querySelector('#estCalcOut'); const r = calcExpr(t.value); o.textContent = !t.value ? '' : r != null ? '= ' + W(r) : 'не понял выражение'; return; }
+        const m = t.id.match(/^est_([a-z]+)(?:_(\d))?$/); if (m) V[m[2] != null ? `${m[1]}.${m[2]}` : m[1]] = t.value;
+      });
+      el.addEventListener('keydown', e => {
+        if (e.key !== 'Enter') return;
+        const m = e.target.id && e.target.id.match(/^est_([a-z]+)(?:_(\d))?$/); if (!m) return;
+        e.preventDefault();
+        const b = el.querySelector(m[2] != null ? `[data-estsck="${m[1]}.${m[2]}"]` : `[data-estck="${m[1]}"]`); if (b) b.click();
+      });
+      el.addEventListener('click', e => {
+        const b = e.target.closest('button'); if (!b) return;
+        if (b.id === 'estCheck') {
+          checkedAll = true;
+          const r = Q.map(q => gradeOf(parseN(V[q.k]), T.ans[q.k]));
+          if (r.every(x => x !== 'miss')) { api.done('one'); streak++; if (streak >= 3) api.done('three'); } else streak = 0;
+          if (r.every(x => x === 'exact')) api.done('exact');
+          draw(); return;
+        }
+        if (b.id === 'estNew') { T = newTask(); reset(); draw(); return; }
+        if (b.dataset.estck) { G[b.dataset.estck] = 'checked'; draw(); return; }
+        if (b.dataset.estshow) { const k = b.dataset.estshow; G[k] = 'shown'; draw(); return; }
+        if (b.dataset.estopen) { const k = b.dataset.estopen; open[k] = !open[k]; draw(); const f = el.querySelector(`#est_${k}_0`); if (f && open[k]) f.focus(); return; }
+        if (b.dataset.estsck || b.dataset.estsshow) {
+          const key = b.dataset.estsck || b.dataset.estsshow, [k, i] = key.split('.'), s = stepsOf(T, k)[+i];
+          G[key] = b.dataset.estsshow ? 'shown' : gradeOf(parseN(V[key]), s.v);
+          draw();
+          if (G[key] !== 'miss') { const n = el.querySelector(`#est_${k}_${+i + 1}`) || el.querySelector(`#est_${k}`); if (n) n.focus(); }
+        }
+      });
+      draw();
     }
   });
   const LAT = [['Чтение из L1-кэша процессора', 1], ['Чтение из оперативной памяти', 100], ['Запрос в Redis в том же дата-центре', 300000], ['Случайное чтение с SSD', 100000], ['Простой SELECT по индексу в PostgreSQL', 2000000], ['Пинг Москва — Новосибирск', 50000000], ['Пинг Европа — США', 100000000], ['Ответ с CDN рядом с пользователем', 15000000]];
