@@ -173,8 +173,8 @@
   const srvW = n => n + ' ' + plural(n, 'сервер', 'сервера', 'серверов');
 
   /* ---------- подсветка SQL ---------- */
-  const KW = new Set('CREATE TABLE PRIMARY KEY NOT NULL UNIQUE DEFAULT SELECT FROM WHERE INSERT INTO VALUES UPDATE SET DELETE ORDER BY DESC ASC LIMIT PARTITION OF FOR IN WITH MODULUS REMAINDER RANGE LIST HASH ALTER DETACH DROP AND TO'.split(' '));
-  const TY = new Set(['bigint', 'varchar', 'text', 'char', 'timestamptz', 'numeric', 'boolean']);
+  const KW = new Set('CREATE TABLE PRIMARY KEY NOT NULL UNIQUE DEFAULT SELECT FROM WHERE INSERT INTO VALUES UPDATE SET DELETE ORDER BY DESC ASC LIMIT PARTITION OF FOR IN WITH MODULUS REMAINDER RANGE LIST HASH ALTER DETACH DROP AND TO INDEX ON USING INCLUDE CLUSTER ADD BEGIN COMMIT ROLLBACK BETWEEN'.split(' '));
+  const TY = new Set(['bigint', 'varchar', 'text', 'char', 'timestamptz', 'numeric', 'boolean', 'geography']);
   function hlSql(s) {
     return String(s).replace(/(--[^\n]*)|('(?:[^']|'')*')|(\b\d+(?:\.\d+)?\b)|([A-Za-z_][A-Za-z_0-9]*)|([\s\S])/g, (m, c, st, n, w) => {
       if (c) return `<span class="c">${esc(c)}</span>`;
@@ -193,9 +193,10 @@
   const memo = t => `<p class="lt-mem"><b>Запомни.</b> ${t}</p>`;
   const asm = list => `<details class="lt-asm" open><summary>Допущения для расчёта</summary><ul>${list.filter(Boolean).map(x => `<li>${x}</li>`).join('')}</ul></details>`;
   const INFO0 = 'Наведи на строку — покажу, что в ней и где она лежит. Во вкладке «Запросы» клик по строке ищет её по id.';
-  const TABS = [['table', '1', 'Таблица'], ['weight', '2', 'Вес'], ['part', '3', 'Партиции'], ['shard', '4', 'Шарды'], ['query', '5', 'Запросы'], ['reshard', '6', 'Решардинг'], ['hot', '7', 'Горячий шард'], ['memo', '✓', 'Итоги']];
+  const TABS = [['table', '1', 'Таблица'], ['weight', '2', 'Вес'], ['idx', '3', 'Индексы'], ['part', '4', 'Партиции'], ['shard', '5', 'Шарды'], ['query', '6', 'Запросы'], ['reshard', '7', 'Решардинг'], ['hot', '8', 'Горячий шард'], ['iso', '9', 'Изоляция'], ['srv', '10', 'Сервер'], ['memo', '✓', 'Итоги']];
   const TAB_IDS = TABS.map(t => t[0]);
-  const STAGE = new Set(['part', 'shard', 'query', 'reshard', 'hot']);
+  const STAGE = new Set(['idx', 'part', 'shard', 'query', 'reshard', 'hot', 'iso', 'srv']);
+  const CUSTOM = new Set(['idx', 'iso', 'srv']);
 
   /* бытовые аналогии — первая строка в обоих режимах */
   const LIFE = {
@@ -207,6 +208,9 @@
     reshard: 'Поставили ещё один шкаф. Если правило раскладки — «номер карточки по модулю числа шкафов», с новым шкафом почти у каждой карточки меняется адрес — переносить приходится почти всё. Если правило — кольцо, новый шкаф забирает понемногу у каждого соседа.',
     hot: 'Если раскладывать карточки по городам, а половина клиентов — из Москвы, московская комната завалена работой, а остальные скучают. Сервер, на который приходится непропорционально много, — «горячий».',
     email: 'Каждая комната проверяет «нет ли у нас уже такого email» только в своём шкафу. Про соседнюю комнату она не знает — и дубль проскакивает.',
+    idx: 'Индекс — как алфавитный указатель в конце книги: чтобы найти «Казань», не листаешь всю книгу, а открываешь указатель на «К» и сразу видишь номера страниц.',
+    iso: 'Двое правят одну таблицу в общем документе. Видит ли каждый правки другого до того, как тот нажал «Сохранить»? И что будет, если оба поменяли одну ячейку, каждый — от своей старой копии?',
+    srv: 'Сервер — кухня ресторана: повара (ядра) готовят одновременно, холодильник (память) держит ходовые продукты под рукой, кладовая (диск) далеко и медленно, окно выдачи (сеть) пропускает сколько пропускает. Ресторан упирается в самое узкое место.',
     memo: 'Как после экскурсии по складу: коротко — что где лежит и почему.'
   };
 
@@ -256,7 +260,10 @@
     ['Шарды и реплики', ['Шарды — разные серверы, у каждого своя часть строк; роутер выбирает сервер по ключу шарда.', 'Ключ шарда выбирают под самый частый запрос и под равномерность.', 'Реплики разгружают чтения, но не записи: писать можно только в primary.']],
     ['Запросы', ['Есть ключ шарда в WHERE — один шард; нет — все шарды (scatter-gather) и слияние.', 'ORDER BY … LIMIT по шардам: каждый отдаёт свой топ, роутер сливает; глубокий OFFSET — дорого.', 'Цена запроса — сколько шардов, партиций и строк он тронул (смотри EXPLAIN).']],
     ['Решардинг', ['hash mod N при N → N+1 переносит ≈ N/(N+1) строк, кольцо — ≈ 1/(N+1).', 'Онлайн-переезд: двойная запись → копирование → сверка → переключение роутера → удаление старых копий.', 'Заранее заводят много виртуальных шардов на немногих серверах — тогда растут переносом целых кусков.']],
-    ['Горячий шард и уникальность', ['Ключ с перекосом (страна, 55 % RU) даёт горячий шард; дата как ключ — все записи в последний шард.', 'Лечение — hash(id) или составной ключ.', 'UNIQUE работает только внутри шарда: глобальная уникальность — таблица-справочник email → id, шардированная по email.']]
+    ['Горячий шард и уникальность', ['Ключ с перекосом (страна, 55 % RU) даёт горячий шард; дата как ключ — все записи в последний шард.', 'Лечение — hash(id) или составной ключ.', 'UNIQUE работает только внутри шарда: глобальная уникальность — таблица-справочник email → id, шардированная по email.']],
+    ['Индексы', ['Индекс — отсортированная копия ключей с адресами строк: поиск — спуск по дереву вместо перебора.', 'Тип под запрос: B-tree — равенство и диапазоны, hash — только равенство, GIN — слова, GiST — гео, BRIN — огромные таблицы по времени.', 'Составной работает по левому префиксу, покрывающий даёт Index Only Scan, частичный — только при том же условии.', 'Каждый индекс замедляет запись и занимает место.']],
+    ['Изоляция', ['MVCC: UPDATE создаёт новую версию строки, каждая транзакция видит версии по своему снимку.', 'Read Committed — снимок на запрос: неповторяемое чтение и фантомы возможны.', 'Repeatable Read — снимок на транзакцию; Serializable ещё и ловит перекос записи.', 'Прочитал в приложение — посчитал — записал: так теряются обновления. Лечение — SET x = x + …, FOR UPDATE или версия.']],
+    ['Сервер', ['Ресурсы — ядра, память, диск, сеть; упираемся в самое узкое.', 'Горячее не влезло в память — нагрузка уходит на диск.', 'Вертикально — проще, пока хватает; реплики — для чтений; шарды — для записей и объёма.']]
   ];
   const MEMO_BIZ = [
     ['Таблица клиентов', ['Каждая колонка — бизнес-правило: номер не меняется, email уникален, деньги точные до копейки.', 'Ошибка в типе или уникальности превращается в деньги: потерянные копейки, чужие письма, обращения в поддержку.']],
@@ -264,8 +271,107 @@
     ['Партиции', ['Отчёты по периодам и странам читают только нужный ящик — в разы быстрее.', 'Удаление по сроку хранения — секунда вместо минут тяжёлой нагрузки.']],
     ['Шарды и реплики', ['Шардируют, когда пик (особенно распродажи) не влезает в один сервер.', 'Шарды снижают цену падения: упал один — страдает доля клиентов, а не весь магазин.', 'Реплики — дешёвая страховка: переключение за секунды вместо часа простоя.']],
     ['Запросы', ['Частые действия клиента (вход, профиль) должны попадать в один сервер.', 'Отчёты по всем серверам ждут самый медленный — их запускают реже и не в пик.']],
-    ['Рост, перекосы, дубли', ['Рост закладывают заранее (кольцо или виртуальные шарды): переезд втрое короче и безопаснее.', 'Делить по стране при 54 % России — сервер «Россия» падает первым в распродажу.', 'Дубли email после шардирования — чужие письма и очередь в поддержку; нужен общий справочник адресов.']]
+    ['Рост, перекосы, дубли', ['Рост закладывают заранее (кольцо или виртуальные шарды): переезд втрое короче и безопаснее.', 'Делить по стране при 54 % России — сервер «Россия» падает первым в распродажу.', 'Дубли email после шардирования — чужие письма и очередь в поддержку; нужен общий справочник адресов.']],
+    ['Индексы', ['Без индекса каждый вход клиента — перебор всей базы; с индексом — доли миллисекунды.', 'Каждый индекс — дороже регистрация и больше диска: держи только те, что нужны запросам.']],
+    ['Изоляция', ['Одновременные операции с одним счётом без защиты теряют деньги клиентов.', 'Защита (Serializable, FOR UPDATE, версия) стоит процентов нагрузки — несравнимо дешевле жалоб.']],
+    ['Сервер', ['Сервер упирается в одно узкое место — его и расширяют.', 'Сначала сервер побольше, потом реплики для чтений, потом шарды.']]
   ];
+
+  /* ================= индексы, изоляция, сервер: общие данные ================= */
+  const IXV = [
+    ['none', 'Без индекса', 'Seq Scan: перебор всех страниц'],
+    ['btree', 'B-tree', 'дерево по id и email: «равно» и диапазоны'],
+    ['hash', 'Hash', 'корзины по hash(email): только «равно»'],
+    ['composite', 'Составной', '(country, created_at): страна, потом дата'],
+    ['covering', 'Покрывающий', 'id INCLUDE (balance): без похода в таблицу'],
+    ['clustered', 'Кластеризация', 'строки переложены по created_at'],
+    ['gin', 'GIN', 'слово → список строк (имя, город)'],
+    ['gist', 'GiST', 'гео: прямоугольники на карте'],
+    ['brin', 'BRIN', 'min и max дат по блокам'],
+    ['partial', 'Частичный', 'email только активных клиентов']
+  ];
+  const IX_IDS = IXV.slice(1).map(x => x[0]);
+  const IXNAME = Object.fromEntries(IXV.map(x => [x[0], x[1]]));
+  /* байт на строку, которые добавляет индекс (с заполнением страниц) */
+  const IXB = { btree: 74, hash: 24, composite: 31, covering: 31, clustered: 0, gin: 30, gist: 40, brin: 0.01, partial: 45 };
+  const IXDDL = {
+    none: '-- индексов нет (даже PRIMARY KEY выключен для опыта)',
+    btree: 'CREATE UNIQUE INDEX users_pkey ON users (id);\nCREATE UNIQUE INDEX users_email_key\n  ON users (email);',
+    hash: 'CREATE INDEX users_email_hash\n  ON users USING hash (email);',
+    composite: 'CREATE INDEX users_country_created\n  ON users (country, created_at);',
+    covering: 'CREATE INDEX users_id_cov\n  ON users (id) INCLUDE (balance);',
+    clustered: 'CREATE INDEX users_created\n  ON users (created_at);\nCLUSTER users USING users_created;',
+    gin: "CREATE INDEX users_words ON users\n  USING gin (to_tsvector('simple',\n    name || ' ' || city));",
+    gist: 'ALTER TABLE users\n  ADD location geography(Point);\nCREATE INDEX users_loc\n  ON users USING gist (location);',
+    brin: 'CREATE INDEX users_created_brin\n  ON users USING brin (created_at);',
+    partial: 'CREATE INDEX users_email_active\n  ON users (email) WHERE is_active;'
+  };
+  const IXTXT = {
+    none: '<b>Seq Scan.</b> Без индекса база читает таблицу страница за страницей и проверяет каждую строку. На 48 строках незаметно, на 50 млн — десятки секунд на каждый запрос.',
+    btree: '<b>B-tree</b> — сбалансированное дерево: корень → внутренние узлы → листья с отсортированными ключами и адресами строк. Поиск — спуск на 3–4 уровня, диапазон — спуск к началу и проход по цепочке листьев. PRIMARY KEY и UNIQUE создают его сами.',
+    hash: '<b>Hash-индекс</b> раскладывает ключи по корзинам по hash(ключ). Точный поиск — сразу в нужную корзину. Порядка в корзинах нет, поэтому диапазоны и сортировку он не умеет.',
+    composite: '<b>Составной индекс (country, created_at)</b> отсортирован сначала по стране, внутри страны — по дате. Помогает условиям «страна» и «страна + дата» (левый префикс). Только по дате — нет: подходящие записи разбросаны по всем странам.',
+    covering: '<b>Покрывающий индекс</b> (id) INCLUDE (balance) хранит рядом с ключом ещё и баланс. Если запросу хватает колонок индекса — Index Only Scan, таблицу не читаем (если страница отмечена в visibility map как «все строки видимы»).',
+    clustered: '<b>Кластеризация</b> (CLUSTER users USING users_created): строки физически переложены в порядке даты. Диапазон по дате читает соседние страницы, а не скачет по диску. Порядок держится до новых вставок — CLUSTER повторяют, и он блокирует таблицу.',
+    gin: '<b>GIN</b> — обратный индекс: каждое слово → список строк, где оно встречается. Поиск по слову — заход в словарь и чтение найденных строк. Дорог на запись: одна строка — по записи на каждое своё слово.',
+    gist: '<b>GiST</b> (PostGIS) — R-дерево: точки сгруппированы в прямоугольники. Запрос «в радиусе 700 км» открывает только прямоугольники, которые задевают круг. В демо у клиента нет координат — берём координаты его города (колонка location).',
+    brin: '<b>BRIN</b> хранит для каждого блока страниц только min и max даты. Блоки, где max раньше нужной даты, пропускаются целиком. Весит килобайты, но работает, только если строки лежат примерно по порядку дат — переключи порядок и сравни.',
+    partial: '<b>Частичный индекс</b> … ON users (email) WHERE is_active: в нём только активные клиенты. Он меньше и дешевле на запись, но работает, только если в запросе есть то же условие is_active.'
+  };
+  const IXBIZ = {
+    none: 'Без индекса любой поиск клиента — полный перебор базы. На 48 строках терпимо, на миллионах — невозможно.',
+    btree: 'Вход по номеру клиента и по почте, проверка «этот email уже занят» при регистрации, выборки «клиенты №…–№…».',
+    hash: 'Только точный вход по почте. Чуть компактнее B-tree, но «все адреса на букву n» не найдёт.',
+    composite: 'Отчёт «новые клиенты Казахстана за год» читает один кусок индекса. Порядок колонок решает: «все новые за год» без страны он не ускорит.',
+    covering: 'Баланс в шапке сайта — прямо из индекса, без чтения таблицы: тысячи раз в секунду и почти без диска.',
+    clustered: 'Отчёты по периодам читают соседние страницы диска — в разы быстрее. Цена: перекладка таблицы по ночам с блокировкой.',
+    gin: 'Поиск клиентов в админке по имени или городу: «все Ивановы», «все из Казани».',
+    gist: 'Клиенты рядом со складом или пунктом выдачи — расчёт доставки и реклама по району.',
+    brin: 'Огромные журналы по времени: индекс весит килобайты и отбрасывает ненужные блоки.',
+    partial: 'Вход только для активных клиентов: индекс меньше и регистрация дешевле.'
+  };
+  const IXQS = { none: ['id', 'idr', 'email'], btree: ['id', 'idr', 'email'], hash: ['email', 'emailr', 'id'], composite: ['kzd', 'kz', 'd'], covering: ['bal', 'mail42', 'id'], clustered: ['d', 'd2'], gin: ['w'], gist: ['geo'], brin: ['d', 'd2'], partial: ['act', 'inact'] };
+  const CITY = { 'Москва': [55.76, 37.62], 'Санкт-Петербург': [59.94, 30.31], 'Казань': [55.79, 49.11], 'Екатеринбург': [56.84, 60.6], 'Новосибирск': [55.03, 82.92], 'Нижний Новгород': [56.33, 44.0], 'Самара': [53.2, 50.15], 'Краснодар': [45.04, 38.98], 'Пермь': [58.01, 56.25], 'Алматы': [43.24, 76.89], 'Астана': [51.17, 71.45], 'Шымкент': [42.32, 69.59], 'Караганда': [49.8, 73.1], 'Минск': [53.9, 27.57], 'Гомель': [52.44, 30.98], 'Брест': [52.1, 23.7], 'Гродно': [53.68, 23.83], 'Ташкент': [41.31, 69.24], 'Самарканд': [39.65, 66.96], 'Бухара': [39.77, 64.42], 'Ереван': [40.18, 44.51], 'Гюмри': [40.79, 43.85], 'Тбилиси': [41.72, 44.79], 'Батуми': [41.64, 41.63], 'Кутаиси': [42.27, 42.7] };
+  const GEO_C = ['Москва', 'Алматы', 'Минск', 'Ташкент'], GEO_R = 700;
+  const kmBetween = (a, b) => { const t = Math.PI / 180, dLa = (b[0] - a[0]) * t, dLo = (b[1] - a[1]) * t; const h = Math.sin(dLa / 2) ** 2 + Math.cos(a[0] * t) * Math.cos(b[0] * t) * Math.sin(dLo / 2) ** 2; return 2 * 6371 * Math.asin(Math.min(1, Math.sqrt(h))); };
+  const words = r => (r.name + ' ' + r.city).toLowerCase().replace(/ё/g, 'е').split(/[\s-]+/).filter(Boolean);
+  let DRIFT = null;
+  const driftOf = r => { if (!DRIFT) { const R = mulberry(777); DRIFT = {}; for (let id = 1; id <= 48; id++) DRIFT[id] = R() < 0.3 ? R() * 50 : id + (R() * 2 - 1) * 3; } return r.id <= 48 ? DRIFT[r.id] : 1e6 + r.id; };
+  const PAGE_RAND = 0.1, PAGE_SEQ = 0.016;   // мс на страницу 8 КБ: вразброс с SSD / подряд
+  const STORE_RUB = 10;                       // ₽ за ГБ SSD в месяц
+
+  const ISO_L = [['rc', 'Read Committed'], ['rr', 'Repeatable Read'], ['ser', 'Serializable']];
+  const LOCK_L = [['none', 'Нет'], ['optimistic', 'Версия (оптимистично)'], ['pessimistic', 'FOR UPDATE']];
+  const ISC = [['dirty', 'Грязное чтение'], ['nonrep', 'Неповторяемое чтение'], ['phantom', 'Фантом'], ['lost', 'Потерянное обновление'], ['skew', 'Перекос записи']];
+  const ANOM = {
+    dirty: { rc: ['нет', 'ok'], rr: ['нет', 'ok'], ser: ['нет', 'ok'] },
+    nonrep: { rc: ['есть', 'bad'], rr: ['нет', 'ok'], ser: ['нет', 'ok'] },
+    phantom: { rc: ['есть', 'bad'], rr: ['нет*', 'ok'], ser: ['нет', 'ok'] },
+    lost: { rc: ['есть', 'bad'], rr: ['ошибка → повтор', 'warn'], ser: ['ошибка → повтор', 'warn'] },
+    skew: { rc: ['есть', 'bad'], rr: ['есть', 'bad'], ser: ['ошибка → повтор', 'warn'] }
+  };
+  const ANOM_LOCK = { dirty: ['—', '—'], nonrep: ['не помогает', 'держит строку'], phantom: ['не помогает', 'не помогает'], lost: ['ловит', 'ловит'], skew: ['не помогает', 'ловит, если блокировать обе строки'] };
+  const ISCT = {
+    dirty: 'Аня меняет баланс клиента id 7 и ещё не зафиксировала транзакцию. Может ли Борис увидеть незафиксированное значение?',
+    nonrep: 'Борис дважды читает баланс клиента id 7 в одной транзакции, а между чтениями Аня его меняет.',
+    phantom: 'Борис дважды считает клиентов из Казахстана, а между подсчётами Аня регистрирует нового.',
+    lost: 'Аня пополняет баланс клиента id 7 на 500 ₽, Борис одновременно списывает 200 ₽. Оба читают баланс в приложение, считают новое значение и записывают его. Должно получиться 1 300 ₽.',
+    skew: 'Аня (счёт id 7) и Борис (счёт id 8) — семья с общим правилом: сумма балансов не ниже 0. У каждого по 300 ₽. Оба одновременно тратят по 500 ₽, перед этим проверив сумму.'
+  };
+  const ISCB = {
+    dirty: 'Два сотрудника поддержки работают с одним клиентом: один уже ввёл списание, но не подтвердил. Увидит ли второй «полуготовый» баланс и успеет ли на него ответить клиенту?',
+    nonrep: 'Отчёт сверки читает баланс клиента в начале и в конце. Если между чтениями пришёл платёж, отчёт не сходится сам с собой — бухгалтерия ищет несуществующую ошибку.',
+    phantom: 'Отчёт «сколько клиентов в Казахстане» читает число дважды: для заголовка и для таблицы. Новая регистрация посередине — и цифры в одном отчёте расходятся.',
+    lost: 'Клиент пополнил счёт на 500 ₽, а одновременное списание 200 ₽ затёрло пополнение: у клиента «пропали» 500 ₽ — жалоба, ручная проверка, компенсация.',
+    skew: 'У семьи общий лимит: сумма счетов не ниже 0. Две одновременные покупки проверили лимит по старым данным — семья ушла в минус, и этот долг магазин уже не вернёт.'
+  };
+  const SIZE = { 8: { k: 's', cpu: 2, iops: 3000, net: 1, ops: 2500, usd: 220 }, 32: { k: 'm', cpu: 8, iops: 10000, net: 5, ops: 5000, usd: 450 }, 64: { k: 'l', cpu: 16, iops: 20000, net: 10, ops: 9000, usd: 850 }, 128: { k: 'xl', cpu: 32, iops: 40000, net: 25, ops: 16000, usd: 1600 } };
+  const SIZE_BY_K = { s: 8, m: 32, l: 64, xl: 128 };
+  const MIX = {
+    shop: { n: 'Магазин: вход, профиль, баланс', rd: 0.8, kb: 2, cpu: 1, pg: 1 },
+    write: { n: 'Много записей: регистрации, бонусы', rd: 0.5, kb: 1, cpu: 1, pg: 1 },
+    report: { n: 'Отчёты и выгрузки', rd: 0.98, kb: 300, cpu: 6, pg: 30 }
+  };
 
   /* ================= экземпляр лаборатории ================= */
   const LKEY = 'amp-stroyka-labs-v1', MODE_KEY = 'amp-stroyka-lt-mode';
@@ -277,7 +383,7 @@
     S.hl = null; S.q = null; S.mig = null; S.dup = null;
   }
   function newState() {
-    const S = { tab: 'table', part: 'none', N: 1, key: 'id', method: 'mod', reps: 0, hist: [], lastMig: null, rps: 10000, ev: 1, pick: null, col: 'email', w: { ri: 5, hot: 0.25, ram: 32, sh: 1 }, qId: 42, qUpd: 17, qC: 'KZ', qD: '2026-07-01', pend: null };
+    const S = { tab: 'table', part: 'none', N: 1, key: 'id', method: 'mod', reps: 0, hist: [], lastMig: null, rps: 10000, ev: 1, pick: null, col: 'email', w: { ri: 5, hot: 0.25, ram: 32, sh: 1 }, qId: 42, qUpd: 17, qC: 'KZ', qD: '2026-07-01', pend: null, ix: ['btree'], ixView: 'btree', ixQ: 'id', ixRes: null, ixBase: null, ixCmp: false, ixSorted: false, ixWord: 'москва', ixGeo: 'Москва', ixIns: null, iso: 'rc', lock: 'none', isc: 'lost', ist: 0, isoSeen: {}, srvLoad: 3000, srvMix: 'shop' };
     resetData(S);
     return S;
   }
@@ -288,6 +394,10 @@
     if (['mod', 'ring'].includes(o.method)) S.method = o.method;
     if (['none', 'range', 'list', 'hash'].includes(o.partition)) S.part = o.partition;
     if (o.replicas != null) S.reps = Math.max(0, Math.min(2, Math.round(+o.replicas) || 0));
+    if (Array.isArray(o.idx)) { S.ix = o.idx.filter(k => IX_IDS.includes(k)); S.ixView = S.ix.includes('btree') ? 'btree' : S.ix[0] || 'none'; S.ixQ = IXQS[S.ixView][0]; S.ixRes = null; S.ixIns = null; }
+    if (['rc', 'rr', 'ser'].includes(o.isolation)) { S.iso = o.isolation; S.ist = 0; }
+    if (['none', 'optimistic', 'pessimistic'].includes(o.locking)) { S.lock = o.locking; S.ist = 0; }
+    if (SIZE_BY_K[o.size]) S.w.ram = SIZE_BY_K[o.size];
     if (o.tab && TAB_IDS.includes(o.tab)) S.tab = o.tab;
   }
   const readDone = () => { try { const st = JSON.parse(localStorage.getItem(LKEY) || '{}'); return (st.done && st.done.table) || []; } catch (e) { return []; } };
@@ -375,6 +485,9 @@
         fail: 'Сервер без реплики чинят ≈ 1 час; с репликой переключение занимает ≈ 30 с.',
         dup: '0,1 % регистраций — с уже занятым email; 30 % таких клиентов пишут в поддержку, обращение стоит 300 ₽; регистраций в день — как в последнем квартале демо.',
         hot: 'Доли стран — как в демо: Россия 54 %, Казахстан 15 %, Беларусь 10 %, остальные — 21 %.',
+        idx: 'Страница 8 КБ с SSD вразброс — 0,1 мс, подряд — 0,016 мс; в странице индекса ≈ 300 ключей; хранение — 10 ₽ за ГБ SSD в месяц; вход по номеру — ≈ 30 % обращений.',
+        iso: 'Баланс меняется при каждом заказе; 0,05 % операций совпадают по времени с другой операцией того же клиента; среднее столкновение — 500 ₽; защита стоит ≈ 1–3 % повторов и ожиданий.',
+        srvm: 'Ресурсы серверов: S — 2 ядра, 3 000 IOPS, 1 Гбит/с; M — 8 ядер, 10 000 IOPS, 5 Гбит/с; L — 16 ядер, 20 000 IOPS, 10 Гбит/с; XL — 32 ядра, 40 000 IOPS, 25 Гбит/с. Потолок процессора — как на площадке (2 500 / 5 000 / 9 000 / 16 000 оп/с). Промах мимо памяти — 2 чтения с диска, запись — журнал и 0,5 IOPS на каждый индекс.',
         mem: `Под кэш — 75 % памяти сервера; горячая доля таблицы — ${pc(S.w.hot)}; индексы — целиком в памяти.`
       })[k];
     }
@@ -437,7 +550,7 @@
             ${A(['scale', 'srv', 'mem', 'orders'])}</section>
             <section class="lt-box" id="ltWBox">${weightBox()}</section></div>`
           + memo('считай не «сколько весит», а «влезает ли горячее в память» и сколько это стоит против минуты простоя.')
-          + next('part', 'Дальше: партиции');
+          + next('idx', 'Дальше: индексы');
       }
       const segs = rc.parts.map(p => `<span class="${p.c}" style="flex:${p.b} 0 0" title="${esc(p.l)}: ${p.b} Б">${p.b >= 13 ? `${esc(p.l === 'заголовок' ? 'заг.' : p.l)} ${p.b}` : p.b >= 5 ? p.b : ''}</span>`).join('');
       return ana(LIFE.weight, 'Посчитаем, сколько весит одна строка, вся таблица и её индексы — и влезет ли «горячее» в память.', '<b>Размер строки</b> (tuple) = заголовок 24 Б + поля по их типам + <b>выравнивание</b>. Строки лежат в <b>страницах по 8 КБ</b>. <b>Рабочий набор</b> (hot set) — данные и индексы, которые читаются постоянно.')
@@ -449,7 +562,7 @@
           <div class="lt-card">В страницу 8 КБ помещается <b>${rc.rpp} строк</b> → на диске каждая строка в среднем стоит <b>${Math.round(rc.perRow)} Б</b>. Пустоты выравнивания уменьшают, ставя 8-байтовые поля (bigint, timestamptz) в начало, — но строка всё равно округляется до 8 байт, так что выигрыш бывает и нулевым.</div></section>
           <section class="lt-box" id="ltWBox">${weightBox()}</section></div>`
         + memo('считай вес от типов: 24 Б заголовка + поля + выравнивание, плюс индексы (≈ 20–50 Б на строку каждый). В памяти должны жить горячие данные и индексы, а не вся таблица.')
-        + next('part', 'Дальше: партиции');
+        + next('idx', 'Дальше: индексы');
     }
     function weightBox() {
       const n = ROWSTEPS[S.w.ri];
@@ -970,7 +1083,7 @@
         + (B ? '<div class="lt-card"><b>Как починить:</b> отдельный справочник «email → номер клиента», который делится по самому адресу: регистрация сначала «занимает» адрес там (это один сервер — проверка честная), потом создаёт клиента. Регистрация дороже на несколько миллисекунд, зато дубли исчезают.</div>' : '<div class="lt-card"><b>Как вернуть уникальность:</b><ul><li>Таблица-справочник <code>emails (email PRIMARY KEY, user_id)</code>, шардированная по hash(email): сначала занимаем email там (это один шард — уникальность работает), потом вставляем пользователя.</li><li>Шардировать сам users по email — но тогда поиск по id уйдёт на все шарды.</li><li>Распределённая СУБД с глобальными индексами (CockroachDB, YugabyteDB, Spanner) — проверяет весь кластер, но запись дороже.</li></ul></div>');
       return h + (B ? A(['scale', 'hot', 'load', 'orders', 'loss', 'dup']) : '')
         + memo(B ? 'делить клиентов по стране при 54 % России — сервер «Россия» падает первым в распродажу; делить по номеру — ровно. После деления уникальность email держит отдельный справочник.' : 'ключ шарда с перекосом (страна, дата) даёт горячий шард — лечится hash(id). UNIQUE и внешние ключи работают только внутри шарда: глобальные правила держи отдельной таблицей-справочником.')
-        + `<div class="row-btns">${next('memo', 'Итоги: что запомнить')}</div>`;
+        + `<div class="row-btns">${next('iso', 'Дальше: изоляция')}</div>`;
     }
     function actDup() {
       if (S.mig) { S.dup = { c: 'warn', h: 'Сначала закончи решардинг во вкладке «Решардинг».' }; renderPanel(); return; }
@@ -998,6 +1111,532 @@
       if (c.N > 1) { const ld = loadsFor(counts(c), c); if (ld.ratio[s] >= 1.5) done('hot'); }
       const pk = EL.querySelector('#ltPick'); if (pk) pk.innerHTML = pickCard();
       EL.querySelectorAll('#ltStage .lt-col').forEach(e => e.classList.toggle('lt-pk', +e.dataset.s === s));
+    }
+
+    /* ================= Индексы ================= */
+    const RN = { cpu: 'процессор', disk: 'диск', net: 'сеть', mem: 'память' };
+    const rowBy = id => S.rows.find(r => r.id === id) || S.rows[0];
+    const eA = () => rowBy(17).email;
+    const eAct = () => (S.rows.find(x => x.id === 17 && x.active) || S.rows.find(x => x.active) || S.rows[0]).email;
+    const eIn = () => (S.rows.find(x => !x.active) || S.rows[0]).email;
+    const TS_D = Date.UTC(2026, 6, 1), TS_D2 = Date.UTC(2026, 0, 1);
+    const yymm = ts => { const d = new Date(ts); return String(d.getUTCFullYear()).slice(2) + '.' + p2(d.getUTCMonth() + 1); };
+    const IXQ = {
+      id: { t: 'WHERE id = 42', b: 'вход: клиент №42', sql: () => 'SELECT * FROM users\nWHERE id = 42;', m: r => r.id === 42 },
+      idr: { t: 'WHERE id BETWEEN 22 AND 33', b: 'клиенты №22–33', sql: () => 'SELECT * FROM users\nWHERE id BETWEEN 22 AND 33;', m: r => r.id >= 22 && r.id <= 33 },
+      email: { t: "WHERE email = '…'", b: 'вход по почте', sql: () => `SELECT * FROM users\nWHERE email = '${eA()}';`, m: r => r.email === eA() },
+      emailr: { t: "WHERE email >= 'n'", b: 'все адреса от буквы «n»', sql: () => "SELECT * FROM users\nWHERE email >= 'n';", m: r => r.email >= 'n' },
+      kzd: { t: "country = 'KZ' AND created_at ≥ 2026", b: 'новые клиенты Казахстана за год', sql: () => "SELECT * FROM users\nWHERE country = 'KZ'\n  AND created_at >= '2026-01-01';", m: r => r.country === 'KZ' && r.ts >= TS_D2 },
+      kz: { t: "WHERE country = 'KZ'", b: 'все клиенты Казахстана', sql: () => "SELECT * FROM users\nWHERE country = 'KZ';", m: r => r.country === 'KZ' },
+      d: { t: "WHERE created_at >= '2026-07-01'", b: 'новые клиенты за квартал', sql: () => "SELECT * FROM users\nWHERE created_at >= '2026-07-01';", m: r => r.ts >= TS_D },
+      d2: { t: "WHERE created_at >= '2026-01-01'", b: 'новые клиенты за год', sql: () => "SELECT * FROM users\nWHERE created_at >= '2026-01-01';", m: r => r.ts >= TS_D2 },
+      bal: { t: 'SELECT balance … WHERE id = 42', b: 'баланс в шапке сайта', sql: () => 'SELECT balance FROM users\nWHERE id = 42;', m: r => r.id === 42 },
+      mail42: { t: 'SELECT email … WHERE id = 42', b: 'почта клиента для письма', sql: () => 'SELECT email FROM users\nWHERE id = 42;', m: r => r.id === 42 },
+      w: { t: 'слово в имени или городе', b: 'поиск клиентов по слову', sql: () => `SELECT * FROM users\nWHERE to_tsvector('simple', name || ' ' || city)\n   @@ to_tsquery('simple', '${S.ixWord}');`, m: r => words(r).includes(S.ixWord) },
+      geo: { t: `в радиусе ${GEO_R} км от города`, b: 'клиенты рядом со складом', sql: () => { const c = CITY[S.ixGeo]; return `SELECT * FROM users\nWHERE ST_DWithin(location,\n  ST_Point(${c[1]}, ${c[0]})::geography,\n  ${GEO_R}000);`; }, m: r => kmBetween(CITY[r.city], CITY[S.ixGeo]) <= GEO_R },
+      act: { t: "email = '…' AND is_active", b: 'вход активного клиента', sql: () => `SELECT * FROM users\nWHERE email = '${eAct()}'\n  AND is_active;`, m: r => r.email === eAct() && r.active },
+      inact: { t: "email = '…' без is_active", b: 'найти клиента, даже неактивного', sql: () => `SELECT * FROM users\nWHERE email = '${eIn()}';`, m: r => r.email === eIn() }
+    };
+    function ixHeap(v, sortedOv) {
+      const sorted = sortedOv != null ? sortedOv : (v === 'clustered' || (v === 'brin' && S.ixSorted));
+      const rows = S.rows.slice().sort(sorted ? (a, b) => a.ts - b.ts || a.id - b.id : (a, b) => driftOf(a) - driftOf(b));
+      const pages = []; for (let i = 0; i < rows.length; i += 6) pages.push(rows.slice(i, i + 6));
+      const pg = new Map(); pages.forEach((p, i) => p.forEach(r => pg.set(r.id, i)));
+      return { rows, pages, pg, sorted };
+    }
+    function ixTree(col, rows) {
+      const key = r => col === 'id' ? r.id : col === 'ts' ? r.ts : r.email;
+      const ents = rows.map(r => ({ k: key(r), r })).sort((a, b) => a.k < b.k ? -1 : a.k > b.k ? 1 : a.r.id - b.r.id);
+      const leaves = []; for (let i = 0; i < ents.length; i += 6) leaves.push(ents.slice(i, i + 6));
+      const groups = []; for (let i = 0; i < leaves.length; i += 3) groups.push(seq(Math.min(3, leaves.length - i)).map(j => i + j));
+      return { col, ents, leaves, groups };
+    }
+    const leafOf = (T, k) => { let li = 0; T.leaves.forEach((lf, i) => { if (lf[0].k <= k) li = i; }); return li; };
+    function ixLabel(T, k) {
+      if (T.col === 'id') return String(k);
+      if (T.col === 'ts') return yymm(k);
+      const s = String(k).split('@')[0]; return s.length > 8 ? s.slice(0, 7) + '…' : s;
+    }
+    function ixPlan(v, qk, sortedOv) {
+      const H = ixHeap(v, sortedOv), Q = IXQ[qk], rows = H.rows, hits = rows.filter(Q.m);
+      const R = { v, qk, plan: 'Seq Scan', used: false, idxPages: 0, heap: [], checked: 0, hits: new Set(hits.map(r => r.id)), nodes: new Map(), edges: new Set(), open: new Set(), keys: new Set(), ptr: [], skip: new Set(), why: '', sorted: H.sorted, H };
+      const seqScan = why => { R.plan = 'Seq Scan'; R.used = false; R.heap = H.pages.map((_, i) => i); R.checked = rows.length; R.why = why; return R; };
+      const heapOf = list => [...new Set(list.map(r => H.pg.get(r.id)))].sort((a, b) => a - b);
+      const walk = (T, lo, hi) => {
+        const li0 = leafOf(T, lo), gi = Math.floor(li0 / 3);
+        R.nodes.set('r', 0); R.nodes.set('i' + gi, 1); R.edges.add('r-i' + gi); R.edges.add('i' + gi + '-l' + li0);
+        let li = li0, step = 2;
+        while (li < T.leaves.length && (li === li0 || T.leaves[li][0].k <= hi)) { R.nodes.set('l' + li, step++); R.open.add(li); if (li > li0) R.edges.add('l' + (li - 1) + '-l' + li); li++; }
+        R.idxPages = 2 + R.open.size;
+        return T.ents.filter(e => e.k >= lo && e.k <= hi);
+      };
+      if (v === 'none') return seqScan('Индексов нет: база читает все страницы подряд и проверяет каждую строку.');
+      if (v === 'btree' || v === 'covering' || v === 'clustered' || v === 'partial') {
+        const col = v === 'clustered' ? 'ts' : v === 'partial' || qk === 'email' ? 'email' : 'id';
+        const T = ixTree(col, v === 'partial' ? rows.filter(r => r.active) : rows); R.tree = T;
+        if (v === 'partial') R.notIn = new Set(rows.filter(r => !r.active).map(r => r.id));
+        if (v === 'partial' && qk === 'inact') return seqScan('В частичном индексе только активные клиенты, а в запросе нет условия is_active — планировщик не может им воспользоваться и читает всю таблицу. Искомый неактивный клиент в индексе и не лежит.');
+        let lo, hi;
+        if (col === 'id') { if (qk === 'idr') { lo = 22; hi = 33; } else lo = hi = 42; }
+        else if (col === 'email') lo = hi = v === 'partial' ? eAct() : eA();
+        else { lo = qk === 'd' ? TS_D : TS_D2; hi = Infinity; }
+        const found = walk(T, lo, hi);
+        found.forEach(e => R.keys.add(e.r.id));
+        R.checked = found.length; R.used = true;
+        if (v === 'covering' && qk === 'bal') { R.plan = 'Index Only Scan'; R.why = `Спуск по дереву (${R.idxPages} страницы индекса), а баланс лежит прямо в листе (INCLUDE) — таблицу не читаем вообще.`; return R; }
+        R.plan = 'Index Scan'; R.heap = heapOf(found.map(e => e.r)); R.ptr = found.map(e => e.r.id);
+        if (v === 'clustered') R.why = `Спуск к первой нужной дате и проход по листьям. Строки лежат по дате — ${rowsW(found.length)} в ${R.heap.length} соседних ${plural(R.heap.length, 'странице', 'страницах', 'страницах')} подряд (${R.heap.join(', ')}).`;
+        else if (v === 'covering') R.why = `${qk === 'mail42' ? 'email' : 'Остальных колонок'} в индексе нет — после листа идём в таблицу за строкой (1 страница).`;
+        else if (v === 'partial') R.why = `В индексе только ${T.ents.length} активных клиентов из ${rows.length} — он меньше. Спуск сразу находит адрес строки.`;
+        else if (qk === 'idr') R.why = `Спуск к ключу 22 и проход по цепочке листьев до 33 (${R.open.size} ${plural(R.open.size, 'лист', 'листа', 'листьев')}). Строки лежат вразброс — ${R.heap.length} страниц таблицы из ${H.pages.length}.`;
+        else R.why = `Спуск по дереву: корень → узел → лист (${R.idxPages} страницы индекса), в листе — адрес строки: одна страница таблицы.`;
+        return R;
+      }
+      if (v === 'hash') {
+        const hb = e => fmix(fnv('h:' + e)) % 8, Bk = seq(8).map(() => []);
+        rows.forEach(r => Bk[hb(r.email)].push(r)); R.buckets = Bk;
+        if (qk !== 'email') return seqScan(qk === 'emailr' ? 'Хэш перемешивает порядок: соседние адреса лежат в разных корзинах. «Больше, чем n» хэш-индекс не умеет — читаем всю таблицу.' : 'Хэш-индекс построен по email, а запрос — по id. Он здесь не поможет.');
+        const b = hb(eA()); R.nodes.set('b' + b, 1); R.open.add(b); R.calc = `hash('${eA().split('@')[0]}…') % 8 = ${b}`;
+        const found = Bk[b].filter(r => r.email === eA()); found.forEach(r => R.keys.add(r.id));
+        R.checked = Bk[b].length; R.used = true; R.plan = 'Index Scan (hash)'; R.idxPages = 2; R.heap = heapOf(found); R.ptr = found.map(r => r.id);
+        R.why = `Считаем hash(email) % 8 = ${b} и сразу открываем одну корзину: в ней ${Bk[b].length} ${plural(Bk[b].length, 'адрес', 'адреса', 'адресов')}, сверяем и идём за строкой.`;
+        return R;
+      }
+      if (v === 'composite') {
+        R.ents = rows.slice().sort((a, b) => a.country < b.country ? -1 : a.country > b.country ? 1 : a.ts - b.ts || a.id - b.id);
+        if (qk === 'd') { R.scatter = new Set(hits.map(r => r.id)); return seqScan('Правило левого префикса: индекс отсортирован сначала по стране, даты идут внутри каждой страны. Записи «с 1 июля» разбросаны по всем странам (подсвечены красным) — одним куском их не прочитать, поэтому база читает таблицу целиком.'); }
+        const read = R.ents.filter(r => r.country === 'KZ' && (qk === 'kz' || r.ts >= TS_D2));
+        read.forEach(r => R.keys.add(r.id)); R.read = new Set(read.map(r => r.id));
+        R.used = true; R.plan = 'Index Scan'; R.checked = read.length; R.idxPages = 2 + Math.ceil(read.length / 6); R.heap = heapOf(read); R.ptr = read.map(r => r.id);
+        R.why = qk === 'kz' ? 'Условие только по первой колонке (country) — это тоже левый префикс: читаем весь кусок «KZ» подряд.' : 'Страна + дата: спускаемся к «KZ, 2026-01-01» и читаем один непрерывный кусок до конца Казахстана.';
+        return R;
+      }
+      if (v === 'gin') {
+        const dict = new Map(); rows.forEach(r => words(r).forEach(w => { if (!dict.has(w)) dict.set(w, []); const l = dict.get(w); if (!l.includes(r.id)) l.push(r.id); }));
+        R.dict = dict; R.word = S.ixWord;
+        const list = dict.get(S.ixWord) || [];
+        list.forEach(id => R.keys.add(id)); R.used = true; R.plan = 'Bitmap Heap Scan (GIN)'; R.checked = list.length; R.idxPages = 2; R.heap = heapOf(rows.filter(r => list.includes(r.id))); R.ptr = list.slice();
+        R.why = `В словаре ${dict.size} слов. «${esc(S.ixWord)}» → список из ${rowsW(list.length)}. Читаем только их страницы — ${R.heap.length} из ${H.pages.length}, без перебора остальных.`;
+        return R;
+      }
+      if (v === 'gist') {
+        const jit = (r, i) => ((fmix(fnv('g' + i + ':' + r.id)) % 1000) / 1000 - 0.5);
+        const pts = rows.map(r => ({ r, la: CITY[r.city][0] + jit(r, 1) * 1.4, lo: CITY[r.city][1] + jit(r, 2) * 2.2 })).sort((a, b) => a.lo - b.lo);
+        const per = Math.ceil(pts.length / 4), mbr = [];
+        for (let i = 0; i < pts.length; i += per) { const g = pts.slice(i, i + per); mbr.push({ g, la0: Math.min(...g.map(p => p.la)), la1: Math.max(...g.map(p => p.la)), lo0: Math.min(...g.map(p => p.lo)), lo1: Math.max(...g.map(p => p.lo)) }); }
+        const c = CITY[S.ixGeo], dLa = GEO_R / 111, dLo = GEO_R / (111 * Math.cos(c[0] * Math.PI / 180));
+        mbr.forEach((m, i) => { m.on = !(m.la1 < c[0] - dLa || m.la0 > c[0] + dLa || m.lo1 < c[1] - dLo || m.lo0 > c[1] + dLo); if (m.on) R.nodes.set('m' + i, 1); });
+        const cand = mbr.filter(m => m.on).flatMap(m => m.g.map(p => p.r));
+        R.geo = { pts, mbr, c, dLa, dLo }; R.cand = new Set(cand.map(r => r.id));
+        hits.forEach(r => R.keys.add(r.id)); R.used = true; R.plan = 'Index Scan (GiST)'; R.checked = cand.length; R.idxPages = 1 + mbr.filter(m => m.on).length; R.heap = heapOf(hits);
+        R.why = `Круг ${GEO_R} км вокруг точки «${S.ixGeo}» задевает ${mbr.filter(m => m.on).length} из ${mbr.length} прямоугольников. Точки проверяем только в них — ${cand.length} из ${rows.length}, остальные не открываем. Внутри круга — ${rowsW(hits.length)}.`;
+        return R;
+      }
+      if (v === 'brin') {
+        const lo = qk === 'd' ? TS_D : TS_D2;
+        R.sum = H.pages.map(p => [Math.min(...p.map(r => r.ts)), Math.max(...p.map(r => r.ts))]);
+        R.sum.forEach(([, mx], i) => { if (mx < lo) R.skip.add(i); else R.heap.push(i); });
+        R.checked = R.heap.reduce((s, i) => s + H.pages[i].length, 0); R.used = true; R.plan = 'Bitmap Heap Scan (BRIN)'; R.idxPages = 1;
+        R.why = `Сводка BRIN: у каждой страницы min и max даты. Пропускаем ${R.skip.size} из ${H.pages.length} страниц, где max раньше нужной даты; остальные ${R.heap.length} читаем целиком и проверяем ${R.checked} строк. ${H.sorted ? 'Строки лежат по порядку дат — пропусков много.' : 'Строки лежат вразброс: почти в каждой странице есть и старые, и новые даты — пропускать почти нечего.'}`;
+        return R;
+      }
+      return seqScan('');
+    }
+    function ixReal(P) {
+      const C = ROWSTEPS[S.w.ri], rc = rowCalc(false), TP = C / rc.rpp, n = Math.max(1, P.H.rows.length), lev = Math.max(2, Math.ceil(Math.log(C) / Math.log(300)));
+      if (!P.used) return C / BIZ.scan;
+      if (P.v === 'brin') return P.heap.length / P.H.pages.length * TP * PAGE_SEQ / 1000 + P.checked / n * C / BIZ.scan;
+      if (P.hits.size <= 1) return ((P.v === 'hash' ? 2 : lev) * PAGE_RAND + (P.plan === 'Index Only Scan' ? 0 : PAGE_RAND)) / 1000;
+      const m = P.hits.size / n * C, pages = P.sorted ? m / rc.rpp : Math.min(m, TP), per = P.sorted ? PAGE_SEQ : pages > 0.2 * TP ? PAGE_SEQ * 2 : PAGE_RAND;
+      return (lev * PAGE_RAND + pages * per) / 1000 + m / BIZ.scan;
+    }
+    function ixEnsure() {
+      if (S.ixRes && S.ixRes.v === S.ixView) return;
+      const q = IXQS[S.ixView].includes(S.ixQ) ? S.ixQ : IXQS[S.ixView][0];
+      S.ixQ = q; S.ixRes = ixPlan(S.ixView, q); S.ixBase = S.ixView === 'clustered' ? ixPlan('clustered', q, false) : ixPlan('none', q);
+    }
+    function ixRun(qk, flip) {
+      flush();
+      const v = S.ixView; if (!IXQS[v].includes(qk)) qk = IXQS[v][0];
+      S.ixQ = qk; S.ixRes = ixPlan(v, qk); S.ixBase = v === 'clustered' ? ixPlan('clustered', qk, false) : ixPlan('none', qk);
+      const R = S.ixRes;
+      if (v === 'btree' && qk === 'id' && R.used) done('idx-btree');
+      if (v === 'composite' && qk === 'd') done('idx-prefix');
+      if (R.plan === 'Index Only Scan') done('idx-only');
+      renderPanel(); drawStage(flip ? { flip: true } : {});
+    }
+    function ixInsert() {
+      flush();
+      const r = nextUser(); S.rows.push(r);
+      const on = k => S.ix.includes(k), L = [['Таблица (heap)', 1, 'новая строка — в страницу, где есть место']];
+      if (on('btree')) L.push(['B-tree PRIMARY KEY (id)', 1, 'ключ в самый правый лист'], ['B-tree UNIQUE (email)', 1, 'ключ в середину дерева + проверка «такой уже есть?»']);
+      if (on('hash')) L.push(['Hash (email)', 1, 'запись в свою корзину']);
+      if (on('composite')) L.push(['Составной (country, created_at)', 1, 'в конец куска своей страны']);
+      if (on('covering')) L.push(['Покрывающий (id) INCLUDE (balance)', 1, 'ключ и баланс в правый лист']);
+      if (on('clustered')) L.push(['Кластеризация', 0, 'строка ложится в конец — порядок по дате портится; CLUSTER повторяют ночью, он блокирует таблицу']);
+      if (on('gin')) L.push(['GIN (слова)', words(r).length, 'по записи на каждое слово: ' + words(r).join(', ')]);
+      if (on('gist')) L.push(['GiST (location)', 1, 'точка — в подходящий прямоугольник, иногда он расширяется']);
+      if (on('brin')) L.push(['BRIN (created_at)', 0, 'сводку блока обновят, когда он заполнится']);
+      if (on('partial')) L.push(['Частичный (email) WHERE is_active', r.active ? 1 : 0, r.active ? 'клиент активен — запись есть' : 'неактивных не индексируем']);
+      S.ixIns = { r, L, total: L.reduce((a, x) => a + x[1], 0) };
+      if (S.ix.length >= 2) done('idx-write');
+      S.ixRes = null;
+      ixRun(S.ixQ, true);
+    }
+    function ginWords() { const f = new Map(); base().forEach(r => words(r).forEach(w => f.set(w, (f.get(w) || 0) + 1))); const top = [...f.entries()].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1)).slice(0, 10).map(x => x[0]); if (!top.includes(S.ixWord)) top.push(S.ixWord); return top; }
+    function ixWriteHTML() {
+      const Bz = isBiz(), C = ROWSTEPS[S.w.ri], b = biz(), bytes = S.ix.reduce((a, k) => a + IXB[k], 0), gb = bytes * C / 1e9, I = S.ixIns;
+      const regPeak = b.C * QCNT[6] / 48 / 92 / 86400 * 3;
+      return `<div class="lt-ctl"><b>${Bz ? 'Индексы у базы магазина (как у узла)' : 'Включённые индексы (как у узла базы)'}</b><div class="lt-ixts">${IX_IDS.map(k => `<button type="button" class="lt-ixt${S.ix.includes(k) ? ' on' : ''}" data-ixt="${k}" aria-pressed="${S.ix.includes(k)}">${IXNAME[k]}</button>`).join('')}</div></div>
+        <div class="lt-card${Bz ? ' biz' : ''}"><b>Место:</b> индексы добавляют ≈ ${Math.round(bytes)} Б на строку → ${size(gb * 1e9)} на ${human(C)} строк${Bz ? ` ≈ ${rub(gb * STORE_RUB)} в месяц за диск — и столько же на каждой реплике` : ''}.</div>
+        <div class="row-btns"><button type="button" class="btn" data-ixins="1">INSERT нового клиента — что обновится?</button></div>
+        ${I ? `<table class="lt-bt"><thead><tr><th>структура</th><th class="r">записей</th></tr></thead><tbody>${I.L.map(x => `<tr><td>${esc(x[0])}<br><small>${esc(x[2])}</small></td><td class="r ${x[1] ? '' : 'ok'}">${x[1]}</td></tr>`).join('')}</tbody></table>
+        <div class="lt-card ${I.total > 4 ? 'warn' : 'ok'}${Bz ? ' biz' : ''}"><b>Один INSERT → ${I.total} ${plural(I.total, 'запись', 'записи', 'записей')}</b> в ${I.L.filter(x => x[1]).length} ${plural(I.L.filter(x => x[1]).length, 'структуру', 'структуры', 'структур')} и столько же в журнал (WAL). ${Bz ? `Регистрация клиента дольше ≈ на ${dec(I.total * 0.05, 2)} мс. В пик ≈ ${nf(regPeak)} ${plural(Math.round(regPeak), 'регистрация', 'регистрации', 'регистраций')} в секунду — для таблицы клиентов это почти незаметно; на таблицах, куда пишут тысячи строк в секунду (заказы, события), каждый лишний индекс — заметная нагрузка и диск.` : 'Чем больше индексов, тем быстрее чтение и медленнее запись: ≈ 0,05 мс и запись журнала на каждую структуру.'}</div>` : ''}`;
+    }
+    function ixOut(R) {
+      const Bz = S.ixBase, C = ROWSTEPS[S.w.ri], t = ixReal(R), cmp = Bz && (Bz.v !== R.v || Bz.sorted !== R.sorted), tb = cmp ? ixReal(Bz) : null, worse = R.used && tb != null && t > tb;
+      return `<pre class="lt-code">${hlSql(IXQ[R.qk].sql())}</pre>
+        <div class="lt-tiles"><div><small>план</small><b class="lt-pl">${R.plan}</b></div><div><small>страниц индекса</small><b>${R.idxPages}</b></div><div><small>страниц таблицы</small><b>${R.heap.length}<i> из ${R.H.pages.length}</i></b></div><div><small>строк проверено</small><b>${R.checked}</b></div></div>
+        <div class="lt-card ${R.used ? (worse ? 'warn' : 'ok') : 'bad'}">${R.why}</div>
+        <div class="lt-card${isBiz() ? ' biz' : ''}"><b>На ${human(C)} строк:</b> ≈ ${secs(t)}${cmp ? ` против ≈ ${secs(tb)} ${Bz.v === 'none' ? 'полным перебором' : 'до кластеризации'}` : ''}.${worse ? ' В таком масштабе этот план медленнее полного перебора — планировщик выбрал бы Seq Scan: индекс выгоден для узких выборок или когда строки лежат по порядку.' : ''}</div>`;
+    }
+    function idxBiz() {
+      const b = biz(), seqS = b.C / BIZ.scan, lev = Math.max(2, Math.ceil(Math.log(b.C) / Math.log(300))), pt = (lev + 1) * PAGE_RAND / 1000, login = b.rpsPeak * 0.3, srv = Math.ceil(login * seqS / SIZE[32].cpu);
+      return `<div class="lt-card biz"><b>Вход клиента по номеру.</b> Без индекса база перебирает всех ${human(b.C)} клиентов — ≈ ${secs(seqS)} на каждый вход. В пик входов ≈ ${nf(login)} в секунду: чтобы успевать, понадобилось бы ≈ ${human(srv)} серверов по 8 ядер. С B-tree — ≈ ${secs(pt)}: ${lev} ${plural(lev, 'шаг', 'шага', 'шагов')} по дереву и одна страница таблицы.</div>`;
+    }
+    function panelIdx() {
+      ixEnsure();
+      const Bz = isBiz(), v = S.ixView, R = S.ixRes;
+      let h = Bz ? ana(LIFE.idx) + bizBar() + idxBiz() : ana(LIFE.idx, 'Без указателя база читает таблицу страница за страницей. С указателем — спускается по нему прямо к нужной странице.', '<b>Индекс</b> — отдельная отсортированная структура «значение → адрес строки». Ускоряет поиск, но каждый INSERT и UPDATE обновляет и его.');
+      h += `<div class="lt-ixg" role="group" aria-label="Какой индекс смотреть">${IXV.map(([k, n, d]) => `<button type="button" class="lt-ixb${k === v ? ' on' : ''}" data-ixv="${k}" aria-pressed="${k === v}"><b>${n}${S.ix.includes(k) ? '<em>у узла</em>' : ''}</b><small>${d}</small></button>`).join('')}</div>`;
+      h += `<div class="lt-card${Bz ? ' biz' : ''}">${Bz ? `<b>${IXNAME[v]}.</b> ${IXBIZ[v]}` : IXTXT[v]}</div>`;
+      if (!Bz) h += `<pre class="lt-code">${hlSql(IXDDL[v])}</pre>`;
+      if (v === 'gin') h += `<div class="lt-qrow"><span class="lt-lbl">Слово</span><select class="lt-in lt-inw" id="ltIxWord" aria-label="Слово">${ginWords().map(w => `<option${w === S.ixWord ? ' selected' : ''}>${esc(w)}</option>`).join('')}</select></div>`;
+      if (v === 'gist') h += `<div class="lt-qrow"><span class="lt-lbl">Центр круга</span><select class="lt-in lt-inw" id="ltIxGeo" aria-label="Центр круга">${GEO_C.map(c => `<option${c === S.ixGeo ? ' selected' : ''}>${c}</option>`).join('')}</select></div>`;
+      if (v === 'brin') h += ctl('Как лежат строки', seg('ixsort', [['0', 'как легли'], ['1', 'по дате (CLUSTER)']], S.ixSorted ? '1' : '0'));
+      h += `<div class="lt-qs">${IXQS[v].map(qk => `<button type="button" class="lt-qb${R && R.qk === qk ? ' cur' : ''}" data-ixq="${qk}"><b>SELECT</b><span>${Bz ? IXQ[qk].b : IXQ[qk].t}</span></button>`).join('')}</div>`;
+      if (v !== 'none') h += `<label class="lt-chk"><input type="checkbox" id="ltIxCmp"${S.ixCmp ? ' checked' : ''}> До/после: тот же запрос ${v === 'clustered' ? 'до кластеризации' : 'без индекса'} — рядом на схеме</label>`;
+      if (R) h += ixOut(R);
+      h += `<div class="lt-sep"></div><h4 class="lt-h">Цена записи</h4>` + ixWriteHTML();
+      if (Bz) h += A(['scale', 'idx', 'scan']);
+      return h + memo(Bz ? 'индекс превращает перебор всей базы в несколько шагов по дереву, но каждый индекс — дороже регистрация и больше диска. Держи индексы под реальные запросы.' : 'индекс выбирают под запрос: B-tree — «равно» и диапазоны, hash — только «равно», составной — по левому префиксу, покрывающий — без похода в таблицу, GIN — слова, GiST — гео, BRIN — огромные таблицы по времени. Каждый индекс замедляет запись.')
+        + `<div class="row-btns">${next('part', 'Дальше: партиции')}</div>`;
+    }
+    function treeHTML(T, R) {
+      const on = id => R.nodes.has(id), sty = id => on(id) ? `--d:${Math.min(R.nodes.get(id) * 110, 480)}ms` : '';
+      const lab = k => esc(ixLabel(T, k));
+      const rootSeps = T.groups.slice(1).map(g => lab(T.leaves[g[0]][0].k));
+      const root = `<div class="lt-bn root${on('r') ? ' on' : ''}" data-n="r" style="grid-column:1/-1;${sty('r')}"><small>корень</small><span>${rootSeps.map(x => `<i>${x}</i>`).join('') || '<i>·</i>'}</span></div>`;
+      const inner = T.groups.map((g, gi) => `<div class="lt-bn${on('i' + gi) ? ' on' : ''}" data-n="i${gi}" style="grid-column:${g[0] + 1}/${g[g.length - 1] + 2};${sty('i' + gi)}"><span>${g.slice(1).map(li => `<i>${lab(T.leaves[li][0].k)}</i>`).join('') || '<i>·</i>'}</span></div>`).join('');
+      const leaves = T.leaves.map((lf, li) => { const id = 'l' + li, op = R.open.has(li); return `<div class="lt-bn leaf${on(id) ? ' on' : ''}${op ? ' open' : ''}" data-n="${id}" style="${sty(id)}">${op ? `<span class="lt-keys">${lf.map(e => `<span class="lt-k${R.keys.has(e.r.id) ? ' hit' : ''}" data-ek="${e.r.id}" style="--cc:${CCOL[e.r.country]}">${lab(e.k)}${R.v === 'covering' ? `<small>${nf(e.r.balance)}</small>` : ''}</span>`).join('')}</span>` : `<span class="lt-rg">${lab(lf[0].k)}<br>…${lab(lf[lf.length - 1].k)}</span>`}</div>`; }).join('');
+      const what = T.col === 'id' ? 'по id' : T.col === 'ts' ? 'по created_at' : R.v === 'partial' ? 'по email, только активные' : 'по email';
+      return `<div class="lt-ixh"><b>B-tree ${what}</b><small>${T.ents.length} ключей · ${T.leaves.length} листьев по 6 · 3 уровня (в жизни в странице ≈ 300 ключей)</small></div><div class="lt-btree" style="--L:${T.leaves.length}"><div class="lt-bt-row">${root}</div><div class="lt-bt-row">${inner}</div><div class="lt-bt-row leaves">${leaves}</div></div>`;
+    }
+    function hashHTML(R) {
+      return `<div class="lt-hx"><div class="lt-ixh"><b>Hash по email: 8 корзин</b>${R.calc ? `<code class="lt-calc">${esc(R.calc)}</code>` : '<small>номер корзины = hash(email) % 8</small>'}</div><div class="lt-bks">${R.buckets.map((b, i) => { const on = R.nodes.has('b' + i), op = R.open.has(i); return `<div class="lt-bk${on ? ' on' : ''}" data-n="b${i}"><small>корзина ${i}</small><b>${b.length}</b>${op ? `<span class="lt-keys">${b.map(r => `<span class="lt-k${R.keys.has(r.id) ? ' hit' : ''}" data-ek="${r.id}" style="--cc:${CCOL[r.country]}">${esc(r.email.split('@')[0].slice(0, 9))}</span>`).join('')}</span>` : ''}</div>`; }).join('')}</div></div>`;
+    }
+    function compHTML(R) {
+      const gs = [...new Set(R.ents.map(r => r.country))].map(c => [c, R.ents.filter(r => r.country === c)]);
+      return `<div class="lt-ixh"><b>Составной (country, created_at)</b><small>отсортирован по стране, внутри — по дате</small></div><div class="lt-comp">${gs.map(([c, list]) => `<div class="lt-cg${R.read && list.some(r => R.read.has(r.id)) ? ' on' : ''}"><small>${c} · ${list.length}</small><span class="lt-keys">${list.map(r => `<span class="lt-k${R.keys.has(r.id) ? ' hit' : ''}${R.scatter && R.scatter.has(r.id) ? ' x' : ''}" data-ek="${r.id}" style="--cc:${CCOL[c]}">${yymm(r.ts)}</span>`).join('')}</span></div>`).join('')}</div>`;
+    }
+    function ginHTML(R) {
+      const all = [...R.dict.entries()].sort((a, b) => b[1].length - a[1].length || (a[0] < b[0] ? -1 : 1));
+      const shown = all.slice(0, 24); if (R.dict.has(R.word) && !shown.find(x => x[0] === R.word)) shown.push([R.word, R.dict.get(R.word)]);
+      shown.sort((a, b) => a[0] < b[0] ? -1 : 1);
+      const list = R.dict.get(R.word) || [];
+      return `<div class="lt-gin"><div class="lt-ixh"><b>GIN: словарь слов</b><small>${R.dict.size} слов, показаны частые · число — сколько строк со словом</small></div><div class="lt-words">${shown.map(([w, l]) => `<span class="lt-wd${w === R.word ? ' on' : ''}"><b>${esc(w)}</b><i>${l.length}</i></span>`).join('')}</div><div class="lt-post"><b>«${esc(R.word)}» →</b>${list.length ? list.map(id => `<span class="lt-k hit" data-ek="${id}">${id}</span>`).join('') : ' нет строк'}</div></div>`;
+    }
+    function gistHTML(R) {
+      const G = R.geo, X = lo => 10 + (lo - 22) / 64 * 500, Y = la => 10 + (61 - la) / 24 * 220;
+      const rects = G.mbr.map((m, i) => `<rect class="lt-mbr${m.on ? ' on' : ''}" x="${(X(m.lo0) - 5).toFixed(1)}" y="${(Y(m.la1) - 5).toFixed(1)}" width="${(X(m.lo1) - X(m.lo0) + 10).toFixed(1)}" height="${(Y(m.la0) - Y(m.la1) + 10).toFixed(1)}" rx="5"><title>прямоугольник ${i + 1}: ${m.g.length} точек</title></rect>`).join('');
+      const circle = `<ellipse class="lt-geo-c" cx="${X(G.c[1]).toFixed(1)}" cy="${Y(G.c[0]).toFixed(1)}" rx="${(X(G.c[1] + G.dLo) - X(G.c[1])).toFixed(1)}" ry="${(Y(G.c[0] - G.dLa) - Y(G.c[0])).toFixed(1)}"/>`;
+      const pts = G.pts.map(p => `<circle class="lt-gp${R.keys.has(p.r.id) ? ' hit' : R.cand.has(p.r.id) ? ' chk' : ''}" cx="${X(p.lo).toFixed(1)}" cy="${Y(p.la).toFixed(1)}" r="4" style="--cc:${CCOL[p.r.country]}"><title>id ${p.r.id} · ${esc(p.r.city)}</title></circle>`).join('');
+      const labs = GEO_C.concat(['Новосибирск', 'Ереван']).map(c => { const x = X(CITY[c][1]), r = x > 420; return `<text x="${(r ? x - 6 : x + 6).toFixed(1)}" y="${(Y(CITY[c][0]) - 6).toFixed(1)}"${r ? ' text-anchor="end"' : ''}>${c}</text>`; }).join('');
+      return `<div class="lt-ixh"><b>GiST: R-дерево по координатам</b><small>4 прямоугольника-листа · круг ${GEO_R} км · зелёные прямоугольники открыты</small></div><svg class="lt-map" viewBox="0 0 520 240" role="img" aria-label="Карта клиентов и прямоугольники GiST">${rects}${circle}${pts}${labs}</svg>`;
+    }
+    function heapHTML(R) {
+      const H = R.H, read = new Set(R.heap), seqP = R.plan === 'Seq Scan';
+      const pages = H.pages.map((p, i) => {
+        const rd = read.has(i), sk = R.skip.has(i), d = seqP ? i * 55 : 380 + Math.min(R.heap.indexOf(i), 5) * 35;
+        const sum = R.sum ? `<em>${yymm(R.sum[i][0])}–${yymm(R.sum[i][1])}</em>` : '';
+        return `<div class="lt-pg${rd ? ' rd' : ''}${sk ? ' skip' : ''}" style="--d:${d}ms"><small>стр. ${i}${sk ? ' · мимо' : ''}</small>${sum}<div>${p.map(r => { const hit = rd && R.hits.has(r.id), chk = rd && !hit && (seqP || R.v === 'brin'), na = R.notIn && R.notIn.has(r.id); return `<span class="lt-hr${hit ? ' hit' : ''}${chk ? ' chk' : ''}${na ? ' na' : ''}" data-hid="${r.id}" style="--cc:${CCOL[r.country]};--d:${d}ms" title="id ${r.id} · ${esc(r.email)} · ${fdate(r.ts)}${na ? ' · нет в частичном индексе' : ''}">${r.id}</span>`; }).join('')}</div></div>`;
+      }).join('');
+      return `<div class="lt-heap"><div class="lt-hh"><b>Таблица users на диске</b><small>${H.pages.length} страниц по 6 строк · ${H.sorted ? 'строки лежат по дате регистрации' : 'строки лежат как легли при вставках и обновлениях'}</small></div><div class="lt-pages">${pages}</div></div>`;
+    }
+    function cmpHTML(R, Bz) {
+      const col = (P, title) => `<div class="lt-cmpc ${P.used ? 'ok' : 'bad'}"><b>${title}</b><span class="lt-plan ${P.used ? 'ok' : 'bad'}">${P.plan}</span><div class="lt-strip8">${P.H.pages.map((_, i) => `<i class="${P.heap.includes(i) ? 'rd' : P.skip.has(i) ? 'skip' : ''}"></i>`).join('')}</div><dl><dt>страниц индекса</dt><dd>${P.idxPages}</dd><dt>страниц таблицы</dt><dd>${P.heap.length} из ${P.H.pages.length}</dd><dt>строк проверено</dt><dd>${P.checked}</dd><dt>на ${human(ROWSTEPS[S.w.ri])} строк</dt><dd>≈ ${secs(ixReal(P))}</dd></dl></div>`;
+      return `<div class="lt-cmp">${col(Bz, Bz.v === 'none' ? 'Без индекса' : 'До кластеризации')}${col(R, IXNAME[R.v])}</div>`;
+    }
+    function stageIdx() {
+      ixEnsure();
+      const v = S.ixView, R = S.ixRes, H = R.H;
+      const head = `<div class="lt-sh"><b>${IXNAME[v]}</b><span>${H.sorted ? 'строки лежат по дате' : 'строки лежат как легли'}</span>${isBiz() ? `<span class="lt-shb">1 строка ≈ ${human(biz().per)} клиентов</span>` : ''}<span class="lt-lgs">${CC.map(x => `<i class="lt-lg" style="--cc:${CCOL[x]}">${x}</i>`).join('')}</span></div>`;
+      const bar = `<div class="lt-qbar"><code>${esc(IXQ[R.qk].sql().replace(/\s+/g, ' ').slice(0, 110))}</code><span class="lt-plan ${R.used ? 'ok' : 'bad'}">${R.plan}</span><span><b>${R.idxPages}</b> стр. индекса</span><span><b>${R.heap.length}</b> из ${H.pages.length} стр. таблицы</span><span><b>${R.checked}</b> ${plural(R.checked, 'строка проверена', 'строки проверено', 'строк проверено')}</span></div>`;
+      const st = R.tree ? treeHTML(R.tree, R) : v === 'hash' ? hashHTML(R) : v === 'composite' ? compHTML(R) : v === 'gin' ? ginHTML(R) : v === 'gist' ? gistHTML(R) : v === 'brin' ? '<div class="lt-ixh"><b>BRIN: сводка по блокам</b><small>в каждой странице ниже — min и max даты; в жизни блок = 128 страниц</small></div>' : '';
+      const cmp = S.ixCmp && v !== 'none' && S.ixBase ? cmpHTML(R, S.ixBase) : '';
+      return `<div class="lt-sin lt-ixs" id="ltSIn"><svg class="lt-ixsvg" aria-hidden="true"></svg>${head}${bar}${st}${heapHTML(R)}${cmp}<svg class="lt-ixptr" aria-hidden="true"></svg></div>`;
+    }
+    function ixLines(move) {
+      const box = EL.querySelector('#ltSIn'); if (!box || S.tab !== 'idx') return;
+      const sv = box.querySelector('.lt-ixsvg'), sp = box.querySelector('.lt-ixptr'); if (!sv || !sp) return;
+      const B = box.getBoundingClientRect(); if (!B.width) return;
+      [sv, sp].forEach(s => { s.setAttribute('width', B.width); s.setAttribute('height', B.height); s.setAttribute('viewBox', `0 0 ${B.width.toFixed(1)} ${B.height.toFixed(1)}`); });
+      const rc = el => { const r = el.getBoundingClientRect(); return { x: r.left - B.left, y: r.top - B.top, w: r.width, h: r.height }; };
+      const dOf = (a, b, k) => {
+        const ea = box.querySelector(a), eb = box.querySelector(b); if (!ea || !eb) return null;
+        const p = rc(ea), q = rc(eb);
+        if (k === 'h') { const y = (p.y + 12).toFixed(1); return `M${(p.x + p.w).toFixed(1)} ${y} L${q.x.toFixed(1)} ${y}`; }
+        const x0 = p.x + p.w / 2, y0 = p.y + p.h, x1 = q.x + q.w / 2, y1 = q.y, ym = ((y0 + y1) / 2).toFixed(1);
+        return k === 'v' ? `M${x0.toFixed(1)} ${y0.toFixed(1)} L${x1.toFixed(1)} ${y1.toFixed(1)}` : `M${x0.toFixed(1)} ${y0.toFixed(1)} C${x0.toFixed(1)} ${ym} ${x1.toFixed(1)} ${ym} ${x1.toFixed(1)} ${y1.toFixed(1)}`;
+      };
+      if (move === true && (sv.childElementCount || sp.childElementCount)) { [sv, sp].forEach(s => s.querySelectorAll('path[data-a]').forEach(p => { const d = dOf(p.dataset.a, p.dataset.b, p.dataset.k); if (d) p.setAttribute('d', d); })); return; }
+      const R = S.ixRes; if (!R) return;
+      const path = (a, b, k, cls, extra) => { const d = dOf(a, b, k); return d ? `<path data-a='${a}' data-b='${b}' data-k="${k}" class="${cls}" d="${d}"${extra || ''}/>` : ''; };
+      let e = '';
+      if (R.tree) {
+        const T = R.tree;
+        T.groups.forEach((g, gi) => { e += path('[data-n="r"]', `[data-n="i${gi}"]`, 'v', 'lt-ie' + (R.edges.has('r-i' + gi) ? ' on' : '')); g.forEach(li => { e += path(`[data-n="i${gi}"]`, `[data-n="l${li}"]`, 'v', 'lt-ie' + (R.edges.has(`i${gi}-l${li}`) ? ' on' : '')); }); });
+        T.leaves.forEach((_, li) => { if (li) e += path(`[data-n="l${li - 1}"]`, `[data-n="l${li}"]`, 'h', 'lt-ie ch' + (R.edges.has(`l${li - 1}-l${li}`) ? ' on' : '')); });
+      }
+      sv.innerHTML = e;
+      sp.innerHTML = (R.ptr || []).map((id, i) => path(`[data-ek="${id}"]`, `[data-hid="${id}"]`, 'c', 'lt-ip', ` pathLength="100" style="--d:${440 + Math.min(i, 8) * 15}ms"`)).join('');
+    }
+
+    /* ================= Изоляция ================= */
+    function isoScript() {
+      const sc = S.isc, lv = S.iso, lk = S.lock, pess = lk === 'pessimistic', opt = lk === 'optimistic', snapLv = lv !== 'rc';
+      const lvName = (ISO_L.find(x => x[0] === lv) || ISO_L[0])[1];
+      const V = {}, steps = [];
+      const clone = () => JSON.parse(JSON.stringify(V));
+      const put = (k, val, tx, extra) => { const vs = V[k], curv = vs.filter(x => x.st === 'c' && x.xst !== 'c').pop(); if (curv) { curv.xmax = tx; curv.xst = 'u'; } vs.push(Object.assign({ v: val, xmin: tx, st: 'u' }, extra || {})); };
+      const fin = (tx, ok) => Object.values(V).forEach(vs => vs.forEach(x => { if (x.xmin === tx && x.st === 'u') x.st = ok ? 'c' : 'a'; if (x.xmax === tx && x.xst === 'u') { if (ok) x.xst = 'c'; else { delete x.xmax; delete x.xst; } } }));
+      const st = (who, sql, note, f) => steps.push(Object.assign({ who, sql, note, vers: clone() }, f || {}));
+      const R$ = v => nf(v) + ' ₽';
+      let init, verdict;
+      if (sc === 'dirty') {
+        V['7'] = [{ v: 1000, xmin: 90, st: 'c' }]; init = clone();
+        put('7', 500, 101);
+        st('A', 'BEGIN;\nUPDATE users SET balance = balance - 500\nWHERE id = 7;', 'Списала 500 ₽, но ещё не зафиксировала: появилась новая версия строки, её видит только Аня.', { see: '500 ₽ (своя версия)' });
+        st('B', 'SELECT balance FROM users\nWHERE id = 7;', 'Незафиксированную версию PostgreSQL не показывает никому — даже на самом слабом уровне. Read Uncommitted в PostgreSQL работает как Read Committed.', { see: '1 000 ₽', flag: 'ok' });
+        fin(101, false);
+        st('A', 'ROLLBACK;', 'Аня передумала — её версия выброшена.');
+        st('B', 'SELECT balance FROM users\nWHERE id = 7;\nCOMMIT;', 'Снова 1 000 ₽. Будь грязное чтение возможно, Борис успел бы увидеть 500 ₽ — деньги, которых никогда не было.', { see: '1 000 ₽', flag: 'ok' });
+        verdict = { anomaly: false, c: 'ok', h: '<b>Грязного чтения нет</b> ни на одном уровне PostgreSQL: незафиксированные версии видит только их автор.' };
+      } else if (sc === 'nonrep') {
+        V['7'] = [{ v: 1000, xmin: 90, st: 'c' }]; init = clone();
+        st('B', `BEGIN;\nSELECT balance FROM users\nWHERE id = 7${pess ? '\nFOR UPDATE' : ''};`, (snapLv ? 'Снимок транзакции взят сейчас: дальше Борис видит базу на этот момент.' : 'Read Committed берёт новый снимок на каждый запрос.') + (pess ? ' FOR UPDATE ещё и блокирует строку до конца транзакции Бориса.' : ''), { see: '1 000 ₽' });
+        if (pess) {
+          st('A', 'BEGIN;\nUPDATE users SET balance = balance + 500\nWHERE id = 7;', 'Строку держит Борис (FOR UPDATE) — Аня ждёт.', { flag: 'wait' });
+          st('B', 'SELECT balance FROM users\nWHERE id = 7;', 'Строку никто не поменял — снова 1 000 ₽.', { see: '1 000 ₽', flag: 'ok' });
+          put('7', 1500, 101);
+          st('B', 'COMMIT;', 'Борис отпустил строку — UPDATE Ани наконец выполнился.');
+          fin(101, true);
+          st('A', 'COMMIT;', 'Аня зафиксировала 1 500 ₽.');
+          verdict = { anomaly: false, c: 'ok', h: '<b>FOR UPDATE:</b> Аня ждала, пока Борис закончит, — оба его чтения совпали. Цена — ожидание.' };
+        } else {
+          put('7', 1500, 101); fin(101, true);
+          st('A', 'BEGIN;\nUPDATE users SET balance = balance + 500\nWHERE id = 7;\nCOMMIT;', 'Аня пополнила баланс и зафиксировала: новая версия 1 500 ₽, старая помечена удалённой (xmax).');
+          st('B', 'SELECT balance FROM users\nWHERE id = 7;', snapLv ? 'Снимок Бориса старше коммита Ани — он по-прежнему видит 1 000 ₽.' : 'Новый снимок уже включает коммит Ани.', { see: snapLv ? '1 000 ₽' : '1 500 ₽', flag: snapLv ? 'ok' : 'anom' });
+          st('B', 'COMMIT;', '');
+          verdict = snapLv ? { anomaly: false, c: 'ok', h: `<b>${lvName}:</b> снимок взят в начале транзакции — Борис дважды видит 1 000 ₽.` } : { anomaly: true, c: 'bad', h: '<b>Неповторяемое чтение:</b> один и тот же запрос в одной транзакции вернул 1 000 ₽, а потом 1 500 ₽.' };
+        }
+      } else if (sc === 'phantom') {
+        const n0 = S.rows.filter(r => r.country === 'KZ').length;
+        V.kz = [{ v: n0 + ' строк KZ', xmin: 90, st: 'c' }]; V.new = []; init = clone();
+        st('B', pess ? "BEGIN;\nSELECT id FROM users\nWHERE country = 'KZ'\nFOR UPDATE;" : "BEGIN;\nSELECT count(*) FROM users\nWHERE country = 'KZ';", pess ? `Нашёл ${rowsW(n0)} и заблокировал их.` : snapLv ? 'Снимок транзакции взят сейчас.' : 'Снимок — только на этот запрос.', { see: n0 + ' клиентов' });
+        V.new.push({ v: 'id ' + S.nextId + ' · KZ', xmin: 101, st: 'c' });
+        st('A', "BEGIN;\nINSERT INTO users (…, country, …)\nVALUES (…, 'KZ', …);\nCOMMIT;", pess ? 'FOR UPDATE заблокировал только найденные строки — новую строку он остановить не может. Вставка прошла.' : 'Новый клиент из Казахстана зафиксирован.');
+        st('B', "SELECT count(*) FROM users\nWHERE country = 'KZ';", snapLv ? 'Новая строка создана после снимка Бориса — он её не видит.' : 'Новый снимок — и в подсчёте появилась новая строка.', { see: (snapLv ? n0 : n0 + 1) + ' клиентов', flag: snapLv ? 'ok' : 'anom' });
+        st('B', 'COMMIT;', '');
+        verdict = snapLv ? { anomaly: false, c: 'ok', h: `<b>${lvName}:</b> оба подсчёта — ${n0}. По стандарту SQL на Repeatable Read фантомы возможны, но снимок PostgreSQL скрывает и новые строки.` } : { anomaly: true, c: 'bad', h: `<b>Фантом:</b> в одной транзакции было ${n0} строк, стало ${n0 + 1} — появилась строка, которой не было.${pess ? ' FOR UPDATE от фантомов не спасает.' : ''}` };
+      } else if (sc === 'lost') {
+        V['7'] = [{ v: 1000, xmin: 90, st: 'c', ver: opt ? 1 : 0 }]; init = clone();
+        const sel = `BEGIN;\nSELECT balance${opt ? ', version' : ''} FROM users\nWHERE id = 7${pess ? '\nFOR UPDATE' : ''};`;
+        st('A', sel, 'Аня хочет пополнить на 500 ₽: прочитала 1 000, в приложении посчитала 1 500.', { see: '1 000 ₽' + (opt ? ' · version 1' : '') });
+        if (pess) st('B', sel, 'Строку держит Аня (FOR UPDATE) — Борис ждёт.', { flag: 'wait' });
+        else st('B', sel, 'Борис хочет списать 200 ₽: прочитал 1 000, посчитал 800.', { see: '1 000 ₽' + (opt ? ' · version 1' : '') });
+        put('7', 1500, 101, opt ? { ver: 2 } : {}); fin(101, true);
+        st('A', `UPDATE users SET balance = 1500${opt ? ', version = 2' : ''}\nWHERE id = 7${opt ? ' AND version = 1' : ''};\nCOMMIT;`, 'Аня записала 1 500 ₽ и зафиксировала.');
+        let final;
+        if (pess && lv === 'rc') {
+          st('B', '-- SELECT … FOR UPDATE дождался', 'Аня закончила — Борис получил строку и видит уже 1 500 ₽, считает 1 300.', { see: '1 500 ₽' });
+          put('7', 1300, 102); fin(102, true);
+          st('B', 'UPDATE users SET balance = 1300\nWHERE id = 7;\nCOMMIT;', 'Списание от свежего значения.', { flag: 'ok' }); final = 1300;
+        } else if (pess) {
+          st('B', '-- ERROR: could not serialize access\n-- due to concurrent update', 'Снимок Бориса старше коммита Ани, а строку меняли — база требует начать заново.', { flag: 'err' });
+          put('7', 1300, 103); fin(103, true);
+          st('B', 'BEGIN; -- повтор\nSELECT balance FROM users\nWHERE id = 7 FOR UPDATE;  -- 1 500\nUPDATE users SET balance = 1300\nWHERE id = 7;\nCOMMIT;', 'Приложение повторило транзакцию — уже от 1 500 ₽.', { see: '1 500 ₽', flag: 'retry' }); final = 1300;
+        } else if (opt) {
+          st('B', 'UPDATE users SET balance = 800, version = 2\nWHERE id = 7 AND version = 1;\n' + (lv === 'rc' ? '-- UPDATE 0' : '-- ERROR: could not serialize access'), lv === 'rc' ? 'Обновлено 0 строк: версия уже 2 — кто-то успел раньше.' : 'Строку уже изменила другая транзакция — ошибка сериализации.', { flag: 'err' });
+          put('7', 1300, 103, { ver: 3 }); fin(103, true);
+          st('B', 'BEGIN; -- повтор\nSELECT balance, version FROM users\nWHERE id = 7;  -- 1 500, 2\nUPDATE users SET balance = 1300, version = 3\nWHERE id = 7 AND version = 2;\nCOMMIT;', 'Приложение перечитало и повторило — 1 300 ₽.', { see: '1 500 ₽ · version 2', flag: 'retry' }); final = 1300;
+        } else if (lv === 'rc') {
+          put('7', 800, 102); fin(102, true);
+          st('B', 'UPDATE users SET balance = 800\nWHERE id = 7;\nCOMMIT;', 'Борис записал своё 800, посчитанное от старых 1 000 ₽, — пополнение Ани затёрто.', { flag: 'anom' }); final = 800;
+        } else {
+          st('B', 'UPDATE users SET balance = 800\nWHERE id = 7;\n-- ERROR: could not serialize access\n-- due to concurrent update', 'Строку изменила транзакция, которой нет в снимке Бориса, — база не даёт её затереть.', { flag: 'err' });
+          put('7', 1300, 103); fin(103, true);
+          st('B', 'BEGIN; -- повтор\nSELECT balance FROM users\nWHERE id = 7;  -- 1 500\nUPDATE users SET balance = 1300\nWHERE id = 7;\nCOMMIT;', 'Повтор от свежего значения — 1 300 ₽.', { see: '1 500 ₽', flag: 'retry' }); final = 1300;
+        }
+        verdict = final === 1300 ? { anomaly: false, c: 'ok', final: R$(1300), h: `<b>Верно:</b> ${pess ? 'FOR UPDATE заставил Бориса ждать.' : opt ? 'колонка version поймала устаревшую запись.' : 'ошибка сериализации заставила повторить транзакцию.'}` } : { anomaly: true, c: 'bad', final: R$(800) + ' вместо 1 300 ₽', h: '<b>Потерянное обновление:</b> пополнение Ани исчезло. Лечится: <code>SET balance = balance + 500</code> прямо в SQL, FOR UPDATE, колонка version или уровень Repeatable Read и выше.' };
+      } else {
+        V['7'] = [{ v: 300, xmin: 90, st: 'c' }]; V['8'] = [{ v: 300, xmin: 90, st: 'c' }]; init = clone();
+        const sel = `BEGIN;\nSELECT ${pess ? 'balance' : 'sum(balance)'} FROM users\nWHERE id IN (7, 8)${pess ? '\nFOR UPDATE' : ''};`;
+        st('A', sel, 'Аня хочет потратить 500 ₽: сумма семьи 600 ≥ 500 — можно.', { see: 'сумма 600 ₽' });
+        if (pess) {
+          st('B', sel, 'Обе строки держит Аня — Борис ждёт.', { flag: 'wait' });
+          put('7', -200, 101);
+          st('A', 'UPDATE users SET balance = balance - 500\nWHERE id = 7;', 'Списала со своего счёта.');
+          fin(101, true);
+          st('A', 'COMMIT;', 'Аня зафиксировала: её счёт −200 ₽, сумма семьи 100 ₽.');
+          if (lv === 'rc') st('B', '-- SELECT … FOR UPDATE дождался\n-- сумма 100 < 500\nROLLBACK;', 'Борис получил строки уже с новой суммой — денег не хватает, покупка отклонена.', { see: 'сумма 100 ₽', flag: 'ok' });
+          else st('B', '-- ERROR: could not serialize access\nBEGIN; -- повтор: сумма 100 < 500\nROLLBACK;', 'Снимок Бориса устарел — ошибка и повтор; при повторе денег уже не хватает.', { see: 'сумма 100 ₽', flag: 'retry' });
+          verdict = { anomaly: false, c: 'ok', final: 'сумма 100 ₽', h: '<b>Правило соблюдено:</b> FOR UPDATE на обе строки выстроил покупки в очередь.' };
+        } else {
+          st('B', sel, 'Борис тоже хочет потратить 500 ₽ — видит те же 600 ₽.', { see: 'сумма 600 ₽' });
+          put('7', -200, 101);
+          st('A', 'UPDATE users SET balance = balance - 500\nWHERE id = 7;', 'Списала со своего счёта (строка 7).');
+          put('8', -200, 102);
+          st('B', 'UPDATE users SET balance = balance - 500\nWHERE id = 8;', 'Списал со своего счёта (строка 8) — это другая строка, конфликта записи нет.');
+          fin(101, true);
+          st('A', 'COMMIT;', 'Аня зафиксировала.');
+          if (lv === 'ser') {
+            fin(102, false);
+            st('B', 'COMMIT;\n-- ERROR: could not serialize access due to\n-- read/write dependencies among transactions', 'Serializable (SSI) заметил: Борис читал строку, которую поменяла Аня, а она — его. Транзакция Бориса отменена.', { flag: 'err' });
+            st('B', 'BEGIN; -- повтор\nSELECT sum(balance) …;  -- 100\nROLLBACK;  -- денег не хватает', 'При повторе сумма уже 100 ₽ — покупка отклонена.', { see: 'сумма 100 ₽', flag: 'retry' });
+            verdict = { anomaly: false, c: 'ok', final: 'сумма 100 ₽', h: '<b>Serializable поймал перекос:</b> вторая транзакция отменена, после повтора правило соблюдено.' };
+          } else {
+            fin(102, true);
+            st('B', 'COMMIT;', 'Борис тоже зафиксировал. Каждый проверил правило — но по старому снимку.', { flag: 'anom' });
+            verdict = { anomaly: true, c: 'bad', final: 'сумма −400 ₽', h: `<b>Перекос записи:</b> сумма семьи ушла в минус, хотя оба проверили «не ниже 0». ${lv === 'rr' ? 'Repeatable Read не спасает: транзакции меняли разные строки, конфликта записи нет. ' : ''}${opt ? 'Колонка version тоже не помогает — строки разные. ' : ''}Спасают Serializable или FOR UPDATE на обе строки.` };
+          }
+        }
+      }
+      if (opt && (sc === 'dirty' || sc === 'nonrep' || sc === 'phantom')) verdict.h += ' Колонка version здесь ни при чём: она защищает запись, а не чтение.';
+      return { steps, init, verdict };
+    }
+    function versHTML(vers) {
+      const lab = { '7': S.isc === 'skew' ? 'id 7 · Аня' : 'id 7', '8': 'id 8 · Борис', kz: 'клиенты KZ', new: 'новая строка' };
+      return Object.entries(vers).filter(([, vs]) => vs.length).map(([k, vs]) => `<div class="lt-vrow"><small>${lab[k] || esc(k)}</small><span>${vs.map(x => { const dead = x.st === 'c' && x.xst === 'c', cls = x.st === 'a' ? 'ab' : x.st === 'u' ? 'un' : dead ? 'dead' : x.xst === 'u' ? 'lock' : 'live'; return `<i class="lt-ver ${cls}">${typeof x.v === 'number' ? nf(x.v) + ' ₽' : esc(x.v)}${x.ver ? ` <u>v${x.ver}</u>` : ''}<small>xmin ${x.xmin}${x.xmax ? ' · xmax ' + x.xmax : ''}</small></i>`; }).join('')}</span></div>`).join('');
+    }
+    function stageIso() {
+      const X = isoScript(), n = X.steps.length, k = Math.min(S.ist, n);
+      const FL = { wait: 'ждёт', err: 'ошибка', anom: 'аномалия', ok: 'верно', retry: 'повтор' };
+      const cell = (s, who) => s.who !== who ? '' : `<pre class="lt-code">${hlSql(s.sql)}</pre>${s.note ? `<p>${s.note}</p>` : ''}${s.see ? `<span class="lt-see">видит: <b>${esc(s.see)}</b></span>` : ''}${s.flag ? `<em class="lt-flag ${s.flag}">${FL[s.flag]}</em>` : ''}`;
+      const rows = X.steps.slice(0, k).map((s, i) => `<div class="lt-iso-r${i === k - 1 ? ' last' : ''}"><div class="lt-iso-c a${s.who === 'A' ? ' act' : ''}">${cell(s, 'A')}</div><div class="lt-iso-c m">${versHTML(s.vers)}</div><div class="lt-iso-c b${s.who === 'B' ? ' act' : ''}">${cell(s, 'B')}</div></div>`).join('');
+      const scN = (ISC.find(x => x[0] === S.isc) || ISC[0])[1], lvN = (ISO_L.find(x => x[0] === S.iso) || ISO_L[0])[1], lkN = (LOCK_L.find(x => x[0] === S.lock) || LOCK_L[0])[1];
+      return `<div class="lt-sin lt-iss" id="ltSIn"><div class="lt-sh"><b>${scN}</b><span>${lvN}</span><span>блокировки: ${lkN}</span><span>шаг ${k} из ${n}</span></div>
+        <div class="lt-iso"><div class="lt-iso-r hd"><div>Аня · txid 101</div><div>Строки users: версии (MVCC)</div><div>Борис · txid 102</div></div>
+        <div class="lt-iso-r"><div class="lt-iso-c a"><p class="lt-sub">начало</p></div><div class="lt-iso-c m">${versHTML(X.init)}</div><div class="lt-iso-c b"></div></div>${rows}</div>
+        ${k >= n ? `<div class="lt-card ${X.verdict.c}">${X.verdict.final ? `<b>Итог: ${X.verdict.final}.</b> ` : ''}${X.verdict.h}</div>` : `<div class="lt-iso-next">Дальше ходит ${X.steps[k].who === 'A' ? 'Аня' : 'Борис'} — нажми «Шаг →»</div>`}
+        <div class="lt-tklg"><span><i class="lt-ver live">v</i> действующая версия</span><span><i class="lt-ver dead">v</i> старая (xmax зафиксирован)</span><span><i class="lt-ver un">v</i> не зафиксирована</span><span><i class="lt-ver lock">v</i> меняется другой транзакцией</span><span><i class="lt-ver ab">v</i> отменена</span></div></div>`;
+    }
+    function anomTable() {
+      return `<table class="lt-bt lt-anom"><thead><tr><th>аномалия</th>${ISO_L.map(([k]) => `<th class="${k === S.iso ? 'cur' : ''}">${k === 'rc' ? 'RC' : k === 'rr' ? 'RR' : 'Ser'}</th>`).join('')}</tr></thead><tbody>${ISC.map(([k, t]) => `<tr${k === S.isc ? ' class="now"' : ''}><td>${t}</td>${ISO_L.map(([l]) => { const [txt, c] = ANOM[k][l]; return `<td class="v ${c}${l === S.iso ? ' cur' : ''}">${txt}</td>`; }).join('')}</tr>`).join('')}</tbody></table>
+        <p class="lt-sub">RC — Read Committed, RR — Repeatable Read, Ser — Serializable (так ведёт себя PostgreSQL). * По стандарту SQL фантомы на RR возможны, снимок PostgreSQL их скрывает. FOR UPDATE ловит потерянное обновление и перекос (если заблокировать все прочитанные строки), от фантомов не спасает; колонка version ловит только потерянное обновление.</p>`;
+    }
+    function isoBiz() {
+      const b = biz(), coll = b.ordersDay * 0.0005, lostRub = coll * 500;
+      return `<div class="lt-card biz"><b>Сколько это в деньгах.</b> Баланс клиента меняется при каждом заказе (бонусы, оплата) — ≈ ${human(b.ordersDay)} операций в день. Если 0,05 % из них совпадают по времени с другой операцией того же клиента (две вкладки, повторный клик, начисление и списание разом), это ≈ ${nf(coll)} столкновений в день. Без защиты каждое — потерянные ≈ 500 ₽: ≈ <b>${rub(lostRub)} в день</b>, ≈ ${rub(lostRub * 30)} в месяц плюс обращения в поддержку. Serializable, FOR UPDATE или версия обходятся в ≈ 1–3 % повторов и ожиданий.</div>`;
+    }
+    function isoJudge() {
+      const X = isoScript();
+      S.isoSeen[S.isc + ':' + S.iso + ':' + S.lock] = X.verdict.anomaly;
+      const seen = (sc, pred) => Object.entries(S.isoSeen).some(([k, a]) => { const [s, l] = k.split(':'); return s === sc && pred(l, a); });
+      if (seen('nonrep', (l, a) => a) && seen('nonrep', (l, a) => !a)) done('iso-nonrep');
+      if (seen('lost', (l, a) => a) && seen('lost', (l, a) => !a)) done('iso-lost');
+      if (seen('skew', (l, a) => l === 'rr' && a) && seen('skew', (l, a) => l === 'ser' && !a)) done('iso-skew');
+    }
+    function isoStep(a) {
+      flush();
+      const n = isoScript().steps.length;
+      S.ist = a === 'reset' ? 0 : a === 'all' ? n : Math.min(n, S.ist + 1);
+      if (S.ist >= n) isoJudge();
+      renderPanel(); drawStage();
+    }
+    function panelIso() {
+      const Bz = isBiz(), n = isoScript().steps.length;
+      let h = Bz ? ana(LIFE.iso) + bizBar() + isoBiz() : ana(LIFE.iso, 'Каждая транзакция работает со своим снимком базы. Уровень изоляции решает, когда снимок обновляется и что делать, если двое меняют одно и то же.', '<b>Изоляция</b> — насколько транзакции не мешают друг другу. <b>MVCC</b>: UPDATE не стирает строку, а создаёт новую версию (xmin — кто создал, xmax — кто удалил); каждая транзакция видит версии по своему снимку.');
+      h += `<div class="lt-ctl"><b>Что проверяем</b><div class="lt-iscg">${ISC.map(([k, t]) => `<button type="button" class="lt-isb${k === S.isc ? ' on' : ''}" data-isc="${k}" aria-pressed="${k === S.isc}">${t}</button>`).join('')}</div></div>`;
+      h += `<div class="lt-card${Bz ? ' biz' : ''}">${Bz ? ISCB[S.isc] : ISCT[S.isc]}</div>`;
+      h += ctl('Уровень изоляции', seg('iso', ISO_L, S.iso)) + ctl('Блокировки в коде', seg('lock', LOCK_L, S.lock));
+      h += `<div class="row-btns"><button type="button" class="btn primary" data-isostep="next"${S.ist >= n ? ' disabled' : ''}>Шаг → ${Math.min(S.ist + 1, n)} из ${n}</button><button type="button" class="btn" data-isostep="all"${S.ist >= n ? ' disabled' : ''}>Показать всё</button><button type="button" class="btn ghost" data-isostep="reset">Сначала</button></div>`;
+      h += anomTable();
+      if (Bz) h += A(['iso', 'orders']);
+      return h + memo(Bz ? 'одновременные операции с одним счётом без защиты теряют деньги клиентов. Защита стоит процентов нагрузки — несравнимо дешевле жалоб и компенсаций.' : 'Read Committed — снимок на запрос, Repeatable Read — на транзакцию, Serializable ещё и ловит перекос записи. «Прочитал в приложение — посчитал — записал» теряет обновления: SET x = x + …, FOR UPDATE или версия.')
+        + `<div class="row-btns">${next('srv', 'Дальше: сервер')}</div>`;
+    }
+
+    /* ================= Сервер ================= */
+    const srvLoadNow = () => isBiz() ? biz().rpsPeak * S.ev : S.srvLoad;
+    function srvCalc(load, ram, N, R) {
+      const z = SIZE[ram], mx = MIX[S.srvMix], C = ROWSTEPS[S.w.ri], per = load / N, rd = per * mx.rd, wr = per - rd, prd = rd / (1 + R);
+      const W = wCalcFor(C / N, ram, S.w.hot, 1), nI = Math.max(1, S.ix.length), memF = W.hot / W.usable, hit = memF <= 1 ? 0.99 : Math.max(0.2, 0.99 / memF);
+      const io = prd * (1 - hit) * 2 * mx.pg + wr * (1 + 0.5 * nI), mbit = (prd + wr) * mx.kb * 8192 / 1e6;
+      const u = { cpu: (prd + wr * (1 + 0.15 * nI)) * mx.cpu / z.ops, mem: memF, disk: io / z.iops, net: mbit / (z.net * 1000) };
+      const top = ['cpu', 'disk', 'net'].reduce((a, k) => u[k] > u[a] ? k : a, 'cpu'), rho = u[top];
+      const lat = rho < 1 ? (1 + (1 - hit) * 6) / (1 - rho) : Infinity;
+      return { z, load, per, prd, wr, W, hit, io, mbit, u, top, rho, lat, conc: rho < 1 ? (prd + wr) * lat / 1000 : Infinity, lim: { cpu: load / u.cpu, disk: load / u.disk, net: load / u.net }, cost: N * (1 + R) * z.usd, N, R, ram };
+    }
+    function srvOptions(load) {
+      const all = [];
+      [8, 32, 64, 128].forEach(ram => all.push(Object.assign({ kind: 'Вертикально' }, srvCalc(load, ram, 1, 0))));
+      [1, 2, 3, 4, 6].forEach(R => all.push(Object.assign({ kind: 'Реплики' }, srvCalc(load, 32, 1, R))));
+      [2, 3, 4, 6, 8, 12, 16].forEach(N => all.push(Object.assign({ kind: 'Шарды' }, srvCalc(load, 32, N, 0))));
+      return ['Вертикально', 'Реплики', 'Шарды'].map(k => { const l = all.filter(o => o.kind === k); return l.filter(o => o.rho < 0.8).sort((a, b) => a.cost - b.cost)[0] || l.sort((a, b) => a.rho - b.rho)[0]; });
+    }
+    function srvOptHTML(load) {
+      const opts = srvOptions(load), best = opts.filter(o => o.rho < 0.8).sort((a, b) => a.cost - b.cost)[0], Bz = isBiz();
+      const cfg = o => o.kind === 'Вертикально' ? `${SIZE[o.ram].cpu} vCPU · ${o.ram} ГБ` : o.kind === 'Реплики' ? `8 vCPU · 32 ГБ + ${o.R} ${plural(o.R, 'реплика', 'реплики', 'реплик')}` : `${o.N} × 8 vCPU · 32 ГБ`;
+      return `<div class="lt-card${Bz ? ' biz' : ''}"><b>Как выдержать ${nf(load)} оп/с:</b><table class="lt-bt"><thead><tr><th>способ</th><th class="r">загрузка</th><th class="r">в месяц</th><th></th></tr></thead><tbody>${opts.map(o => `<tr${o === best ? ' class="now"' : ''}><td>${o.kind}<br><small>${cfg(o)}</small></td><td class="r ${lvl(o.rho)}">${o.rho > 9.99 ? '> 999 %' : pc(o.rho)}<small>${RN[o.top]}</small></td><td class="r">${Bz ? rub(o.cost * BIZ.usdRub) : '$' + nf(o.cost)}</td><td><button type="button" class="lt-link" data-srvapply="${o.ram}:${o.N}:${o.R}">применить</button></td></tr>`).join('')}</tbody></table><p class="lt-sub">${best ? `Дешевле всего с запасом (загрузка до 80 %) — <b>${best.kind.toLowerCase()}</b>. ` : 'Ни один вариант не держит такую нагрузку с запасом — нужен кэш, очередь или другая архитектура. '}Вертикально — проще всего, пока хватает самого большого сервера. Реплики — когда много чтений. Шарды — когда упираются записи или объём.</p></div>`;
+    }
+    function srvJudge() {
+      const X = srvCalc(srvLoadNow(), S.w.ram, S.N, S.reps);
+      if (X.rho >= 1) done('srv-limit');
+      if (X.load >= 15000 && X.rho < 1) done('srv-fit');
+    }
+    function srvApply(ram, N, R) {
+      flush();
+      S.mig = null; S.hl = null; S.q = null;
+      S.w.ram = ram; S.N = N; S.reps = R; if (WSH.includes(N)) S.w.sh = N;
+      if (S.pick != null && S.pick >= S.N) S.pick = null;
+      renderPanel(); drawStage();
+    }
+    function srvBiz() {
+      const b = biz(), perC = BIZ.dau * BIZ.hits * BIZ.peakX / 86400;
+      return `<div class="lt-card biz"><b>Сколько клиентов держит один сервер базы</b> (вход, профиль, баланс; пик вечером):<table class="lt-bt"><thead><tr><th>сервер</th><th class="r">обычный вечер</th><th class="r">чёрная пятница</th><th class="r">в месяц</th></tr></thead><tbody>${[8, 32, 64, 128].map(r => `<tr${r === S.w.ram ? ' class="now"' : ''}><td><b>${SIZE[r].k.toUpperCase()}</b> · ${r} ГБ</td><td class="r">${human(SIZE[r].ops / perC)}</td><td class="r">${human(SIZE[r].ops / perC / 4)}</td><td class="r">${rub(SIZE[r].usd * BIZ.usdRub)}</td></tr>`).join('')}</tbody></table><p class="lt-sub">Сейчас у магазина ${human(b.C)} клиентов → пик ${nf(b.rpsPeak)} оп/с${S.ev > 1 ? `, сегодня ×${S.ev} — ${nf(b.rpsPeak * S.ev)}` : ''}.</p></div>`;
+    }
+    function panelSrv() {
+      const Bz = isBiz(), load = srvLoadNow();
+      srvJudge();
+      let h = Bz ? ana(LIFE.srv) + bizBar() + srvBiz() : ana(LIFE.srv, 'Двигай нагрузку и смотри, какой ресурс заполнится первым, — его и надо расширять.', '<b>Вертикальное масштабирование</b> — сервер побольше. <b>Горизонтальное</b> — реплики (для чтений) и шарды (для записей и объёма). <b>Узкое место</b> (bottleneck) — ресурс, который кончается первым.');
+      h += ctl('Размер сервера', seg('w-ram', [[8, 'S · 2 vCPU · 8 ГБ'], [32, 'M · 8 vCPU · 32 ГБ'], [64, 'L · 16 vCPU · 64 ГБ'], [128, 'XL · 32 vCPU · 128 ГБ']], S.w.ram));
+      h += Bz ? ctl('Какой сегодня вечер', evSeg()) : `<div class="lt-rl"><span>Нагрузка на базу</span><output id="ltSrvOut">${nf(S.srvLoad)} оп/с</output></div><input type="range" class="lt-range" id="ltSrvLoad" min="500" max="40000" step="500" value="${S.srvLoad}" aria-label="Нагрузка на базу">`;
+      h += ctl('Какая нагрузка', seg('mix', Object.entries(MIX).map(([k, m]) => [k, m.n]), S.srvMix));
+      h += ctl('Шардов (как во вкладке «Шарды»)', nSeg(false)) + ctl('Реплик у каждого', repsSeg());
+      h += `<div id="ltSrvOpt">${srvOptHTML(load)}</div>`;
+      if (Bz) h += A(['scale', 'load', 'srv', 'srvm', 'mem']);
+      return h + memo(Bz ? 'сервер упирается в одно узкое место — его и расширяют. Сначала сервер побольше, потом реплики для чтений, потом шарды.' : 'ресурсы — ядра, память, диск, сеть; упираемся в самое узкое. Не влезло горячее в память — нагрузка уходит на диск. Вертикально — проще, пока хватает; реплики — для чтений; шарды — для записей и объёма.')
+        + `<div class="row-btns">${next('memo', 'Итоги: что запомнить')}</div>`;
+    }
+    function stageSrv() {
+      const load = srvLoadNow(), X = srvCalc(load, S.w.ram, S.N, S.reps), z = X.z;
+      const ub = f => `<i class="lt-ub"><b style="width:${Math.min(100, f * 100).toFixed(1)}%"></b></i>`;
+      const busy = Math.round(Math.min(1, X.u.cpu) * z.cpu), queue = isFinite(X.conc) ? Math.max(0, Math.round(X.conc - z.cpu)) : '∞';
+      const res = (k, title, body, f, note) => `<section class="lt-rs ${lvl(f)}${X.top === k && f >= 0.75 ? ' top' : ''}"><h5>${title}</h5>${body}${ub(f)}<small>${note}</small></section>`;
+      const memW = Math.min(100, X.W.hot / Math.max(X.W.hot, X.W.usable) * 100), memCap = X.u.mem > 1 ? 100 / X.u.mem : null;
+      const lims = [['cpu', X.lim.cpu], ['disk', X.lim.disk], ['net', X.lim.net]], mx = Math.max(load * 1.4, Math.min(...lims.map(l => l[1])) * 1.6), nd = Math.min(100, load / mx * 100);
+      const ruler = lims.map(([k, l]) => `<div class="lt-rl3${k === X.top ? ' top' : ''}"><span>${RN[k]}</span><i><b style="width:${Math.min(100, l / mx * 100).toFixed(1)}%"></b><span class="lt-needle" style="left:${nd.toFixed(1)}%"></span></i><em>${l > mx ? '> ' + nf(mx) : '≈ ' + nf(l)}</em></div>`).join('');
+      const v = X.rho >= 1 ? ['bad', `<b>Упирается ${RN[X.top]}:</b> нагрузка ${nf(load)} оп/с, а он выдерживает ≈ ${nf(X.lim[X.top])}. Очередь растёт без предела — таймауты и ошибки.`] : X.rho >= 0.75 ? ['warn', `<b>Близко к пределу:</b> ${RN[X.top]} загружен на ${pc(X.rho)}, ответ ≈ ${dec(X.lat, 1)} мс и быстро растёт с нагрузкой.`] : ['ok', `<b>Запас есть:</b> самый загруженный ресурс — ${RN[X.top]} (${pc(X.rho)}), ответ ≈ ${dec(X.lat, 1)} мс.`];
+      return `<div class="lt-sin lt-srvs" id="ltSIn"><div class="lt-sh"><b>${S.N > 1 ? S.N + ' × ' : ''}сервер ${z.cpu} vCPU · ${S.w.ram} ГБ${S.reps ? ` + ${S.reps} ${plural(S.reps, 'реплика', 'реплики', 'реплик')}` : ''}</b><span>нагрузка ${nf(load)} оп/с${S.N > 1 ? ` → ${nf(X.per)} на шард` : ''}</span><span>${MIX[S.srvMix].n}</span><span>${isBiz() ? rub(X.cost * BIZ.usdRub) : '$' + nf(X.cost)} в месяц</span></div>
+        <div class="lt-res4">
+          ${res('cpu', `Процессор · ${z.cpu} ${plural(z.cpu, 'ядро', 'ядра', 'ядер')}`, `<div class="lt-cores">${seq(z.cpu).map(i => `<i class="${i < busy ? 'on' : ''}"></i>`).join('')}</div>`, X.u.cpu, `${pc(X.u.cpu)} · заняты ${busy} из ${z.cpu}${queue ? ` · в очереди ≈ ${queue}` : ''}`)}
+          ${res('mem', `Память · ${S.w.ram} ГБ`, `<div class="lt-membar"><b style="width:${memW.toFixed(1)}%"></b>${memCap != null ? `<span style="left:${memCap.toFixed(1)}%"></span>` : ''}</div>`, X.u.mem, `горячее ${size(X.W.hot)} из ${size(X.W.usable)} под кэш · из памяти ${pc(X.hit)} чтений`)}
+          ${res('disk', `Диск · ${nf(z.iops)} IOPS`, '', X.u.disk, `${nf(X.io)} операций в секунду · ${pc(X.u.disk)}`)}
+          ${res('net', `Сеть · ${z.net} Гбит/с`, '', X.u.net, `${dec(X.mbit / 1000, 2)} Гбит/с · ${pc(X.u.net)}`)}
+        </div>
+        <div class="lt-ruler"><b>При какой нагрузке кончится каждый ресурс</b>${ruler}<small>зелёная черта — сейчас ${nf(load)} оп/с; клиентов ${human(ROWSTEPS[S.w.ri])} (вкладка «Вес»), индексов ${S.ix.length} (вкладка «Индексы»)</small></div>
+        <div class="lt-card ${v[0]}">${v[1]}</div></div>`;
     }
 
     /* ================= Итоги ================= */
@@ -1066,6 +1705,15 @@
     function drawStage(opts) {
       opts = opts || {};
       const box = EL.querySelector('#ltStage'), work = EL.querySelector('#ltWork'); if (!box || !work || work.hidden) return;
+      if (CUSTOM.has(S.tab)) {
+        const an = opts.flip && !isCalm() && !!Element.prototype.animate, bf = new Map();
+        if (an) box.querySelectorAll('.lt-hr[data-hid]').forEach(e => bf.set(e.dataset.hid, e.getBoundingClientRect()));
+        box.innerHTML = S.tab === 'idx' ? stageIdx() : S.tab === 'iso' ? stageIso() : stageSrv();
+        if (S.tab === 'idx') ixLines();
+        fitStick();
+        if (an && bf.size) { let j = 0; box.querySelectorAll('.lt-hr[data-hid]').forEach(e => { const b = bf.get(e.dataset.hid); if (!b) return; const a = e.getBoundingClientRect(), dx = b.left - a.left, dy = b.top - a.top; if (Math.abs(dx) + Math.abs(dy) < 1) return; e.animate([{ transform: `translate(${dx.toFixed(1)}px, ${dy.toFixed(1)}px)`, zIndex: 5 }, { transform: 'none', zIndex: 5 }], { duration: 440, delay: Math.min(j++ * 6, 140), easing: 'cubic-bezier(.2,.75,.25,1)', fill: 'backwards' }); }); }
+        return;
+      }
       const anim = opts.flip && !isCalm(), before = new Map();
       if (anim) { box.querySelectorAll('.lt-r[data-k]').forEach(e => before.set(e.dataset.k, e.getBoundingClientRect())); Object.entries(opts.from || {}).forEach(([k, r]) => before.set(k, r)); }
       box.innerHTML = stageHTML();
@@ -1085,7 +1733,7 @@
     /* ================= вкладки, режим и события ================= */
     function renderPanel() {
       const p = EL.querySelector('#ltPanel'); if (!p) return;
-      p.innerHTML = S.tab === 'part' ? panelPart() : S.tab === 'shard' ? panelShard() : S.tab === 'query' ? panelQuery() : S.tab === 'reshard' ? panelReshard() : S.tab === 'hot' ? panelHot() : '';
+      p.innerHTML = S.tab === 'part' ? panelPart() : S.tab === 'shard' ? panelShard() : S.tab === 'query' ? panelQuery() : S.tab === 'reshard' ? panelReshard() : S.tab === 'hot' ? panelHot() : S.tab === 'idx' ? panelIdx() : S.tab === 'iso' ? panelIso() : S.tab === 'srv' ? panelSrv() : '';
     }
     function renderView() {
       const v = EL.querySelector('#ltView'); if (!v) return;
@@ -1097,6 +1745,7 @@
     function setTab(t) {
       flush();
       S.tab = TAB_IDS.includes(t) ? t : 'table';
+      if (S.tab === 'idx') S.ixRes = null;
       EL.querySelectorAll('[data-tab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === S.tab)));
       const work = EL.querySelector('#ltWork'), view = EL.querySelector('#ltView');
       if (STAGE.has(S.tab)) { view.hidden = true; view.innerHTML = ''; work.hidden = false; renderPanel(); drawStage(); }
@@ -1113,7 +1762,10 @@
     function setCfg(k, v) {
       flush();
       if (k === 'ev') { S.ev = +v; rerender(false); return; }
-      if (k.startsWith('w-')) { S.w[k.slice(2)] = +v; renderView(); return; }
+      if (k.startsWith('w-')) { S.w[k.slice(2)] = +v; rerender(false); return; }
+      if (k === 'iso' || k === 'lock') { S[k] = v; S.ist = 0; rerender(false); return; }
+      if (k === 'mix') { S.srvMix = v; rerender(false); return; }
+      if (k === 'ixsort') { S.ixSorted = v === '1'; ixRun(S.ixQ, true); return; }
       if (S.mig) S.mig = null;
       if (k === 'part') S.part = v; else if (k === 'n') S.N = +v; else if (k === 'key') S.key = v; else if (k === 'method') S.method = v; else if (k === 'reps') S.reps = +v;
       if (S.pick != null && S.pick >= S.N) S.pick = null;
@@ -1139,7 +1791,7 @@
       if (a.startsWith('pre:')) { S.mig = null; S.key = a.slice(4); S.N = 3; S.method = 'mod'; S.hl = null; S.pick = null; renderPanel(); drawStage({ flip: true }); }
     }
     function onClick(e) {
-      const b = e.target.closest('[data-tab],[data-mode],[data-go],[data-set],[data-q],[data-mig],[data-w],[data-act],[data-col],tr[data-id],.lt-r,.lt-col');
+      const b = e.target.closest('[data-tab],[data-mode],[data-go],[data-set],[data-q],[data-mig],[data-w],[data-act],[data-col],[data-ixv],[data-ixq],[data-ixt],[data-ixins],[data-isc],[data-isostep],[data-srvapply],tr[data-id],.lt-r,.lt-col');
       if (!b || !EL.contains(b) || b.disabled) return;
       const d = b.dataset;
       if (d.tab) return setTab(d.tab);
@@ -1150,6 +1802,13 @@
       if (d.mig) return migAct(d.mig);
       if (d.w) { const [, r, k] = d.w.split(':'); S.w.ram = +r; S.w.sh = Math.max(1, Math.min(16, +k)); if (!WSH.includes(S.w.sh)) S.w.sh = WSH.find(x => x >= S.w.sh) || 16; renderView(); return; }
       if (d.act) return act(d.act);
+      if (d.ixv) { S.ixView = d.ixv; S.ixRes = null; return ixRun(IXQS[d.ixv][0], true); }
+      if (d.ixq) return ixRun(d.ixq, false);
+      if (d.ixt) { const k = d.ixt; S.ix = S.ix.includes(k) ? S.ix.filter(x => x !== k) : S.ix.concat(k); S.ixIns = null; renderPanel(); return; }
+      if (d.ixins) return ixInsert();
+      if (d.isc) { S.isc = d.isc; S.ist = 0; renderPanel(); drawStage(); return; }
+      if (d.isostep) return isoStep(d.isostep);
+      if (d.srvapply) { const [r, n, rp] = d.srvapply.split(':').map(Number); return srvApply(r, n, rp); }
       if (d.col) { S.col = d.col; renderView(); return; }
       if (b.matches('tr[data-id]')) return showRow(+d.id);
       if (b.classList.contains('lt-r')) {
@@ -1172,6 +1831,10 @@
         const w = EL.querySelector('#ltWOut'); if (w) w.innerHTML = weightOut();
         if (isBiz() && e.type === 'change') { const sc = scrollBox(), y = sc ? sc.scrollTop : 0; renderView(); if (sc) sc.scrollTop = y; const r = EL.querySelector('#ltRows'); if (r) r.focus(); }
       }
+      else if (t.id === 'ltIxWord') { S.ixWord = t.value; if (e.type === 'change') ixRun('w', false); }
+      else if (t.id === 'ltIxGeo') { S.ixGeo = t.value; if (e.type === 'change') ixRun('geo', false); }
+      else if (t.id === 'ltIxCmp') { if (e.type === 'change') { S.ixCmp = t.checked; drawStage(); } }
+      else if (t.id === 'ltSrvLoad') { S.srvLoad = +t.value; const o = EL.querySelector('#ltSrvOut'); if (o) o.textContent = nf(S.srvLoad) + ' оп/с'; drawStage(); const w = EL.querySelector('#ltSrvOpt'); if (w) w.innerHTML = srvOptHTML(S.srvLoad); srvJudge(); }
       else if (t.id === 'ltRps') { S.rps = +t.value; const o = EL.querySelector('#ltRpsOut'); if (o) o.textContent = nf(S.rps) + ' оп/с'; drawStage(); const pk = EL.querySelector('#ltPick'); if (pk) pk.innerHTML = pickCard(); }
     }
     function onKey(e) {
@@ -1199,7 +1862,7 @@
       <div class="lt-work" id="ltWork" hidden><div class="lt-panel" id="ltPanel"></div><div class="lt-stage" id="ltStage"></div></div></div>`;
     EL.addEventListener('click', onClick); EL.addEventListener('input', onInput); EL.addEventListener('change', onInput); EL.addEventListener('keydown', onKey); EL.addEventListener('mouseover', onHover);
     let raf = 0;
-    const ro = window.ResizeObserver ? new ResizeObserver(() => { cancelAnimationFrame(raf); raf = requestAnimationFrame(() => { wires(true); fitStick(); }); }) : null;
+    const ro = window.ResizeObserver ? new ResizeObserver(() => { cancelAnimationFrame(raf); raf = requestAnimationFrame(() => { wires(true); ixLines(true); fitStick(); }); }) : null;
     if (ro) ro.observe(EL.querySelector('#ltStage'));
     setTab(S.tab);
     let alive = true;
@@ -1231,7 +1894,7 @@
   let MODAL_S = null;
   const LAB = {
     id: 'table', title: 'Таблица вживую', lede: 'Типы, вес, партиции, шарды и путь запроса', dive: 'sharding',
-    intro: 'Одна таблица users: восемь типов полей и 48 живых строк. Посчитай, сколько она весит, разложи её на партиции внутри сервера и на шарды между серверами, запускай запросы и смотри, какой путь они проходят и сколько строк трогают. Переключатель «Техника | Бизнес» вверху рассказывает то же самое на примере интернет-магазина — в деньгах и секундах.',
+    intro: 'Одна таблица users: восемь типов полей и 48 живых строк. Посчитай, сколько она весит, посмотри, как её ищут индексы, разложи на партиции и шарды, запускай запросы и транзакции и подбери сервер — на тех же строках. Переключатель «Техника | Бизнес» вверху рассказывает то же самое на примере интернет-магазина — в деньгах и секундах.',
     tasks: [
       { id: 'byid', text: 'Найди пользователя по id при шардировании по id — запрос уходит на один шард' },
       { id: 'prune', text: 'Выполни запрос, который в каждом шарде трогает только одну партицию' },
@@ -1240,7 +1903,16 @@
       { id: 'hot', text: 'Найди горячий шард и кликни по нему' },
       { id: 'drop', text: 'Удали старый квартал через DROP PARTITION' },
       { id: 'fit', text: 'Подбери сервер или число шардов, чтобы 500 млн строк с индексами помещались в память' },
-      { id: 'email', text: 'Вставь дубль email в шардированную таблицу и посмотри, почему база его пропустила' }
+      { id: 'email', text: 'Вставь дубль email в шардированную таблицу и посмотри, почему база его пропустила' },
+      { id: 'idx-btree', text: 'Найди клиента по id через B-tree и сравни с полным перебором' },
+      { id: 'idx-prefix', text: 'Убедись, что составной индекс (country, created_at) не помогает запросу только по дате' },
+      { id: 'idx-only', text: 'Получи Index Only Scan покрывающим индексом — без похода в таблицу' },
+      { id: 'idx-write', text: 'Включи несколько индексов и посмотри, сколько структур обновляет один INSERT' },
+      { id: 'iso-nonrep', text: 'Получи неповторяемое чтение на Read Committed и убери его уровнем выше' },
+      { id: 'iso-lost', text: 'Получи потерянное обновление и исправь его: уровнем, FOR UPDATE или версией' },
+      { id: 'iso-skew', text: 'Перекос записи: проходит на Repeatable Read и ловится на Serializable' },
+      { id: 'srv-limit', text: 'Доведи нагрузку до упора и найди ресурс, который кончился первым' },
+      { id: 'srv-fit', text: 'Подбери конфигурацию, которая держит 15 000 оп/с: вертикально, репликами или шардами' }
     ],
     mount(el, api) {
       MODE = readMode();
