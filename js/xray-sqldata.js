@@ -20,9 +20,9 @@
     let emb = null;
     const enter = () => {
       ctx.useHtml(true); box(true);
-      ctx.html.innerHTML = '<p class="xsd-lede">Таблица <b>users</b> этой базы — 48 строк для наглядности. Шарды, ключ шардирования, партиции и реплики — как у узла на площадке: поменяй их в настройках справа, и строки переложатся. Вкладка «Запросы» показывает путь запроса к данным.</p><div class="xsd-wrap"></div>';
+      ctx.html.innerHTML = '<p class="xsd-lede">Таблица <b>users</b> этой базы — 48 строк для наглядности. Шарды, ключ шардирования, партиции и реплики — как у узла на площадке: поменяй их в настройках справа, и строки переложатся. Вкладка «Запросы» показывает путь запроса к данным, а переключатель «Бизнес» — что это значит для магазина в секундах и рублях.</p><div class="xsd-wrap"></div>';
       const el = ctx.html.querySelector('.xsd-wrap');
-      if (SD.labTable && SD.labTable.embed) emb = SD.labTable.embed(el, Object.assign(optsOf(ctx.node), { tab: 'queries' }));
+      if (SD.labTable && SD.labTable.embed) emb = SD.labTable.embed(el, Object.assign(optsOf(ctx.node), { tab: 'shard' }));
       else {
         const lab = (SD.LABS || []).find(l => l.id === 'table');
         const off = lab ? lab.mount(el, { done: () => {} }) : null;
