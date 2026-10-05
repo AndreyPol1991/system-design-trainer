@@ -1623,6 +1623,11 @@ html.calm .lt *, html.calm .lt *::before, html.calm .lt *::after { animation-del
 .fr-ref[hidden] { display: none; }
 .fr-ref table { width: 100%; border-collapse: collapse; margin-bottom: 8px; } .fr-ref td, .fr-ref th { padding: 5px 6px; border-bottom: 1px solid var(--border); text-align: left; } .fr-ref td:not(:first-child) { font-family: var(--f-mono); }
 .fr-ref p { margin: 0; line-height: 1.5; }
+.sh-sheet { width: min(860px, 100%); }
+.sh-body { padding: 16px 18px; display: flex; flex-direction: column; gap: 10px; overflow: auto; }
+.sh-tabs { align-self: flex-start; }
+.sh-note { margin: 0; font-size: 13px; color: var(--text-2); line-height: 1.5; }
+.sh-text { width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border-strong); background: var(--bg); color: var(--text); font: 12.5px/1.5 var(--f-mono); resize: vertical; }
 .pred-pop { position: fixed; z-index: 60; width: 300px; display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border-strong); box-shadow: var(--shadow); font-size: 12.5px; line-height: 1.45; color: var(--text-2); animation: chgIn .2s ease-out; }
 .pred-pop[hidden] { display: none; }
 .pred-pop b { color: var(--text); font-size: 13.5px; }
@@ -2831,6 +2836,7 @@ html.calm .lt *, html.calm .lt *::before, html.calm .lt *::after { animation-del
 <script src="js/lab-table.js"></script>
 <script src="js/xray-sqldata.js"></script>
 <script src="js/free.js"></script>
+<script src="js/share.js"></script>
 <script src="js/app.js"></script>
 
 </body>
