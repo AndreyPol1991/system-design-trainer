@@ -41,7 +41,7 @@
     const prog = A.progress[L.id] || {};
     let h = '';
     if (SD.walk && SD.walk.active()) h += SD.walk.paneHtml();
-    h += `<span class="eyebrow">${L.sandbox ? 'Песочница' : L.interview ? 'Собеседование · этап «Схема»' : L.innerLvl ? 'Внутри сервиса · C4, уровень компонентов' : L.knobLvl ? 'Настройки на пальцах' : L.opsLvl ? 'Эксплуатация и инструменты' : L.archLvl ? 'Архитектура из сервисов' : L.practice ? 'Практикум паттернов' : L.fix ? 'Найди и перестрой · инцидент' : `Уровень ${idx + 1} · ${tierLabel(L.tier)}`}</span>`;
+    h += `<span class="eyebrow">${L.daily ? `Событие дня · по уровню «${esc(L.daily.baseTitle)}»` : L.sandbox ? 'Песочница' : L.interview ? 'Собеседование · этап «Схема»' : L.innerLvl ? 'Внутри сервиса · C4, уровень компонентов' : L.knobLvl ? 'Настройки на пальцах' : L.opsLvl ? 'Эксплуатация и инструменты' : L.archLvl ? 'Архитектура из сервисов' : L.practice ? 'Практикум паттернов' : L.fix ? 'Найди и перестрой · инцидент' : `Уровень ${idx + 1} · ${tierLabel(L.tier)}`}</span>`;
     h += `<h2>${esc(L.title)}</h2>`;
     h += `<p class="story" style="margin-top:8px">${esc(L.story)}</p>`;
     if (L.chips) h += `<div class="chips-row">${L.chips.map(c => `<span class="chip">${esc(c)}</span>`).join('')}</div>`;
@@ -235,6 +235,7 @@
   /* ---------- карта уровней ---------- */
   function map(A) {
     let h = '<div class="tiers">';
+    if (SD.daily) { try { h += SD.daily.mapHtml(A); } catch (e) { /* событие дня не собралось — карта без него */ } }
     SD.TIERS.forEach(t => {
       const ls = SD.LEVELS.filter(l => l.tier === t.id);
       h += `<section class="tier"><h3>${esc(t.label)} · <span>${esc(t.note)}</span></h3><div class="cards">`;

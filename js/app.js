@@ -111,7 +111,7 @@
   /* ---------- шапка и палитра ---------- */
   function renderHeader() {
     const L = A.level, i = SD.LEVELS.indexOf(L);
-    $('lvlTag').textContent = L.sandbox ? 'ПЕСОЧНИЦА' : L.interview ? 'СОБЕСЕДОВАНИЕ' : L.innerLvl ? 'ВНУТРИ СЕРВИСА' : L.knobLvl ? 'НАСТРОЙКА' : L.opsLvl ? 'ЭКСПЛУАТАЦИЯ' : L.archLvl ? 'АРХИТЕКТУРА' : L.practice ? 'ПРАКТИКУМ' : L.fix ? 'ИНЦИДЕНТ' : `УР. ${i + 1}/${SD.LEVELS.length}`;
+    $('lvlTag').textContent = L.daily ? 'СОБЫТИЕ ДНЯ' : L.sandbox ? 'ПЕСОЧНИЦА' : L.interview ? 'СОБЕСЕДОВАНИЕ' : L.innerLvl ? 'ВНУТРИ СЕРВИСА' : L.knobLvl ? 'НАСТРОЙКА' : L.opsLvl ? 'ЭКСПЛУАТАЦИЯ' : L.archLvl ? 'АРХИТЕКТУРА' : L.practice ? 'ПРАКТИКУМ' : L.fix ? 'ИНЦИДЕНТ' : `УР. ${i + 1}/${SD.LEVELS.length}`;
     $('lvlName').textContent = L.title;
     const st = (A.progress[L.id] || {}).stars || 0;
     $('lvlStars').textContent = L.sandbox || L.interview ? '' : SD.panels.stars(st);
@@ -319,6 +319,7 @@
     if (SD.learn) SD.learn.mount();
     if (SD.walk) SD.walk.mount();
     if (SD.cmd) SD.cmd.mount();
+    if (SD.daily) SD.daily.mount();
     if (SD.landscape) SD.landscape.mount();
     if (SD.principles) SD.principles.mount();
     if (SD.guide) SD.guide.mount();

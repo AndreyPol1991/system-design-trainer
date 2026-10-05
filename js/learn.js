@@ -50,18 +50,46 @@
   }
 
   /* ---------- правки, которые проверяем симулятором ---------- */
+  /* рычаги ёмкости: экземпляры, реплики, шарды, партиции, GPU, узлы */
+  const CAP = ['count', 'replicas', 'shards', 'partitions', 'gpus', 'nodes'];
+  const levers = n => (((T()[n.type] || {}).props) || []).filter(p => p.type === 'range' && CAP.includes(p.key));
+  const valOf = (n, p) => n.props[p.key] !== undefined ? n.props[p.key] : (p.def !== undefined ? p.def : p.min);
+  /* насколько цель далека от выполнения: меньше — лучше */
+  function gap(L, i, r) {
+    const lg = L.goals[i], over = Object.values(r.res.nodes).reduce((s, x) => s + Math.max(0, (x.util || 0) - 1), 0);
+    if (r.goal.ok) return -1;
+    if (lg.t === 'success') { const ks = Object.keys(L.traffic).filter(k => k !== 'bot' && L.traffic[k] > 0); return 1 - Math.min(...ks.map(k => r.res.kinds[k] ? r.res.kinds[k].success : 1)) + over * 1e-3; }
+    if (lg.t === 'latency') return latOf(lg)(r.res) / Math.max(1, lg.max) + over * 1e-3;
+    return over + 1e-3;
+  }
   function scaleFix(L, G, i) {
     const g = copy(G), ch = {};
-    for (let it = 0; it < 10; it++) {
-      const r = one(L, g, i);
+    let r = one(L, g, i), cur = gap(L, i, r);
+    for (let it = 0; it < 14; it++) {
       if (r.goal.ok) return Object.keys(ch).length ? Object.values(ch) : null;
-      const h = g.nodes.filter(n => n.type !== 'client' && !isOps(n) && scal(n) && r.res.nodes[n.id] && r.res.nodes[n.id].util > 0.85 && (n.props.count || 1) < scal(n).max)
-        .sort((a, b) => r.res.nodes[b.id].util - r.res.nodes[a.id].util)[0];
-      if (!h) return null;
-      const d = scal(h), cur = h.props.count || 1, u = r.res.nodes[h.id].util;
-      const nv = Math.min(d.max, Math.max(cur + 1, Math.ceil(cur * u / 0.75)));
-      ch[h.id] = { id: h.id, key: 'count', from: ch[h.id] ? ch[h.id].from : cur, to: nv };
-      h.props.count = nv;
+      /* кандидаты: три самых загруженных узла × их рычаги × шаг (+1, умеренный, по загрузке) */
+      const hots = g.nodes.filter(n => n.type !== 'client' && !isOps(n) && r.res.nodes[n.id] && r.res.nodes[n.id].util > 0.85 && levers(n).some(p => valOf(n, p) < p.max))
+        .sort((a, b) => r.res.nodes[b.id].util - r.res.nodes[a.id].util).slice(0, 3);
+      let best = null;
+      hots.forEach(h => {
+        const u = r.res.nodes[h.id].util;
+        levers(h).forEach(p => {
+          const v0 = valOf(h, p); if (v0 >= p.max) return;
+          const base = Math.max(v0, 1);
+          const vals = [...new Set([v0 + 1, Math.ceil(base * Math.min(u, 2) / 0.75), Math.ceil(base * u / 0.75)].map(v => Math.min(p.max, Math.max(v0 + 1, v))))];
+          vals.forEach(nv => {
+            h.props[p.key] = nv;
+            const t = one(L, g, i), gp = gap(L, i, t);
+            h.props[p.key] = v0;
+            const cand = { h, p, v0, nv, gp, t, cost: t.res.cost };
+            if (gp < cur - 1e-6 && (!best || gp < best.gp - 1e-6 || (Math.abs(gp - best.gp) <= 1e-6 && cand.cost < best.cost))) best = cand;
+          });
+        });
+      });
+      if (!best) return null;
+      const k = best.h.id + '|' + best.p.key;
+      ch[k] = { id: best.h.id, key: best.p.key, label: best.p.label, from: ch[k] ? ch[k].from : best.v0, to: best.nv };
+      best.h.props[best.p.key] = best.nv; r = best.t; cur = best.gp;
     }
     return null;
   }
@@ -190,7 +218,7 @@
     w.lines.forEach(l => { h += `<p class="why-ln">${esc(l)}</p>`; });
     if (w.fix) {
       const fi = w.fixInfo || {};
-      const lbl = w.fix.map(c => { const n = A.graph.nodes.find(x => x.id === c.id); return `«${esc(nm(n))}»: ${c.from} → ${c.to} экз.`; }).join(', ');
+      const lbl = w.fix.map(c => { const n = A.graph.nodes.find(x => x.id === c.id); return `«${esc(nm(n))}»${c.key === 'count' ? '' : ' · ' + esc((c.label || c.key).toLowerCase())}: ${c.from} → ${c.to}${c.key === 'count' ? ' экз.' : ''}`; }).join(', ');
       h += `<div class="why-fix"><b>Проверил на симуляторе:</b> <span>${lbl}</span>`;
       h += `<small>${fi.ok ? 'эта цель станет зелёной' : 'станет лучше, но не до конца'} · в месяц ${F().usd(fi.cost[0])} → ${F().usd(fi.cost[1])}${fi.broke && fi.broke.length ? ` · но покраснеет: ${esc(fi.broke.join('; ').toLowerCase())}` : ''}</small>`;
       h += `<button type="button" class="btn primary" data-whyfix="${i}">Применить</button></div>`;
