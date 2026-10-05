@@ -1628,6 +1628,28 @@ html.calm .lt *, html.calm .lt *::before, html.calm .lt *::after { animation-del
 .sh-tabs { align-self: flex-start; }
 .sh-note { margin: 0; font-size: 13px; color: var(--text-2); line-height: 1.5; }
 .sh-text { width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border-strong); background: var(--bg); color: var(--text); font: 12.5px/1.5 var(--f-mono); resize: vertical; }
+/* ---------- мой путь ---------- */
+.pt-sheet { width: min(1180px, 100%); }
+.pt-body { overflow: auto; padding: 16px 18px; display: flex; flex-direction: column; gap: 14px; }
+.pt-roles { align-self: flex-start; flex-wrap: wrap; }
+.pt-top { display: flex; gap: 16px; align-items: center; }
+.pt-ring { --p: 0; width: 92px; height: 92px; border-radius: 50%; flex: none; display: grid; place-items: center; align-content: center; background: radial-gradient(closest-side, var(--surface) 78%, transparent 79% 100%), conic-gradient(var(--accent) calc(var(--p) * 1%), var(--surface-3) 0); }
+.pt-ring b { font: 800 22px var(--f-mono); color: var(--text); line-height: 1; } .pt-ring small { font-size: 12px; color: var(--text-muted); }
+.pt-sum { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.pt-sum > b { font-size: 18px; color: var(--text); } .pt-sum > span { font-size: 13px; color: var(--text-2); line-height: 1.5; }
+.pt-sum .btn small { font-weight: 400; opacity: .8; }
+.pt-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+.pt-sk { padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface-2); display: flex; flex-direction: column; gap: 6px; }
+.pt-sk.ok { border-color: var(--ok); } .pt-sk.mid { border-color: var(--warn); }
+.pt-h { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; } .pt-h b { font-size: 13.5px; color: var(--text); } .pt-h span { font: 600 12px var(--f-mono); color: var(--text-muted); }
+.pt-an { font-size: 12px; color: var(--text-muted); }
+.pt-bar { height: 6px; border-radius: 3px; background: var(--surface-3); overflow: hidden; } .pt-bar i { display: block; height: 100%; background: var(--accent); }
+.pt-sk ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 2px; }
+.pt-sk li { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.pt-sk li .linkish { font-size: 12.5px; text-align: left; } .pt-sk li.done .linkish { color: var(--ok); text-decoration: none; }
+.pt-sk li small { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
+.pt-back { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--info); background: var(--surface-2); font-size: 13px; color: var(--text-2); }
+.pt-back b { color: var(--text); } .pt-chips { display: flex; flex-wrap: wrap; gap: 6px; } .pt-chips .chip { cursor: pointer; }
 .pred-pop { position: fixed; z-index: 60; width: 300px; display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border-strong); box-shadow: var(--shadow); font-size: 12.5px; line-height: 1.45; color: var(--text-2); animation: chgIn .2s ease-out; }
 .pred-pop[hidden] { display: none; }
 .pred-pop b { color: var(--text); font-size: 13.5px; }
@@ -2838,6 +2860,7 @@ html.calm .lt *, html.calm .lt *::before, html.calm .lt *::after { animation-del
 <script src="js/xray-sqldata.js"></script>
 <script src="js/free.js"></script>
 <script src="js/share.js"></script>
+<script src="js/path.js"></script>
 <script src="js/app.js"></script>
 
 </body>
