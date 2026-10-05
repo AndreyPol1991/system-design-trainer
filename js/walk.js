@@ -95,6 +95,7 @@
     const A = SD.app && SD.app.A; if (!A) return;
     const L = A.level;
     if (!L.solution) { SD.app.toast(L.interview ? 'На собеседовании эталона нет: он откроется в разборе после завершения.' : 'В песочнице эталона нет.'); return; }
+    if (SD.bridge) SD.bridge.peek(L);
     const order = orderOf(L, L.solution);
     W = { L, order, k: 0, snap: JSON.parse(JSON.stringify(A.graph)), steps: [] };
     for (let k = 0; k <= order.length; k++) W.steps.push(measure(L, build(L, L.solution, order, k)));

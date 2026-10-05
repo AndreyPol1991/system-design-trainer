@@ -73,17 +73,10 @@
   }
   /* «Проверить решение» нашло невыполненные цели */
   function miss(L) { if (L && L.id) B.misses[L.id] = (B.misses[L.id] || 0) + 1; }
-  /* показан эталон */
+  /* показан эталон: кнопка «Эталон» (app.js) или «Эталон по шагам» (walk.js, start — и с кнопки, и из Ctrl+K) */
   function peek(L) { if (L && L.id) B.peeked.add(L.id); }
   /* лаборатория: выполнены все задания */
   function labDone(id) { offer('lab-' + id, 1, 0); }
-
-  /* «Эталон по шагам» строит эталон прямо на площадке — тоже подсмотренный ответ */
-  document.addEventListener('click', e => {
-    if (!e.target || !e.target.closest || !e.target.closest('#walkBtn')) return;
-    const A = SD.app && SD.app.A;
-    if (A && A.level) peek(A.level);
-  }, true);
 
   /* ---------- ответ платформы ---------- */
   function whenApp(fn, tries) {
