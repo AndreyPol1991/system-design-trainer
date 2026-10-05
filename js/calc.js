@@ -225,6 +225,17 @@
     if (m.total - listed > 1) rows.push(['Остальное на схеме', 'как в эталоне', m.total - listed]);
     let h = `<h3>Итог для схемы</h3><table class="calc-sum">${rows.map(([a, b, c]) => `<tr><td>${esc(a)}</td><td>${esc(b)}</td><td>${esc(F().usd(c))}</td></tr>`).join('')}<tr class="tot"><td>В месяц</td><td></td><td>${F().usd(m.total)}</td></tr></table>`;
     if (m.budget) h += `<p class="calc-bud ${m.total <= m.budget.max ? 'ok' : 'bad'}">Бюджет уровня ${F().usd(m.budget.max)}: ${m.total <= m.budget.max ? 'укладываемся' : 'не укладываемся — ищи, где сэкономить'}.</p>`;
+    {
+      const RUB = 90, rub = m.total * RUB, perUser = m.dau ? rub / m.dau : 0, perK = m.P ? rub / (m.P / PEAK * 86400 * 30 / 1000) : 0;
+      const hourReq = m.P * 3600, orders = m.dau * 0.02 / 24 * PEAK, loss = orders * 3000;
+      const fr = v => v >= 1e6 ? (v / 1e6).toFixed(1).replace('.', ',') + ' млн ₽' : v >= 1000 ? Math.round(v / 1000).toLocaleString('ru-RU') + ' тыс. ₽' : v >= 1 ? Math.round(v) + ' ₽' : v.toFixed(2).replace('.', ',') + ' ₽';
+      h += `<details class="calc-biz"><summary>Для бизнеса</summary><ul>
+        <li>Инфраструктура: <b>${fr(rub)}</b> в месяц.</li>
+        <li>На одного пользователя в месяц: <b>${fr(perUser)}</b> (при ${big(m.dau)} пользователей в день из шага 1).</li>
+        <li>На 1 000 запросов: <b>${fr(perK)}</b>.</li>
+        <li>Час простоя в пик: <b>${big(hourReq)}</b> запросов без ответа и ≈ <b>${big(orders)}</b> несостоявшихся заказов — это ≈ <b>${fr(loss)}</b>. Сравни с ценой запаса и надёжности.</li>
+      </ul><small>Допущения: $1 = ${RUB} ₽; среднее за месяц = пик ÷ ${PEAK}; 2 % пользователей заказывают в день, в час пик — втрое чаще среднего, средний чек 3 000 ₽ — условно, для порядка величины.</small></details>`;
+    }
     if (m.S) h += `<p class="calc-note">Картинки и видео (${num(m.S)}/с) — через CDN и объектное хранилище, сервис их не касается.</p>`;
     h += `<div class="calc-act"><button type="button" class="btn primary" data-calcsim>Проверить расчёт на симуляторе</button><button type="button" class="btn" data-calcapply>Поставить эти числа на мою схему</button></div><div id="calcRes"></div>`;
     if (SD.LABS && SD.LABS.find(l => l.id === 'table')) h += `<button type="button" class="linkish calc-lab" data-calclab>Как таблица делится на партиции и шарды — «Таблица вживую»</button>`;
