@@ -1592,6 +1592,37 @@ html.calm .lt *, html.calm .lt *::before, html.calm .lt *::after { animation-del
 .xsd-lede { margin: 0 0 10px; font-size: 13px; color: var(--text-2); line-height: 1.5; }
 .xsd-lede b { color: var(--text); }
 .xsd-wrap { min-width: 0; }
+/* ---------- свободный режим ---------- */
+.fr-cta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 12px 0 4px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--accent); background: color-mix(in srgb, var(--accent) 6%, var(--surface-2)); }
+.fr-cta small { flex-basis: 100%; font-size: 12px; color: var(--text-muted); }
+.fr-sheet { width: min(1000px, 100%); }
+.fr-body, .fr-pick { overflow: auto; padding: 16px 18px; display: flex; flex-direction: column; gap: 14px; }
+.fr-pick .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
+.fr-lede { margin: 0; font-size: 13.5px; color: var(--text-2); line-height: 1.55; }
+.fr-top { display: flex; align-items: center; gap: 16px; }
+.fr-score { width: 96px; height: 96px; border-radius: 50%; display: grid; place-items: center; align-content: center; border: 4px solid var(--border-strong); flex: none; }
+.fr-score b { font: 800 34px var(--f-mono); color: var(--text); line-height: 1; } .fr-score span { font-size: 12px; color: var(--text-muted); }
+.fr-score.ok { border-color: var(--ok); } .fr-score.warn { border-color: var(--warn); } .fr-score.bad { border-color: var(--bad); }
+.fr-lbl { display: flex; flex-direction: column; gap: 4px; } .fr-lbl b { font-size: 18px; color: var(--text); } .fr-lbl span { font-size: 13px; color: var(--text-2); line-height: 1.5; }
+.fr-rows { display: flex; flex-direction: column; gap: 6px; }
+.fr-row { display: grid; grid-template-columns: 170px minmax(0, 1fr) 40px; gap: 4px 10px; align-items: center; }
+.fr-row small { grid-column: 2 / -1; font-size: 12px; color: var(--text-muted); margin-top: -2px; }
+.fr-k { font-size: 13px; color: var(--text); }
+.fr-bar { height: 8px; border-radius: 4px; background: var(--surface-3); overflow: hidden; }
+.fr-bar i { display: block; height: 100%; border-radius: 4px; } .fr-bar i.ok { background: var(--ok); } .fr-bar i.warn { background: var(--warn); } .fr-bar i.bad { background: var(--bad); }
+.fr-v { font: 700 13px var(--f-mono); color: var(--text); text-align: right; }
+.fr-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 760px) { .fr-cols { grid-template-columns: 1fr; } .fr-row { grid-template-columns: 120px minmax(0, 1fr) 36px; } }
+.fr-cols section { padding: 10px 12px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--border); font-size: 13px; color: var(--text-2); line-height: 1.5; }
+.fr-cols h3 { margin: 0 0 6px; } .fr-cols ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; } .fr-cols p { margin: 0; }
+.fr-good { border-color: var(--ok) !important; } .fr-fix { border-color: var(--warn) !important; }
+.fr-goals { margin: 0; display: flex; flex-wrap: wrap; gap: 6px; font-size: 12px; }
+.fr-goals span { padding: 3px 8px; border-radius: 999px; border: 1px solid var(--border); }
+.fr-goals span.ok { color: var(--ok); border-color: var(--ok); } .fr-goals span.bad { color: var(--bad); border-color: var(--bad); }
+.fr-ref { padding: 10px 12px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--border); font-size: 13px; color: var(--text-2); }
+.fr-ref[hidden] { display: none; }
+.fr-ref table { width: 100%; border-collapse: collapse; margin-bottom: 8px; } .fr-ref td, .fr-ref th { padding: 5px 6px; border-bottom: 1px solid var(--border); text-align: left; } .fr-ref td:not(:first-child) { font-family: var(--f-mono); }
+.fr-ref p { margin: 0; line-height: 1.5; }
 .pred-pop { position: fixed; z-index: 60; width: 300px; display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border-strong); box-shadow: var(--shadow); font-size: 12.5px; line-height: 1.45; color: var(--text-2); animation: chgIn .2s ease-out; }
 .pred-pop[hidden] { display: none; }
 .pred-pop b { color: var(--text); font-size: 13.5px; }
@@ -2799,6 +2830,7 @@ html.calm .lt *, html.calm .lt *::before, html.calm .lt *::after { animation-del
 <script src="js/calc.js"></script>
 <script src="js/lab-table.js"></script>
 <script src="js/xray-sqldata.js"></script>
+<script src="js/free.js"></script>
 <script src="js/app.js"></script>
 
 </body>

@@ -92,7 +92,7 @@
 
   /* ---------- подсказки новичку прямо на холсте ---------- */
   function coachStep() {
-    const S = A(); if (!S || !S.level || S.level.sandbox || S.level.interview || U.coachOff || (SD.walk && SD.walk.active())) return null;
+    const S = A(); if (!S || !S.level || S.level.sandbox || S.level.interview || S.level.free || U.coachOff || (SD.walk && SD.walk.active())) return null;
     if (Object.keys(S.progress || {}).length >= 3) return null;
     const pre = new Set((S.level.preset || []).map(p => p[0]));
     const mine = S.graph.nodes.filter(n => n.type !== 'client' && !pre.has(n.id));

@@ -202,7 +202,7 @@
 
   /* кнопка у красной цели и блок разбора под ней (вызывает panels.task) */
   function goalExtra(A, i) {
-    const g = A.goals && A.goals[i]; if (!g || g.ok || A.level.sandbox) return '';
+    const g = A.goals && A.goals[i]; if (!g || g.ok || A.level.sandbox || (SD.free && !SD.free.hintsOn())) return '';
     const open = isCur(A, i);
     let h = `<button type="button" class="why-btn ${open ? 'on' : ''}" data-why="${i}" aria-expanded="${open}">${open ? 'Скрыть' : 'Почему?'}</button>`;
     if (!open) return h;

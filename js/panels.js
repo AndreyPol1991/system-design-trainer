@@ -41,9 +41,10 @@
     const prog = A.progress[L.id] || {};
     let h = '';
     if (SD.walk && SD.walk.active()) h += SD.walk.paneHtml();
-    h += `<span class="eyebrow">${L.daily ? `Событие дня · по уровню «${esc(L.daily.baseTitle)}»` : L.sandbox ? 'Песочница' : L.interview ? 'Собеседование · этап «Схема»' : L.innerLvl ? 'Внутри сервиса · C4, уровень компонентов' : L.knobLvl ? 'Настройки на пальцах' : L.dataLvl ? 'Данные: от события до дашборда' : L.opsLvl ? 'Эксплуатация и инструменты' : L.archLvl ? 'Архитектура из сервисов' : L.practice ? 'Практикум паттернов' : L.fix ? 'Найди и перестрой · инцидент' : `Уровень ${idx + 1} · ${tierLabel(L.tier)}`}</span>`;
+    h += `<span class="eyebrow">${L.free ? `Свободный режим · кейс «${esc(L.free.baseTitle)}»` : L.daily ? `Событие дня · по уровню «${esc(L.daily.baseTitle)}»` : L.sandbox ? 'Песочница' : L.interview ? 'Собеседование · этап «Схема»' : L.innerLvl ? 'Внутри сервиса · C4, уровень компонентов' : L.knobLvl ? 'Настройки на пальцах' : L.dataLvl ? 'Данные: от события до дашборда' : L.opsLvl ? 'Эксплуатация и инструменты' : L.archLvl ? 'Архитектура из сервисов' : L.practice ? 'Практикум паттернов' : L.fix ? 'Найди и перестрой · инцидент' : `Уровень ${idx + 1} · ${tierLabel(L.tier)}`}</span>`;
     h += `<h2>${esc(L.title)}</h2>`;
     h += `<p class="story" style="margin-top:8px">${esc(L.story)}</p>`;
+    if (SD.free) h += SD.free.taskBlock(A);
     if (L.chips) h += `<div class="chips-row">${L.chips.map(c => `<span class="chip">${esc(c)}</span>`).join('')}</div>`;
     if (L.interview && SD.interview) h += SD.interview.paneBlock(A);
     if (L.innerTarget && SD.innerUI) h += `<button type="button" class="dive-cta" data-act="inner" data-id="${L.innerTarget}">${SD.icon('app')}<span><b>Открыть сервис изнутри</b><small>Слои, порты, адаптеры, трасса и код. Двойной клик по сервису на схеме делает то же самое.</small></span></button>`;
@@ -61,7 +62,7 @@
     }
     if (L.sandbox) h += sandboxControls(L);
     else {
-      h += `<h3>Нагрузка${SD.calc && SD.calc.usable(L) ? ' <button type="button" class="linkish calc-open" data-calcopen>Как посчитать ›</button>' : ''}</h3><div class="traffic">${kinds.map(([k, v]) => `<div><small><i style="background:${SD.kindColor(k)}"></i>${esc(SD.KINDS[k].label)}</small><b>${F().num(v)} /с</b></div>`).join('')}</div>`;
+      h += `<h3>Нагрузка${SD.calc && SD.calc.usable(L) && (!SD.free || SD.free.hintsOn()) ? ' <button type="button" class="linkish calc-open" data-calcopen>Как посчитать ›</button>' : ''}</h3><div class="traffic">${kinds.map(([k, v]) => `<div><small><i style="background:${SD.kindColor(k)}"></i>${esc(SD.KINDS[k].label)}</small><b>${F().num(v)} /с</b></div>`).join('')}</div>`;
       const extra = [];
       if (L.global) extra.push('пользователи по всему миру: пинг до дата-центра ≈ 140 мс');
       if (L.connections) extra.push(`${F().num(L.connections)} открытых соединений`);
@@ -92,8 +93,9 @@
         h += `</div>`;
       } else if (prog.stars) h += `<div class="verdict"><span>Лучший результат: ${stars(prog.stars)}</span></div>`;
     }
-    if (SD.archLens && !L.interview) h += SD.archLens.card(A);
-    if (A.advice && A.advice.length && A.graph.nodes.every(n => n.type === 'client')) h += `<h3>Прораб видит</h3><div class="advice"><div class="adv info"><span>Схема пока пустая: запросам некуда идти. Поставь первый узел из палитры и соедини его с «Пользователями».</span></div></div>`;
+    if (SD.archLens && !L.interview && (!SD.free || SD.free.hintsOn())) h += SD.archLens.card(A);
+    if (SD.free && !SD.free.hintsOn()) h += `<h3>Прораб видит</h3><p class="note">Скрыто: свободный режим. Нужна помощь — «Показать подсказки» вверху.</p>`;
+    else if (A.advice && A.advice.length && A.graph.nodes.every(n => n.type === 'client')) h += `<h3>Прораб видит</h3><div class="advice"><div class="adv info"><span>Схема пока пустая: запросам некуда идти. Поставь первый узел из палитры и соедини его с «Пользователями».</span></div></div>`;
     else if (A.advice && A.advice.length) {
       h += `<h3>Прораб видит</h3><div class="advice">`;
       A.advice.slice(0, 7).forEach(a => {
