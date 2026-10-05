@@ -2571,6 +2571,262 @@ html.calm .ld-db td.new, html.calm .ld-db th.new { animation: none; }
 html.calm .lf-sg, html.calm .lf-wmk, html.calm .lf-btrack i { transition: none; }
 html.calm .lf-spin, html.calm .lf-fly, html.calm .lf-ctab tr.fresh > *, html.calm .shift.lf-ph-img, html.calm .shift.lf-ph-recs { animation: none; }
 /* ===== от экрана до сервера: конец ===== */
+/* ===== поток событий ===== */
+/* ===== Лаборатория «Поток событий вживую» (js/lab-stream.js, префикс .lsv-) ===== */
+/* Только переменные проекта, обе темы, текст от 12px. Города: Москва — info, Казань — accent, Самара — warn. */
+.lsv { display: flex; flex-direction: column; gap: 14px; min-width: 0; container: lsv / inline-size; }
+.lsv-tabs { display: flex; flex-wrap: wrap; align-items: center; gap: 3px; padding: 4px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--border); position: sticky; top: -16px; z-index: 6; box-shadow: 0 6px 12px -10px var(--bg); }
+.lsv-tabs > button { border: 0; background: none; padding: 7px 11px; border-radius: 8px; color: var(--text-2); font-size: 13px; font-weight: 500; display: inline-flex; align-items: center; gap: 6px; }
+.lsv-tabs > button b { font: 700 12px var(--f-mono); color: var(--accent); min-width: 12px; text-align: center; }
+.lsv-tabs > button:hover { color: var(--text); background: var(--surface-3); }
+.lsv-tabs > button[aria-selected="true"] { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
+.lsv-mode { margin-left: auto; padding: 2px; background: var(--surface); }
+.lsv-mode button { font-size: 12.5px; padding: 5px 11px; }
+.lsv-mode button[aria-selected="true"] { background: var(--accent-soft); color: var(--text); box-shadow: inset 0 0 0 1px var(--accent); }
+.lsv-view { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+
+/* аналогия → фраза → термин */
+.lsv-ana { border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: var(--r); background: var(--surface-2); padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; font-size: 13px; line-height: 1.5; color: var(--text-2); }
+.lsv-ana p { margin: 0; }
+.lsv-life { color: var(--text); }
+.lsv-tag { display: inline-block; font: 700 12px var(--f-mono); letter-spacing: .03em; color: var(--accent); margin-right: 7px; }
+.lsv-tag.t { color: var(--info); }
+.lsv-ana b, .lsv-card b, .lsv-box b { color: var(--text); }
+.lsv code { font: 12px var(--f-mono); background: var(--surface-3); padding: 0 4px; border-radius: 4px; color: var(--text); overflow-wrap: anywhere; }
+.lsv-h { font-size: 14px; font-weight: 650; color: var(--text); }
+.lsv-sub { display: block; font-size: 12px; color: var(--text-muted); margin: 4px 0 0; }
+
+/* карточки */
+.lsv-card { padding: 9px 11px; border-radius: 8px; background: var(--surface-2); border: 1px solid var(--border); font-size: 13px; line-height: 1.5; color: var(--text-2); }
+.lsv-card p { margin: 6px 0 0; }
+.lsv-card .mut { color: var(--text-muted); font-weight: 500; }
+.lsv-card.ok { border-color: var(--ok); background: var(--ok-soft); }
+.lsv-card.warn { border-color: var(--warn); background: var(--warn-soft); }
+.lsv-card.bad { border-color: var(--bad); background: var(--bad-soft); }
+.lsv-card.info { border-color: var(--info); background: var(--info-soft); }
+.lsv-card.biz { border-left: 3px solid var(--info); }
+.lsv-card ol, .lsv-card ul { margin: 6px 0 0; padding-left: 20px; display: flex; flex-direction: column; gap: 3px; }
+.lsv-asm { font-size: 12px; color: var(--text-muted); border: 1px dashed var(--border-strong); border-radius: 8px; padding: 6px 10px; }
+.lsv-asm summary { cursor: pointer; color: var(--text-2); font-weight: 600; }
+.lsv-asm ul { margin: 6px 0 0; padding-left: 18px; display: flex; flex-direction: column; gap: 3px; line-height: 1.45; }
+
+/* выбор вида */
+.lsv-kinds { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 6px; }
+.lsv-kinds button { text-align: left; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface-2); display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.lsv-kinds button b { font-size: 13px; color: var(--text); }
+.lsv-kinds button small { font-size: 12px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lsv-kinds button:hover { border-color: var(--border-strong); }
+.lsv-kinds button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent); }
+
+/* управление */
+.lsv-play { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 14px; }
+.lsv-btns { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.lsv-seg button { font-size: 12.5px; padding: 5px 9px; }
+.lsv-ctls { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: flex-start; }
+.lsv-ctl { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.lsv-ctl > b { font-size: 12px; color: var(--text-muted); font-weight: 600; }
+.lsv-next { display: flex; justify-content: flex-end; }
+.lsv-next .btn { border-color: var(--accent); }
+
+/* сцена */
+.lsv-stage { border: 1px solid var(--border); border-radius: var(--r); background: var(--bg); overflow-x: auto; overflow-y: hidden; min-height: 120px; }
+.lsv-svg { display: block; }
+.lsv-st { font: 600 13px var(--f-body); fill: var(--text); }
+.lsv-s { font: 12px var(--f-body); fill: var(--text-2); }
+.lsv-s.ok { fill: var(--ok); } .lsv-s.bad { fill: var(--bad); } .lsv-s.warn { fill: var(--warn); } .lsv-s.acc { fill: var(--accent); } .lsv-s.inf { fill: var(--info); } .lsv-s.mut { fill: var(--text-muted); }
+.lsv-clock { font: 600 12px var(--f-mono); fill: var(--text-muted); }
+.lsv-tick { stroke: var(--border-strong); stroke-width: 1; }
+.lsv-ax { font: 12px var(--f-mono); fill: var(--text-muted); }
+.lsv-lane { fill: var(--surface); stroke: var(--border); stroke-width: 1; }
+.lsv-future { fill: var(--surface-2); fill-opacity: .55; }
+.lsv-bt { font: 600 13px var(--f-body); fill: var(--text); }
+.lsv-bs { font: 12px var(--f-body); fill: var(--text-muted); }
+.lsv-now { stroke: var(--text-muted); stroke-width: 1.2; stroke-dasharray: 3 3; }
+.lsv-selln { stroke: var(--accent); stroke-width: 1.4; stroke-dasharray: 4 3; }
+.lsv-hit { fill: transparent; }
+.lsv-evg { cursor: pointer; }
+.lsv-dot { stroke: var(--bg); stroke-width: 1.2; }
+.lsv-dot.M { fill: var(--info); } .lsv-dot.K { fill: var(--accent); } .lsv-dot.S { fill: var(--warn); }
+.lsv-dot.sel { stroke: var(--text); stroke-width: 2.4; }
+.lsv-win { fill: var(--surface); stroke: var(--border-strong); stroke-width: 1.2; }
+.lsv-win.fut { fill: none; stroke: var(--border); stroke-dasharray: 4 4; }
+.lsv-win.open { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.6; stroke-dasharray: 6 3; }
+.lsv-win.closed { fill: var(--surface-2); stroke: var(--ok); }
+.lsv-win.flash { fill: var(--ok-soft); stroke-width: 2.6; }
+.lsv-win.hit { stroke: var(--text); stroke-width: 2.4; stroke-dasharray: none; }
+.lsv-wt { font: 600 12px var(--f-mono); fill: var(--text); }
+.lsv-wv { font: 600 12px var(--f-mono); fill: var(--text-2); }
+.lsv-wv.ok { fill: var(--ok); } .lsv-wv.mut { fill: var(--text-muted); font-weight: 400; } .lsv-wv.bad { fill: var(--bad); } .lsv-wv.warn { fill: var(--warn); } .lsv-wv.inf { fill: var(--info); }
+.lsv-chip { fill: var(--ok-soft); stroke: var(--ok); stroke-width: 1.2; }
+.lsv-chipt { font: 700 12px var(--f-mono); fill: var(--text); }
+.lsv-ar { stroke: var(--border-strong); stroke-width: 1.4; fill: none; }
+.lsv-ah { fill: var(--border-strong); }
+.lsv-ar.out { stroke: var(--ok); } .lsv-ah.out { fill: var(--ok); }
+.lsv-sess { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.4; }
+.lsv-sess.closed { fill: var(--surface-2); stroke: var(--ok); }
+.lsv-swait { fill: var(--warn-soft); stroke: var(--warn); stroke-width: 1; stroke-dasharray: 4 3; }
+.lsv-sdone { fill: var(--ok-soft); stroke: var(--ok); stroke-width: 1; }
+.lsv-sdone.flash { stroke-width: 2.4; }
+
+/* легенда */
+.lsv-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--text-2); margin-top: -6px; }
+.lsv-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.lsv-lg { width: 11px; height: 11px; border-radius: 50%; display: inline-block; background: var(--surface-3); }
+.lsv-lg.M { background: var(--info); } .lsv-lg.K { background: var(--accent); } .lsv-lg.S { background: var(--warn); }
+.lsv-lg.open, .lsv-lg.sess { border-radius: 3px; background: var(--accent-soft); border: 1.5px dashed var(--accent); }
+.lsv-lg.sess { border-style: solid; }
+.lsv-lg.wait { border-radius: 3px; background: var(--warn-soft); border: 1.5px dashed var(--warn); }
+.lsv-lg.done { border-radius: 3px; background: var(--ok-soft); border: 1.5px solid var(--ok); }
+.lsv-lg.bad { background: var(--bad); } .lsv-lg.ok { background: var(--ok); } .lsv-lg.warn { background: var(--warn); } .lsv-lg.inf { background: var(--info); } .lsv-lg.acc { background: var(--accent); }
+.lsv-lg.wm { border-radius: 2px; width: 4px; height: 13px; background: var(--accent); }
+.lsv-lg.side { background: var(--text-muted); }
+.lsv-lg.ln { border-radius: 2px; width: 16px; height: 3px; background: var(--ok); }
+.lsv-cd { width: 9px; height: 9px; border-radius: 50%; display: inline-block; flex: none; background: var(--surface-3); }
+.lsv-cd.M { background: var(--info); } .lsv-cd.K { background: var(--accent); } .lsv-cd.S { background: var(--warn); }
+
+/* плитки */
+.lsv-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px; }
+.lsv-kpi { padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-2); display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.lsv-kpi span { font-size: 12px; color: var(--text-muted); }
+.lsv-kpi b { font: 700 18px/1.25 var(--f-mono); color: var(--text); }
+.lsv-kpi small { font-size: 12px; color: var(--text-muted); line-height: 1.35; }
+.lsv-kpi.ok b { color: var(--ok); } .lsv-kpi.bad b { color: var(--bad); } .lsv-kpi.warn b { color: var(--warn); } .lsv-kpi.inf b { color: var(--info); }
+.lsv-kpi.bad { border-color: var(--bad); } .lsv-kpi.ok { border-color: var(--ok); }
+
+/* лента и результаты */
+.lsv-two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+.lsv-box { border: 1px solid var(--border); border-radius: var(--r); background: var(--surface); padding: 9px 11px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.lsv-feed, .lsv-res, .lsv-log { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 236px; overflow-y: auto; }
+.lsv-feed li, .lsv-res li, .lsv-log li { display: flex; gap: 7px; align-items: center; font-size: 12.5px; line-height: 1.4; color: var(--text-2); padding: 3px 6px; border-radius: 6px; }
+.lsv-feed li > span:not(.lsv-ft), .lsv-res li > span:not(.lsv-ft), .lsv-log li > span:not(.lsv-ft) { flex: 1; min-width: 0; }
+.lsv-log li { align-items: baseline; }
+.lsv-log li.bad { color: var(--bad); } .lsv-log li.warn { color: var(--warn); } .lsv-log li.ok { color: var(--ok); } .lsv-log li.inf { color: var(--info); }
+.lsv-feed li > b, .lsv-res li > b { font: 600 12.5px var(--f-mono); color: var(--text); white-space: nowrap; }
+.lsv-feed li.mut, .lsv-res li.mut, .lsv-log li.mut { display: block; color: var(--text-muted); }
+.lsv-res li.ok > b { color: var(--ok); }
+.lsv-res li.bad > b { color: var(--bad); } .lsv-res li.warn > b { color: var(--warn); }
+.lsv-fi { cursor: pointer; }
+.lsv-fi:hover { background: var(--surface-2); }
+.lsv-fi.on { background: var(--accent-soft); box-shadow: inset 2px 0 0 var(--accent); }
+.lsv-ft { font: 12px var(--f-mono); color: var(--text-muted); white-space: nowrap; }
+
+/* итоги */
+.lsv-memo { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; }
+
+@container lsv (max-width: 760px) {
+  .lsv-two { grid-template-columns: 1fr; }
+}
+html.calm .lsv * { animation: none !important; transition: none !important; }
+
+/* ----- 2. время события и опоздания ----- */
+.lsv-code { margin: 0; padding: 9px 11px; border-radius: 8px; background: var(--surface-2); border: 1px solid var(--border); font: 12px/1.55 var(--f-mono); color: var(--text); white-space: pre-wrap; overflow-wrap: anywhere; }
+.lsv-cm { color: var(--text-muted); }
+.lsv-halo { paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.lsv-ld { stroke: var(--bg); stroke-width: 1.2; fill: var(--info); }
+.lsv-ld.ooo { fill: var(--accent); } .lsv-ld.drop { fill: var(--bad); } .lsv-ld.upd { fill: var(--warn); } .lsv-ld.side { fill: var(--text-muted); }
+.lsv-ld.ghost { fill: none; stroke: var(--text-muted); stroke-width: 1.4; stroke-dasharray: 3 2; }
+.lsv-con { stroke: var(--info); stroke-width: 1.2; opacity: .55; }
+.lsv-con.ooo { stroke: var(--accent); opacity: .8; } .lsv-con.drop { stroke: var(--bad); opacity: .9; stroke-width: 1.6; } .lsv-con.upd { stroke: var(--warn); opacity: .9; stroke-width: 1.6; } .lsv-con.side { stroke: var(--text-muted); opacity: .9; stroke-width: 1.6; stroke-dasharray: 4 3; }
+.lsv-wm { stroke: var(--accent); stroke-width: 2.4; }
+.lsv-wmf { fill: var(--accent); }
+.lsv-wml { font: 700 12px var(--f-mono); fill: var(--accent); }
+.lsv-grid { stroke: var(--border); stroke-width: 1; }
+.lsv-tline { fill: none; stroke: var(--info); stroke-width: 2; stroke-linejoin: round; }
+.lsv-tp { fill: var(--info); stroke: var(--bg); stroke-width: 1.5; }
+.lsv-tp.on { fill: var(--surface); stroke: var(--accent); stroke-width: 3; }
+.lsv-ar.warn { stroke: var(--warn); } .lsv-ah.warn { fill: var(--warn); }
+.lsv-ar.bad { stroke: var(--bad); } .lsv-ah.bad { fill: var(--bad); }
+.lsv-ar.ok { stroke: var(--ok); } .lsv-ah.ok { fill: var(--ok); }
+.lsv-ar.acc { stroke: var(--accent); } .lsv-ah.acc { fill: var(--accent); }
+.lsv-trade { display: block; }
+.lsv-tablewrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--r); background: var(--surface); }
+.lsv-table { width: 100%; border-collapse: collapse; font-size: 12.5px; color: var(--text-2); }
+.lsv-table th, .lsv-table td { padding: 7px 9px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
+.lsv-table thead th { font-size: 12px; font-weight: 600; color: var(--text-muted); background: var(--surface-2); }
+.lsv-table tbody th { color: var(--text); font-weight: 600; white-space: nowrap; font-family: var(--f-mono); font-size: 12px; }
+.lsv-table td { font-family: var(--f-mono); font-size: 12px; }
+.lsv-table tr:last-child > * { border-bottom: 0; }
+.lsv-table td.bad { color: var(--bad); font-weight: 600; } .lsv-table td.ok { color: var(--ok); } .lsv-table td.warn { color: var(--warn); }
+.lsv-table .mut { color: var(--text-muted); }
+
+/* ----- 3. состояние и «ровно один раз» ----- */
+.lsv-clock.bad { fill: var(--bad); }
+.lsv-cell { stroke-width: 1.2; }
+.lsv-cell.todo { fill: var(--surface); stroke: var(--border); }
+.lsv-cell.rd { stroke: var(--border-strong); }
+.lsv-cell.rd.M { fill: var(--info-soft); stroke: var(--info); } .lsv-cell.rd.K { fill: var(--accent-soft); stroke: var(--accent); } .lsv-cell.rd.S { fill: var(--warn-soft); stroke: var(--warn); }
+.lsv-cell.dup { stroke: var(--bad); stroke-width: 2.6; }
+.lsv-cell.new { stroke-width: 2.6; animation: lsvPop .5s ease; transform-box: fill-box; transform-origin: center; }
+@keyframes lsvPop { from { transform: scale(1.18); } to { transform: scale(1); } }
+.lsv-co { font: 12px var(--f-mono); fill: var(--text-muted); }
+.lsv-cc { font: 700 13px var(--f-body); fill: var(--text); }
+.lsv-cc.M { fill: var(--info); } .lsv-cc.K { fill: var(--accent); } .lsv-cc.S { fill: var(--warn); }
+.lsv-ca { font: 12px var(--f-mono); fill: var(--text-2); }
+.lsv-bar { stroke: var(--border-strong); stroke-width: 2; stroke-dasharray: 3 3; }
+.lsv-bar.on { stroke: var(--accent); stroke-width: 3; stroke-dasharray: none; }
+.lsv-ckbar { fill: var(--ok); }
+.lsv-ptr { fill: var(--info); }
+.lsv-box2 { fill: var(--surface); stroke: var(--border-strong); stroke-width: 1.2; }
+.lsv-box2.on { stroke: var(--accent); }
+.lsv-box2.warn { stroke: var(--warn); fill: var(--warn-soft); stroke-width: 2; }
+.lsv-box2.bad { stroke: var(--bad); fill: var(--bad-soft); stroke-width: 2; }
+.lsv-bs.bad { fill: var(--bad); font-weight: 600; } .lsv-bs.warn { fill: var(--warn); font-weight: 600; }
+.lsv-ckrow { fill: var(--surface-2); stroke: var(--border); }
+.lsv-ckrow.new { stroke: var(--ok); fill: var(--ok-soft); animation: lsvFade .7s ease; }
+.lsv-ckrow.rest { stroke: var(--warn); fill: var(--warn-soft); stroke-width: 2; }
+@keyframes lsvFade { from { opacity: .2; } to { opacity: 1; } }
+.lsv-num { font: 700 13px var(--f-mono); fill: var(--text); }
+.lsv-num.bad { fill: var(--bad); }
+.lsv-ar.inf { stroke: var(--info); } .lsv-ah.inf { fill: var(--info); }
+
+/* ----- 4. соединение потоков ----- */
+.lsv-three { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; align-items: start; }
+.lsv-jwin { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1; stroke-dasharray: 4 3; }
+.lsv-jwin.ok { stroke-dasharray: none; fill: var(--ok-soft); stroke: var(--ok); }
+.lsv-jwin.cut { fill: var(--warn-soft); stroke: var(--warn); stroke-dasharray: none; }
+.lsv-jwin.bad { fill: var(--bad-soft); stroke: var(--bad); stroke-dasharray: none; }
+.lsv-jlate { stroke: var(--text-muted); stroke-width: 1.4; stroke-dasharray: 2 3; }
+.lsv-jo { fill: var(--info); stroke: var(--bg); stroke-width: 1.2; }
+.lsv-pwait { fill: var(--warn-soft); stroke: var(--warn); stroke-width: 1; stroke-dasharray: 3 2; }
+.lsv-jlink { stroke: var(--ok); stroke-width: 3; stroke-linecap: round; }
+.lsv-jp { stroke: var(--bg); stroke-width: 1.2; fill: var(--warn); }
+.lsv-jp.ok { fill: var(--ok); } .lsv-jp.bad { fill: var(--bad); } .lsv-jp.side { fill: var(--text-muted); }
+@container lsv (max-width: 760px) { .lsv-three { grid-template-columns: 1fr; } }
+
+/* ----- 5. происхождение данных и контракты ----- */
+.lsv-k4 { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
+.lsv-p { margin: 0; font-size: 13px; line-height: 1.5; color: var(--text-2); }
+.lsv-node { fill: var(--surface); stroke: var(--border-strong); stroke-width: 1.3; }
+.lsv-node.ok { stroke: var(--ok); fill: var(--ok-soft); }
+.lsv-node.warn { stroke: var(--warn); fill: var(--warn-soft); }
+.lsv-node.bad { stroke: var(--bad); fill: var(--bad-soft); stroke-width: 2.2; }
+.lsv-node.stop { stroke: var(--info); fill: var(--info-soft); stroke-width: 2.2; }
+.lsv-node.stale { stroke: var(--text-muted); fill: var(--surface-2); stroke-dasharray: 5 3; }
+.lsv-nt { font: 700 12px var(--f-mono); fill: var(--text); }
+.lsv-ntd { font: 600 13px var(--f-body); fill: var(--text); }
+.lsv-col { font: 12px var(--f-mono); fill: var(--text-2); }
+.lsv-col.bad { fill: var(--bad); font-weight: 700; } .lsv-col.warn { fill: var(--warn); font-weight: 700; } .lsv-col.ok { fill: var(--ok); font-weight: 700; } .lsv-col.inf { fill: var(--info); font-weight: 700; }
+.lsv-tagr { fill: var(--info-soft); stroke: var(--info); stroke-width: 1; }
+.lsv-ar.lin { stroke: var(--border-strong); stroke-width: 1.6; } .lsv-ah.lin { fill: var(--border-strong); }
+.lsv-ar.lin.bad { stroke: var(--bad); stroke-width: 2.2; } .lsv-ah.lin.bad { fill: var(--bad); }
+.lsv-ar.lin.warn { stroke: var(--warn); stroke-width: 2; } .lsv-ah.lin.warn { fill: var(--warn); }
+.lsv-ar.lin.cut { stroke: var(--text-muted); stroke-dasharray: 4 4; } .lsv-ah.lin.cut { fill: var(--text-muted); }
+.lsv-impact { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+.lsv-impact li { display: flex; gap: 8px; align-items: baseline; font-size: 12.5px; line-height: 1.45; color: var(--text-2); }
+.lsv-impact li.new { animation: lsvFade .4s ease; }
+.lsv-impact li.mut { color: var(--text-muted); }
+.lsv-chip2 { flex: none; font: 600 12px var(--f-mono); padding: 1px 7px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-2); background: var(--surface-2); white-space: nowrap; }
+.lsv-chip2.ok { color: var(--ok); border-color: var(--ok); background: var(--ok-soft); }
+.lsv-chip2.warn { color: var(--warn); border-color: var(--warn); background: var(--warn-soft); }
+.lsv-chip2.bad { color: var(--bad); border-color: var(--bad); background: var(--bad-soft); }
+.lsv-chip2.stop { color: var(--info); border-color: var(--info); background: var(--info-soft); }
+.lsv-chip2.stale { color: var(--text-muted); }
+.lsv-table caption { caption-side: top; text-align: left; padding: 7px 9px; font-size: 12.5px; font-weight: 600; color: var(--text); }
+.lsv-table tbody th.wrap, .lsv-tablewrap .lsv-table tbody th { white-space: normal; }
+.lsv-card b.bad { color: var(--bad); } .lsv-card b.ok { color: var(--ok); }
+.lsv-table.txt td, .lsv-table.txt tbody th { font-family: var(--f-body); font-size: 12.5px; }
+.lsv-fi:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+/* ===== поток событий: конец ===== */
 .pred-pop { position: fixed; z-index: 60; width: 300px; display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border-strong); box-shadow: var(--shadow); font-size: 12.5px; line-height: 1.45; color: var(--text-2); animation: chgIn .2s ease-out; }
 .pred-pop[hidden] { display: none; }
 .pred-pop b { color: var(--text); font-size: 13.5px; }
@@ -3704,6 +3960,209 @@ html.calm .lf-spin, html.calm .lf-fly, html.calm .lf-ctab tr.fresh > *, html.cal
 .xr-legend .xr-sw.xcd-sw0 { background: var(--k-read); }
 .xr-legend .xr-sw.xcd-sws { background: var(--k-job); border: 2px solid var(--bad); }
 
+/* ---------- «Поисковый движок изнутри» (xray-search.js, xse-) ---------- */
+.xse-dyn { pointer-events: none; }
+.xse-badge { fill: var(--surface-2); stroke: var(--border-strong); stroke-width: 1.2; }
+.xse-pf { fill: transparent; stroke: transparent; stroke-width: 1.2; }
+.xse-go { fill: var(--accent); }
+.xse-ok { fill: var(--ok); font-weight: 700; } .xse-warn { fill: var(--warn); font-weight: 700; } .xse-bad { fill: var(--bad); font-weight: 700; } .xse-acc { fill: var(--accent); font-weight: 700; }
+.xse-vt { font: 700 15px var(--f-body); fill: var(--text); }
+.xse-qt { font: 600 14px var(--f-body); fill: var(--text); }
+.xse-tt { font: 600 max(11px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-body); fill: var(--text); }
+.xse-hit { fill: var(--accent); font-weight: 700; }
+.xse-ms { font: 500 max(10.5px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-body); fill: var(--text-muted); }
+.xse-fn { font: 600 max(10.5px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-mono); fill: var(--text); }
+.xse-fn.dim { fill: var(--text-2); font-weight: 500; }
+.xse-pn { font: 600 max(10px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-mono); fill: var(--text); pointer-events: none; }
+.xse-pn2 { font: 500 max(10px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-mono); fill: var(--text-2); }
+.xse-mono { font: 500 max(10.5px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-mono); fill: var(--text-2); white-space: pre; font-variant-ligatures: none; }
+.xse-mono.on { fill: var(--accent); font-weight: 700; }
+.xse-codebg { fill: var(--code-bg); stroke: var(--border); stroke-width: 1; }
+.xse-code { font: 500 max(11px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-mono); fill: var(--text); white-space: pre; font-variant-ligatures: none; }
+.xse-code.sm { font-size: max(10.5px, calc(var(--fsmin, 0px) / var(--sc, 1))); }
+.xse-kw { fill: var(--tok-k); font-weight: 700; } .xse-st { fill: var(--tok-s); } .xse-nu { fill: var(--tok-n); } .xse-cm { fill: var(--text-muted); font-style: italic; }
+/* запрос, индекс, выдача */
+.xse-qbox { fill: var(--surface-2); stroke: var(--k-search); stroke-width: 1.6; }
+.xse-qrow { fill: var(--accent-soft); stroke: none; }
+.xse-post { fill: var(--surface-2); stroke: var(--border-strong); stroke-width: 1; }
+.xse-post.hit { fill: var(--ok-soft); stroke: var(--ok); stroke-width: 1.8; }
+.xse-post.seen { stroke: var(--info); }
+.xse-new { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.4; }
+.xse-sep { stroke: var(--border); stroke-width: 1; }
+/* кластер */
+.xr-box.xse-hyellow { stroke: var(--warn); stroke-width: 1.8; } .xr-box.xse-hred { stroke: var(--bad); stroke-width: 2; }
+.xse-node { fill: var(--surface-2); stroke: var(--border-strong); stroke-width: 1.2; }
+.xse-node.dead { fill: var(--bad-soft); stroke: var(--bad); stroke-dasharray: 4 3; }
+.xse-shard { stroke-width: 1.2; }
+.xse-shard.p { fill: color-mix(in srgb, var(--k-search) 22%, var(--surface)); stroke: var(--k-search); }
+.xse-shard.r { fill: var(--surface); stroke: var(--k-search); stroke-dasharray: 4 3; }
+.xse-shard.dead { opacity: .35; }
+.xse-fan { stroke: var(--border-strong); stroke-width: 1.2; stroke-dasharray: 3 4; }
+/* синхронизация и refresh */
+.xse-step { fill: var(--surface-2); stroke: var(--border-strong); stroke-width: 1.1; }
+.xse-step.on { fill: var(--accent-soft); stroke: var(--accent); }
+.xse-step.bad { fill: var(--bad-soft); stroke: var(--bad); stroke-width: 1.8; }
+.xse-bufd { fill: var(--warn-soft); stroke: var(--warn); stroke-dasharray: 3 2; }
+.xse-ringbg { fill: none; stroke: var(--surface-3); stroke-width: 4; }
+.xse-ring { fill: none; stroke: var(--accent); stroke-width: 4; stroke-linecap: round; }
+.xse-seg { fill: var(--surface-3); stroke: var(--border-strong); }
+.xse-seg.fl { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 2; }
+.xse-tok { fill: var(--surface-2); stroke: var(--border-strong); }
+.xse-tok.stop { opacity: .4; stroke-dasharray: 3 2; }
+.xse-tok.st { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.6; }
+/* кнопки */
+.xse-btn { cursor: pointer; outline: none; }
+.xse-btn rect { fill: var(--surface-2); stroke: var(--border-strong); stroke-width: 1.2; }
+.xse-btn.on rect { fill: var(--accent-soft); stroke: var(--accent); }
+.xse-btn text { font: 600 max(10.5px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-body); fill: var(--text-2); text-anchor: middle; }
+.xse-btn.on text { fill: var(--accent); }
+.xse-btn:hover rect, .xse-btn:focus-visible rect { stroke: var(--accent); stroke-width: 2; }
+/* блоки изнутри */
+.xse-backb { fill: var(--surface-2); stroke: var(--border-strong); }
+.xse-back { fill: var(--accent); font-weight: 600; }
+.xse-panel { fill: var(--surface); stroke: var(--border); stroke-width: 1.2; }
+.xse-panel.on { stroke: var(--accent); stroke-width: 1.8; }
+.xse-panel.okb { stroke: var(--ok); stroke-width: 1.6; } .xse-panel.badb { stroke: var(--bad); stroke-width: 1.8; } .xse-panel.warn { stroke: var(--warn); stroke-width: 1.8; }
+.xse-ar { stroke: var(--text-muted); stroke-width: 1.6; fill: none; } .xse-ah { fill: var(--text-muted); }
+.xse-ar.acc { stroke: var(--accent); stroke-width: 2; } .xse-ah.acc { fill: var(--accent); }
+.xse-ar.bad { stroke: var(--bad); stroke-dasharray: 4 3; } .xse-ah.bad { fill: var(--bad); }
+/* легенда */
+.xr-legend .xr-sw.xse-swq { background: var(--accent-soft); border: 1.5px solid var(--accent); }
+.xr-legend .xr-sw.xse-swh { background: var(--ok-soft); border: 1.5px solid var(--ok); }
+.xr-legend .xr-sw.xse-swb { background: var(--warn-soft); border: 1.5px dashed var(--warn); }
+
+/* ---------- «API Gateway изнутри» (xray-gateway.js, xgw-) ---------- */
+.xgw-dyn { pointer-events: none; }
+.xgw-badge { fill: var(--surface-2); stroke: var(--border-strong); stroke-width: 1.2; }
+.xgw-go { fill: var(--accent); }
+.xgw-ok { fill: var(--ok); font-weight: 700; } .xgw-warn { fill: var(--warn); font-weight: 700; } .xgw-bad { fill: var(--bad); font-weight: 700; } .xgw-acc { fill: var(--accent); font-weight: 700; }
+.xgw-vt { font: 700 15px var(--f-body); fill: var(--text); }
+.xgw-nh { font-size: 12px; }
+.xgw-ms { font: 500 max(10.5px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-body); fill: var(--text-muted); }
+.xgw-fn { font: 600 max(10.5px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-mono); fill: var(--text); }
+.xgw-pn { font: 600 max(10px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-mono); fill: var(--text-2); }
+.xgw-mono { font: 500 max(10px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-mono); fill: var(--text-2); white-space: pre; font-variant-ligatures: none; }
+.xgw-mono.on { fill: var(--accent); font-weight: 700; } .xgw-mono.ok { fill: var(--ok); font-weight: 700; } .xgw-mono.warn { fill: var(--warn); font-weight: 700; } .xgw-mono.bad { fill: var(--bad); font-weight: 700; }
+.xgw-codebg { fill: var(--code-bg); stroke: var(--border); stroke-width: 1; }
+.xgw-codebg.bad { stroke: var(--bad); stroke-width: 1.6; }
+.xgw-code { font: 500 max(11px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-mono); fill: var(--text); white-space: pre; font-variant-ligatures: none; }
+.xgw-code.sm { font-size: max(10.5px, calc(var(--fsmin, 0px) / var(--sc, 1))); }
+.xgw-kw { fill: var(--tok-k); font-weight: 700; } .xgw-st { fill: var(--tok-s); } .xgw-nu { fill: var(--tok-n); } .xgw-cm { fill: var(--text-muted); font-style: italic; }
+/* клиенты и ведро жетонов */
+.xr-box.xgw-botbox { stroke: var(--k-bot); stroke-width: 1.8; stroke-dasharray: 5 3; }
+.xgw-tok { fill: var(--surface-3); stroke: var(--border-strong); stroke-width: 1; }
+.xgw-tok.on { fill: var(--k-job); stroke: var(--k-job); }
+.xgw-tok.off { opacity: .35; stroke-dasharray: 2 2; }
+/* шлюз */
+.xgw-copy { fill: var(--surface); stroke: var(--border-strong); stroke-dasharray: 3 3; }
+.xgw-stage { fill: var(--surface); stroke: var(--border-strong); stroke-width: 1.4; }
+.xgw-stage.off { opacity: .55; stroke-dasharray: 4 3; }
+.xgw-stage.rej { stroke: var(--warn); stroke-width: 2.2; }
+.xgw-trbar { fill: var(--surface); stroke: var(--border); stroke-dasharray: 4 3; }
+.xgw-wait { fill: none; stroke: var(--warn); stroke-width: 1.8; stroke-dasharray: 2 2; }
+.xgw-lamp { stroke: var(--bg); stroke-width: 2; }
+.xgw-lamp.closed { fill: var(--ok); } .xgw-lamp.open { fill: var(--bad); } .xgw-lamp.half { fill: var(--warn); } .xgw-lamp.none { fill: var(--surface-3); stroke: var(--border-strong); stroke-dasharray: 2 2; }
+.xgw-krow { fill: var(--accent-soft); stroke: none; }
+.xgw-sep { stroke: var(--border); stroke-width: 1; }
+/* кнопки */
+.xgw-btn { cursor: pointer; outline: none; }
+.xgw-btn rect { fill: var(--surface-2); stroke: var(--border-strong); stroke-width: 1.2; }
+.xgw-btn.on rect { fill: var(--accent-soft); stroke: var(--accent); }
+.xgw-btn text { font: 600 max(10.5px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-body); fill: var(--text-2); text-anchor: middle; }
+.xgw-btn.on text { fill: var(--accent); }
+.xgw-btn:hover rect, .xgw-btn:focus-visible rect { stroke: var(--accent); stroke-width: 2; }
+/* блоки изнутри */
+.xgw-backb { fill: var(--surface-2); stroke: var(--border-strong); }
+.xgw-back { fill: var(--accent); font-weight: 600; }
+.xgw-panel { fill: var(--surface); stroke: var(--border); stroke-width: 1.2; }
+.xgw-panel.on { stroke: var(--accent); stroke-width: 1.8; }
+.xgw-panel.okb { stroke: var(--ok); stroke-width: 1.6; } .xgw-panel.badb { stroke: var(--bad); stroke-width: 1.8; }
+.xgw-panel.j1, .xgw-j1 { stroke: var(--k-search); } .xgw-panel.j2 { stroke: var(--k-write); } .xgw-panel.j3 { stroke: var(--k-static); }
+.xgw-j1 { fill: var(--k-search); stroke: none; } .xgw-j2 { fill: var(--k-write); } .xgw-j3 { fill: var(--k-static); }
+.xgw-ar { stroke: var(--text-muted); stroke-width: 1.6; fill: none; } .xgw-ah { fill: var(--text-muted); }
+.xgw-tick { stroke: var(--border); stroke-width: 1; stroke-dasharray: 2 4; }
+.xgw-hit.ok { fill: var(--ok); } .xgw-hit.no { fill: var(--warn); }
+.xgw-burst { fill: none; stroke: var(--warn); stroke-width: 2; stroke-dasharray: 4 3; }
+.xgw-span { fill: var(--surface-3); }
+.xgw-span.c { fill: var(--k-read); } .xgw-span.o { fill: var(--k-write); } .xgw-span.u { fill: var(--k-static); } .xgw-span.p { fill: var(--k-job); } .xgw-span.g { fill: var(--accent); }
+.xgw-span.hot { fill: var(--warn); }
+.xgw-call { fill: var(--surface-3); }
+.xgw-call.hang { fill: var(--text-muted); opacity: .6; } .xgw-call.to { fill: var(--warn); } .xgw-call.fast { fill: var(--bad); } .xgw-call.ok { fill: var(--ok); }
+.xgw-mark { fill: var(--ok); }
+/* легенда */
+.xr-legend .xr-sw.xgw-swb { background: var(--k-bot); }
+.xr-legend .xr-sw.xgw-swt { background: var(--k-job); }
+.xr-legend .xr-sw.xgw-swc { background: var(--bad); border: 2px solid var(--bg); }
+
+/* ---------- «Realtime-шлюз изнутри» (xray-ws.js, xwz-) ---------- */
+.xwz-dyn { pointer-events: none; }
+.xwz-badge { fill: var(--surface-2); stroke: var(--border-strong); stroke-width: 1.2; }
+.xwz-go { fill: var(--accent); }
+.xwz-ok { fill: var(--ok); font-weight: 700; } .xwz-warn { fill: var(--warn); font-weight: 700; } .xwz-bad { fill: var(--bad); font-weight: 700; } .xwz-acc { fill: var(--accent); font-weight: 700; }
+.xwz-vt { font: 700 15px var(--f-body); fill: var(--text); }
+.xwz-ms { font: 500 max(10.5px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-body); fill: var(--text-muted); }
+.xwz-fn { font: 600 max(10.5px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-mono); fill: var(--text); }
+.xwz-fn.dim { fill: var(--text-muted); }
+.xwz-pn { font: 600 max(10px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-mono); fill: var(--text-2); }
+.xwz-nm { font: 600 max(9.5px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-body); fill: var(--text-2); }
+.xwz-nm.off { fill: var(--text-muted); opacity: .6; }
+.xwz-mono { font: 500 max(10.5px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-mono); fill: var(--text); white-space: pre; font-variant-ligatures: none; }
+.xwz-mono.on { fill: var(--accent); font-weight: 700; } .xwz-mono.dim { fill: var(--text-muted); font-style: italic; }
+.xwz-vtext { font: 600 max(10.5px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-body); fill: var(--text-2); }
+/* клиенты */
+.xwz-phone { fill: var(--surface); stroke: var(--border-strong); stroke-width: 2; }
+.xwz-phone.off { stroke: var(--text-muted); stroke-dasharray: 2 2; opacity: .55; }
+.xwz-phone.tun { stroke-dasharray: 3 2; }
+.xwz-flash { fill: none; stroke: var(--ok); stroke-width: 2; opacity: .7; }
+/* экземпляры */
+.xwz-inst { fill: var(--surface); stroke: var(--border-strong); stroke-width: 1.2; }
+.xwz-inst.down { fill: var(--bad-soft); stroke: var(--bad); stroke-width: 1.8; stroke-dasharray: 5 3; }
+.xwz-inst.over { stroke: var(--bad); stroke-width: 2; }
+.xwz-inst.drain { stroke: var(--warn); stroke-width: 1.8; stroke-dasharray: 4 3; }
+/* брокер и чат */
+.xwz-sub { fill: var(--surface-2); stroke: var(--border-strong); stroke-width: 1; }
+.xwz-krow { fill: var(--accent-soft); stroke: none; }
+.xwz-resume { fill: var(--ok-soft); stroke: var(--ok); stroke-width: 1.4; }
+/* heartbeat */
+.xwz-hbl { stroke: var(--border-strong); stroke-width: 1.2; stroke-dasharray: 3 3; }
+.xwz-tickl { stroke: var(--accent); stroke-width: 1.6; }
+.xwz-tickl.ok { stroke: var(--ok); }
+.xwz-close { fill: var(--bad-soft); stroke: var(--bad); stroke-width: 1.4; }
+.xwz-tunnel { fill: var(--warn-soft); stroke: var(--warn); stroke-width: 1; stroke-dasharray: 3 2; }
+/* блоки изнутри */
+.xwz-backb { fill: var(--surface-2); stroke: var(--border-strong); }
+.xwz-back { fill: var(--accent); font-weight: 600; }
+.xwz-panel { fill: var(--surface); stroke: var(--border); stroke-width: 1.2; }
+.xwz-panel.on { stroke: var(--accent); stroke-width: 1.8; }
+.xwz-panel.badb { stroke: var(--bad); stroke-width: 1.8; }
+.xwz-codebg { fill: var(--code-bg); stroke: var(--border); stroke-width: 1; }
+.xwz-life { stroke: var(--border-strong); stroke-width: 1.2; stroke-dasharray: 4 4; }
+.xwz-ar { stroke: var(--text-muted); stroke-width: 1.6; fill: none; } .xwz-ah { fill: var(--text-muted); }
+.xwz-ar.ok { stroke: var(--ok); } .xwz-ah.ok { fill: var(--ok); }
+.xwz-ar.acc { stroke: var(--accent); } .xwz-ah.acc { fill: var(--accent); }
+.xwz-ar.fut, .xwz-ah.fut { opacity: .25; }
+.xwz-sl { font: 500 max(10px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-mono); fill: var(--text-2); white-space: pre; font-variant-ligatures: none; }
+.xwz-sl.now { fill: var(--text); font-weight: 700; }
+.xwz-sl.fut { opacity: .3; }
+.xwz-sl.xwz-ok { fill: var(--ok); } .xwz-sl.xwz-acc { fill: var(--accent); }
+.xwz-subl { stroke: var(--border-strong); stroke-width: 1.2; stroke-dasharray: 3 3; }
+.xwz-fanl { stroke: var(--ok); stroke-width: 1.2; opacity: .5; }
+.xwz-mem { fill: var(--surface-2); stroke: var(--border-strong); stroke-width: 1; }
+.xwz-mem.src { fill: color-mix(in srgb, var(--k-msg) 22%, var(--surface)); stroke: var(--k-msg); stroke-width: 1.6; }
+.xwz-mem.got { fill: var(--ok-soft); stroke: var(--ok); stroke-width: 1.6; }
+.xwz-rc { fill: var(--surface-3); }
+.xwz-rc.ok { fill: var(--ok); } .xwz-rc.bad { fill: var(--bad); }
+.xwz-bar { fill: var(--k-msg); opacity: .85; }
+.xwz-bar.hl { fill: var(--warn); }
+.xwz-capl { stroke: var(--bad); stroke-width: 1.4; stroke-dasharray: 6 4; }
+.xwz-slot { fill: var(--surface-2); stroke: var(--border); stroke-width: 1; }
+.xwz-fill { fill: var(--ok); }
+.xwz-fill.warn { fill: var(--warn); } .xwz-fill.over { fill: var(--bad); }
+/* легенда */
+.xr-legend .xr-sw.xwz-swc { background: var(--surface); border: 2px solid var(--k-read); }
+.xr-legend .xr-sw.xwz-swm { background: var(--k-msg); }
+.xr-legend .xr-sw.xwz-swh { background: var(--accent); width: 8px; height: 8px; }
+
 /* ===== сцены изнутри: конец ===== */
 /* ---------- живой разбор ---------- */
 .lv-card { padding: 12px 14px; border-radius: var(--r); border: 1px solid var(--border); background: var(--surface-2); display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; font-size: 13px; }
@@ -3989,6 +4448,9 @@ html.calm .lf-spin, html.calm .lf-fly, html.calm .lf-ctab tr.fresh > *, html.cal
 <script src="js/xray-nosql.js"></script>
 <script src="js/xray-objstore.js"></script>
 <script src="js/xray-cdn.js"></script>
+<script src="js/xray-search.js"></script>
+<script src="js/xray-gateway.js"></script>
+<script src="js/xray-ws.js"></script>
 <script src="js/arch-lens.js"></script>
 <script src="js/ops-console.js"></script>
 <script src="js/ops-ui.js"></script>
@@ -4015,6 +4477,7 @@ html.calm .lf-spin, html.calm .lf-fly, html.calm .lf-ctab tr.fresh > *, html.cal
 <script src="js/lab-deploy.js"></script>
 <script src="js/lab-slo.js"></script>
 <script src="js/lab-front.js"></script>
+<script src="js/lab-stream.js"></script>
 <script src="js/xray-sqldata.js"></script>
 <script src="js/free.js"></script>
 <script src="js/share.js"></script>
