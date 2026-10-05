@@ -17,7 +17,7 @@
     { id: 'tx', name: 'Транзакции и согласованность', an: 'Два кассира и последнее место', items: ['booking', 'pay', 'ledger', 'p-isolation', 'p-saga', 'f-dualwrite', 'lab:quorum', 'lab:raft', 'lab:snowflake'] },
     { id: 'async', name: 'Очереди и асинхронность', an: 'Почта: отправил и занимаешься своим', items: ['email', 'order', 'p-outbox', 'p-dlq', 'p-workers', 'k-acks', 'k-batch', 'a-notify', 'a-events', 'i-outbox', 'i-consumer'] },
     { id: 'rel', name: 'Надёжность и отказоустойчивость', an: 'Запасной выход и предохранители', items: ['cascade', 'p-resilience', 'p-retry', 'p-ratelimit', 'f-retrystorm', 'f-spof', 'f-notimeout', 'k-health', 'k-rl', 'c-az', 'lab:resil', 'lab:bucket'] },
-    { id: 'arch', name: 'Архитектура и границы сервисов', an: 'Цеха завода и проходные между ними', items: ['micro', 'legacy', 'ddd', 'a-dbper', 'a-gateway', 'a-split', 'f-shareddb', 'f-distmono', 'i-layers', 'i-ports', 'i-modular', 'i-nplus1'] },
+    { id: 'arch', name: 'Архитектура и границы сервисов', an: 'Цеха завода и проходные между ними', items: ['lab:nfr', 'micro', 'legacy', 'ddd', 'a-dbper', 'a-gateway', 'a-split', 'f-shareddb', 'f-distmono', 'i-layers', 'i-ports', 'i-modular', 'i-nplus1'] },
     { id: 'ops', name: 'Наблюдаемость и эксплуатация', an: 'Приборная панель и дежурный', items: ['monitoring', 'o-metrics', 'o-alerts', 'o-logs', 'o-traces', 'o-k8s', 'lab:deploy', 'lab:slo'] },
     { id: 'data', name: 'Данные и аналитика', an: 'Склад отчётов отдельно от магазина', items: ['analytics', 'd-reports', 'd-clicks', 'd-columns', 'd-lake', 'f-oltpreports'] },
     { id: 'cloud', name: 'Облако и стоимость', an: 'Аренда вместо своего здания', items: ['c-az', 'c-spot', 'c-storage', 'c-serverless', 'photos', 'video', 'p-cdn', 'p-presigned'] },

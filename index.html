@@ -1844,6 +1844,23 @@ html.calm .lt *, html.calm .lt *::before, html.calm .lt *::after { animation-del
 .inc-card { margin-top: 10px; border: 1px solid var(--warn); border-radius: 10px; padding: 8px 10px; background: var(--surface-2); font-size: 13px; color: var(--text-2); line-height: 1.55; }
 .inc-card > summary { cursor: pointer; display: flex; flex-direction: column; gap: 2px; } .inc-card > summary span { font: 600 11px var(--f-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--warn); } .inc-card > summary b { color: var(--text); font-size: 13px; }
 .inc-card p { margin: 6px 0 0; } .inc-l b { color: var(--text); } .inc-card small { display: block; margin-top: 6px; font-size: 12px; color: var(--text-muted); }
+/* ---------- от требований к архитектуре ---------- */
+.nf-wrap { display: grid; grid-template-columns: minmax(280px, 380px) minmax(0, 1fr); gap: 14px; }
+@media (max-width: 1000px) { .nf-wrap { grid-template-columns: 1fr; } }
+.nf-req, .nf-out { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.nf-req h4, .nf-out h4 { margin: 0; }
+.nf-q { display: flex; flex-direction: column; gap: 4px; } .nf-q b { font-size: 13px; color: var(--text); } .nf-q small { font-size: 12px; color: var(--text-muted); line-height: 1.4; }
+.nf-q .seg { flex-wrap: wrap; } .nf-q .seg button { font-size: 12.5px; padding: 4px 9px; }
+.nf-budget { margin: 0; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--warn); font-size: 13px; color: var(--text-2); } .nf-budget b { color: var(--text); }
+.nf-lvl { margin: 0; font-size: 12px; color: var(--text-muted); }
+.nf-area { display: flex; flex-direction: column; gap: 6px; } .nf-area > b { font: 600 11px var(--f-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted); }
+.nf-d { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 8px; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface-2); font-size: 13px; color: var(--text-2); line-height: 1.45; }
+.nf-d.ok { border-color: var(--ok); } .nf-d.bad { border-color: var(--bad); }
+.nf-st { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font: 700 12px var(--f-mono); border: 1.5px solid var(--border-strong); color: var(--text-muted); }
+.nf-d.ok .nf-st { background: var(--ok); border-color: var(--ok); color: var(--bg); } .nf-d.bad .nf-st { border-color: var(--bad); color: var(--bad); }
+.nf-d b { color: var(--text); } .nf-d p { margin: 2px 0 0; } .nf-d small { display: block; margin-top: 3px; font-size: 12px; color: var(--text-muted); }
+.nf-d.bad small { color: var(--bad); } .nf-d.ok small { color: var(--ok); }
+.nf-sum { margin: 0; font: 600 12.5px var(--f-mono); color: var(--text-2); }
 .pred-pop { position: fixed; z-index: 60; width: 300px; display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border-strong); box-shadow: var(--shadow); font-size: 12.5px; line-height: 1.45; color: var(--text-2); animation: chgIn .2s ease-out; }
 .pred-pop[hidden] { display: none; }
 .pred-pop b { color: var(--text); font-size: 13.5px; }
@@ -3283,6 +3300,7 @@ html.calm .lt *, html.calm .lt *::before, html.calm .lt *::after { animation-del
 <script src="js/daily.js"></script>
 <script src="js/calc.js"></script>
 <script src="js/lab-table.js"></script>
+<script src="js/lab-nfr.js"></script>
 <script src="js/xray-sqldata.js"></script>
 <script src="js/free.js"></script>
 <script src="js/share.js"></script>
