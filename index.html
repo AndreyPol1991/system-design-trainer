@@ -4765,6 +4765,220 @@ html.calm .lc2 *, html.calm .lc2 *::before, html.calm .lc2 *::after { animation:
 .xr-legend .xr-sw.xwz-swm { background: var(--k-msg); }
 .xr-legend .xr-sw.xwz-swh { background: var(--accent); width: 8px; height: 8px; }
 
+/* ---------- «LLM изнутри» (xray-llm.js, xlm-) ---------- */
+/* текст в сцене не меньше 12 px на экране: свой минимум поверх общего --fsmin (10/12 px) */
+#xlmSt, #xlmDy { --fsmin: 12px; }
+.xlm-dyn { pointer-events: none; }
+.xlm-badge { fill: var(--surface-2); stroke: var(--border-strong); stroke-width: 1.2; }
+.xlm-go { fill: var(--accent); }
+.xlm-ok { fill: var(--ok); font-weight: 700; } .xlm-warn { fill: var(--warn); font-weight: 700; } .xlm-bad { fill: var(--bad); font-weight: 700; } .xlm-acc { fill: var(--accent); font-weight: 700; }
+.xlm-vt { font: 700 15px var(--f-body); fill: var(--text); }
+.xlm-big { font: 600 15px var(--f-body); fill: var(--text); }
+.xlm-qt { font-size: 12.5px; }
+.xlm-ms { font: 500 max(10.5px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-body); fill: var(--text-muted); }
+.xlm-fn { font: 600 max(10.5px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-mono); fill: var(--text); }
+.xlm-fn.dim { fill: var(--text-muted); font-weight: 500; }
+.xlm-pn { font: 600 max(10px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-mono); fill: var(--text-2); }
+.xlm-ans { font: 500 max(11px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-body); fill: var(--text); }
+.xlm-mono { font: 500 max(10.5px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-mono); fill: var(--text); white-space: pre; font-variant-ligatures: none; }
+.xlm-mono.on { fill: var(--accent); font-weight: 700; } .xlm-mono.dim { fill: var(--text-muted); }
+/* токены */
+.xlm-tok { stroke-width: 1.2; }
+.xlm-tok.t0 { fill: color-mix(in srgb, var(--k-read) 22%, var(--surface)); stroke: var(--k-read); }
+.xlm-tok.t1 { fill: color-mix(in srgb, var(--k-write) 22%, var(--surface)); stroke: var(--k-write); }
+.xlm-tok.t2 { fill: color-mix(in srgb, var(--k-upload) 22%, var(--surface)); stroke: var(--k-upload); }
+.xlm-tok.t3 { fill: color-mix(in srgb, var(--k-search) 22%, var(--surface)); stroke: var(--k-search); }
+.xlm-tt { font: 600 max(10px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-mono); fill: var(--text); white-space: pre; font-variant-ligatures: none; }
+.xlm-tt.big { font-size: max(12px, calc(var(--fsmin, 0px) / var(--sc, 1))); }
+/* конвейер и окно */
+.xlm-row { fill: var(--surface); stroke: var(--border); stroke-width: 1; stroke-dasharray: 3 3; }
+.xlm-row.on { stroke: var(--border-strong); stroke-dasharray: none; }
+.xlm-seg { stroke: var(--bg); stroke-width: 1; }
+.xlm-seg.res { opacity: .45; stroke-dasharray: 3 2; }
+/* генерация */
+.xlm-pre { fill: color-mix(in srgb, var(--accent) 30%, var(--surface)); stroke: var(--accent); stroke-width: 1.2; }
+.xlm-decb { fill: var(--surface-2); stroke: var(--border-strong); stroke-width: 1; }
+.xlm-tick { stroke: var(--k-write); stroke-width: 2; }
+.xlm-now { stroke: var(--text); stroke-width: 1.6; stroke-dasharray: 3 2; }
+.xlm-bubble { fill: var(--surface-2); stroke: var(--border); stroke-width: 1; }
+.xlm-bubble.bad { stroke: var(--bad); stroke-width: 1.8; fill: var(--bad-soft); }
+.xlm-flash { fill: none; stroke: var(--ok); stroke-width: 2; }
+.xlm-flash.bad { stroke: var(--bad); }
+/* GPU */
+.xlm-panel { fill: var(--surface); stroke: var(--border); stroke-width: 1.2; }
+.xlm-panel.on { stroke: var(--accent); stroke-width: 1.8; }
+.xlm-panel.badb { stroke: var(--bad); stroke-width: 1.8; }
+.xlm-queue { fill: var(--surface); stroke: var(--border-strong); stroke-width: 1; }
+.xlm-queue.hot { stroke: var(--warn); stroke-width: 2; }
+.xlm-rep { fill: var(--surface); stroke: var(--border-strong); stroke-width: 1.2; }
+.xlm-slot { fill: var(--surface-3); stroke: var(--border); stroke-width: 1; }
+.xlm-slot.off { fill: none; stroke-dasharray: 2 2; opacity: .5; }
+.xlm-slotf { fill: var(--k-write); }
+.xlm-slotf.pre { fill: var(--accent); }
+.xlm-kvf { fill: var(--k-job); }
+.xlm-kvf.hot { fill: var(--warn); }
+/* блоки изнутри */
+.xlm-backb { fill: var(--surface-2); stroke: var(--border-strong); }
+.xlm-back { fill: var(--accent); font-weight: 600; }
+.xlm-codebg { fill: var(--code-bg); stroke: var(--border); stroke-width: 1; }
+.xlm-capl { stroke: var(--bad); stroke-width: 1.6; stroke-dasharray: 6 4; }
+.xlm-cell { fill: var(--surface-2); stroke: var(--border); stroke-width: .8; }
+.xlm-cell.on { fill: var(--accent); stroke: none; }
+.xlm-cellr.r0, .xlm-kvp.r0 { fill: var(--k-read); } .xlm-cellr.r1, .xlm-kvp.r1 { fill: var(--k-write); } .xlm-cellr.r2, .xlm-kvp.r2 { fill: var(--k-upload); }
+.xlm-cellr.r3, .xlm-kvp.r3 { fill: var(--k-search); } .xlm-cellr.r4, .xlm-kvp.r4 { fill: var(--k-static); } .xlm-cellr.r5, .xlm-kvp.r5 { fill: var(--k-msg); }
+.xlm-cl { font: 700 max(10px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-mono); fill: var(--bg); }
+.xlm-weights { fill: var(--surface-3); stroke: var(--border-strong); stroke-width: 1; }
+.xlm-pbar { fill: var(--accent); }
+.xlm-pbar.odd { fill: var(--warn); } .xlm-pbar.dim { opacity: .45; }
+.xlm-draw { fill: var(--surface-2); stroke: var(--border-strong); stroke-width: 1; }
+.xlm-draw.odd { fill: var(--warn-soft); stroke: var(--warn); stroke-width: 1.6; }
+/* кнопки */
+.xlm-btn { cursor: pointer; outline: none; }
+.xlm-btn rect { fill: var(--surface-2); stroke: var(--border-strong); stroke-width: 1.2; }
+.xlm-btn.on rect { fill: var(--accent-soft); stroke: var(--accent); }
+.xlm-btn text { font: 600 max(10.5px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-body); fill: var(--text-2); text-anchor: middle; }
+.xlm-btn.on text { fill: var(--accent); }
+.xlm-btn:hover rect, .xlm-btn:focus-visible rect { stroke: var(--accent); stroke-width: 2; }
+/* легенда */
+.xr-legend .xr-sw.xlm-swq { background: var(--k-chat); }
+.xr-legend .xr-sw.xlm-swt { background: var(--k-write); }
+.xr-legend .xr-sw.xlm-swk { background: var(--k-job); }
+
+/* ---------- «Векторная БД и RAG изнутри» (xray-vectordb.js, xvd-) ---------- */
+/* текст в сцене не меньше 12 px на экране: свой минимум поверх общего --fsmin (10/12 px) */
+#xvdSt, #xvdDy { --fsmin: 12px; }
+.xvd-dyn { pointer-events: none; }
+.xvd-badge { fill: var(--surface-2); stroke: var(--border-strong); stroke-width: 1.2; }
+.xvd-badge.bad { stroke: var(--bad); stroke-width: 1.8; }
+.xvd-go { fill: var(--accent); }
+.xvd-ok { fill: var(--ok); font-weight: 700; } .xvd-warn { fill: var(--warn); font-weight: 700; } .xvd-bad { fill: var(--bad); font-weight: 700; } .xvd-acc { fill: var(--accent); font-weight: 700; }
+.xvd-vt { font: 700 15px var(--f-body); fill: var(--text); }
+.xvd-qt { font-size: 12.5px; }
+.xvd-ms { font: 500 max(10.5px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-body); fill: var(--text-muted); }
+.xvd-fn { font: 600 max(10.5px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-mono); fill: var(--text); }
+.xvd-pn { font: 600 max(10px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-mono); fill: var(--text-2); }
+.xvd-ct { font: 500 max(9.5px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-body); fill: var(--text); }
+.xvd-ct.dim { fill: var(--text-muted); }
+.xvd-cl { font: 700 max(10px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-body); fill: var(--text-2); paint-order: stroke; stroke: var(--bg); stroke-width: 3px; }
+.xvd-ans { font: 500 max(11px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-body); fill: var(--text); }
+.xvd-mono { font: 500 max(10.5px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-mono); fill: var(--text); white-space: pre; font-variant-ligatures: none; }
+.xvd-mono.on { fill: var(--accent); font-weight: 700; } .xvd-mono.dim { fill: var(--text-muted); } .xvd-mono.bad { fill: var(--bad); }
+/* документы */
+.xvd-chip { fill: var(--surface); stroke: var(--border); stroke-width: 1; }
+.xvd-chip.hot { stroke: var(--ok); stroke-width: 1.8; fill: var(--ok-soft); }
+.xvd-chip.old { stroke: var(--bad); stroke-dasharray: 3 2; fill: var(--bad-soft); }
+.xvd-chip.fresh { stroke: var(--ok); }
+/* карта */
+.xvd-bg { fill: var(--text-muted); opacity: .35; }
+.xvd-pt { stroke: var(--bg); stroke-width: 1.5; }
+.xvd-pt.top { stroke: var(--ok); stroke-width: 3; }
+.xvd-pt.low { stroke: var(--bad); stroke-width: 2.5; stroke-dasharray: 2 2; }
+.xvd-pt.old { stroke: var(--bad); stroke-width: 2.5; stroke-dasharray: 3 2; }
+.xvd-star { fill: var(--k-chat); stroke: var(--bg); stroke-width: 1.5; }
+.xvd-star.off { fill: var(--warn); }
+.xvd-star.dim { fill: none; stroke: var(--warn); stroke-width: 1.6; }
+.xvd-knn { stroke: var(--ok); stroke-width: 1.8; }
+.xvd-knn.low { stroke: var(--bad); stroke-dasharray: 4 3; }
+.xvd-sim { font: 700 max(10px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-mono); fill: var(--ok); paint-order: stroke; stroke: var(--bg); stroke-width: 3px; }
+.xvd-sim.low { fill: var(--bad); }
+.xvd-sweep { fill: none; stroke: var(--warn); stroke-width: 2; stroke-dasharray: 5 4; }
+.xvd-hop { stroke: var(--accent); stroke-width: 2.2; }
+.xvd-down { stroke: var(--accent); stroke-width: 1.6; stroke-dasharray: 3 3; }
+.xvd-hopn { fill: none; stroke: var(--accent); stroke-width: 2; }
+.xvd-miss { fill: none; stroke: var(--warn); stroke-width: 2; stroke-dasharray: 3 2; }
+.xvd-th { stroke: var(--bad); stroke-width: 1.6; stroke-dasharray: 5 3; }
+/* ответ */
+.xvd-bubble { fill: var(--surface-2); stroke: var(--border); stroke-width: 1.2; }
+.xvd-bubble.ok { stroke: var(--ok); } .xvd-bubble.idk { stroke: var(--accent); }
+.xvd-bubble.hall, .xvd-bubble.stale { stroke: var(--bad); stroke-width: 1.8; fill: var(--bad-soft); }
+.xvd-bubble.partial { stroke: var(--warn); stroke-width: 1.6; }
+/* блоки изнутри */
+.xvd-backb { fill: var(--surface-2); stroke: var(--border-strong); }
+.xvd-back { fill: var(--accent); font-weight: 600; }
+.xvd-panel { fill: var(--surface); stroke: var(--border); stroke-width: 1.2; }
+.xvd-panel.on { stroke: var(--accent); stroke-width: 1.8; }
+.xvd-codebg { fill: var(--code-bg); stroke: var(--border); stroke-width: 1; }
+.xvd-piece { stroke-width: 1.2; }
+.xvd-piece.r0 { fill: color-mix(in srgb, var(--k-read) 18%, var(--surface)); stroke: var(--k-read); }
+.xvd-piece.r1 { fill: color-mix(in srgb, var(--k-write) 18%, var(--surface)); stroke: var(--k-write); }
+.xvd-piece.r2 { fill: color-mix(in srgb, var(--k-upload) 18%, var(--surface)); stroke: var(--k-upload); }
+.xvd-piece.r3 { fill: color-mix(in srgb, var(--k-search) 18%, var(--surface)); stroke: var(--k-search); }
+.xvd-edge { stroke: var(--border-strong); stroke-width: 1; opacity: .7; }
+.xvd-gn { fill: var(--surface-3); stroke: var(--text-muted); stroke-width: 1.2; }
+/* кнопки */
+.xvd-btn { cursor: pointer; outline: none; }
+.xvd-btn rect { fill: var(--surface-2); stroke: var(--border-strong); stroke-width: 1.2; }
+.xvd-btn.on rect { fill: var(--accent-soft); stroke: var(--accent); }
+.xvd-btn text { font: 600 max(10.5px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-body); fill: var(--text-2); text-anchor: middle; }
+.xvd-btn.on text { fill: var(--accent); }
+.xvd-btn:hover rect, .xvd-btn:focus-visible rect { stroke: var(--accent); stroke-width: 2; }
+/* легенда */
+.xr-legend .xr-sw.xvd-swd { background: var(--k-read); }
+.xr-legend .xr-sw.xvd-swb { background: var(--text-muted); opacity: .5; width: 8px; height: 8px; }
+.xr-legend .xr-sw.xvd-swq { background: var(--k-chat); clip-path: polygon(50% 0, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%); border-radius: 0; }
+
+/* ---------- «AI-агент изнутри» (xray-agent.js, xag-) ---------- */
+/* текст в сцене не меньше 12 px на экране: свой минимум поверх общего --fsmin (10/12 px) */
+#xagSt, #xagDy { --fsmin: 12px; }
+.xag-dyn { pointer-events: none; }
+.xag-badge { fill: var(--surface-2); stroke: var(--border-strong); stroke-width: 1.2; }
+.xag-go { fill: var(--accent); }
+.xag-ok { fill: var(--ok); font-weight: 700; } .xag-warn { fill: var(--warn); font-weight: 700; } .xag-bad { fill: var(--bad); font-weight: 700; } .xag-acc { fill: var(--accent); font-weight: 700; }
+.xag-vt { font: 700 15px var(--f-body); fill: var(--text); }
+.xag-qt { font-size: 12.5px; }
+.xag-ms { font: 500 max(10.5px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-body); fill: var(--text-muted); }
+.xag-fn { font: 600 max(10.5px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-mono); fill: var(--text); }
+.xag-fn.dim { fill: var(--text-muted); font-weight: 500; }
+.xag-pn { font: 600 max(10px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-mono); fill: var(--text-2); }
+.xag-nt { font: 700 max(11.5px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-body); fill: var(--text); }
+.xag-ans { font: 500 max(10.5px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-body); fill: var(--text); }
+.xag-mono { font: 500 max(10.5px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-mono); fill: var(--text); white-space: pre; font-variant-ligatures: none; }
+.xag-mono.on { fill: var(--accent); font-weight: 700; } .xag-mono.dim { fill: var(--text-muted); }
+.xag-mono.ok { fill: var(--ok); font-weight: 700; } .xag-mono.warn { fill: var(--warn); font-weight: 700; } .xag-mono.bad { fill: var(--bad); font-weight: 700; }
+/* задача, инструменты, цикл */
+.xag-bubble { fill: var(--surface-2); stroke: var(--border); stroke-width: 1.2; }
+.xag-bubble.ok { stroke: var(--ok); fill: var(--ok-soft); } .xag-bubble.warn { stroke: var(--warn); fill: var(--warn-soft); } .xag-bubble.bad { stroke: var(--bad); fill: var(--bad-soft); stroke-width: 1.8; }
+.xag-tool { fill: var(--surface); stroke: var(--border); stroke-width: 1; }
+.xag-tool.risk { stroke: color-mix(in srgb, var(--bad) 55%, var(--border)); }
+.xag-tool.on { stroke: var(--accent); stroke-width: 2; fill: var(--accent-soft); }
+.xag-node { fill: var(--surface); stroke: var(--border-strong); stroke-width: 1.4; }
+.xag-node.on { stroke: var(--accent); stroke-width: 2.4; fill: var(--accent-soft); }
+.xag-node.wait { stroke: var(--warn); fill: var(--warn-soft); }
+.xag-node.bad { stroke: var(--bad); fill: var(--bad-soft); }
+.xag-ar { stroke: var(--text-muted); stroke-width: 1.6; fill: none; } .xag-ah { fill: var(--text-muted); }
+.xag-ar.on { stroke: var(--accent); stroke-width: 2.2; } .xag-ah.on { fill: var(--accent); }
+.xag-sep { stroke: var(--border); stroke-width: 1; }
+.xag-prog { fill: none; stroke: var(--accent); stroke-width: 3; }
+/* ограничения и человек */
+.xag-hitl { fill: var(--surface); stroke: var(--border); stroke-width: 1.2; }
+.xag-hitl.wait { stroke: var(--warn); stroke-width: 2; fill: var(--warn-soft); }
+.xag-hitl.sus { stroke: var(--bad); fill: var(--bad-soft); }
+.xag-yes { fill: var(--ok-soft); stroke: var(--ok); stroke-width: 1.4; }
+.xag-atk { fill: var(--bad); stroke: var(--bg); stroke-width: 2; }
+/* блоки изнутри */
+.xag-backb { fill: var(--surface-2); stroke: var(--border-strong); }
+.xag-back { fill: var(--accent); font-weight: 600; }
+.xag-panel { fill: var(--surface); stroke: var(--border); stroke-width: 1.2; }
+.xag-panel.on { stroke: var(--accent); stroke-width: 1.8; }
+.xag-codebg { fill: var(--code-bg); stroke: var(--border); stroke-width: 1; }
+.xag-krow { fill: var(--accent-soft); stroke: none; }
+.xag-bar { fill: var(--k-read); }
+.xag-bar.over { fill: var(--bad); opacity: .55; }
+.xag-capl { stroke: var(--bad); stroke-width: 1.8; stroke-dasharray: 6 4; }
+/* кнопки */
+.xag-btn { cursor: pointer; outline: none; }
+.xag-btn rect { fill: var(--surface-2); stroke: var(--border-strong); stroke-width: 1.2; }
+.xag-btn.on rect { fill: var(--accent-soft); stroke: var(--accent); }
+.xag-btn.off rect { fill: var(--bad-soft); stroke: var(--bad); }
+.xag-btn.ok rect { fill: var(--ok-soft); stroke: var(--ok); }
+.xag-btn.bad rect { fill: var(--bad-soft); stroke: var(--bad); }
+.xag-btn text { font: 600 max(10.5px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-body); fill: var(--text-2); text-anchor: middle; }
+.xag-btn.on text { fill: var(--accent); } .xag-btn.ok text { fill: var(--ok); } .xag-btn.bad text, .xag-btn.off text { fill: var(--bad); }
+.xag-btn:hover rect, .xag-btn:focus-visible rect { stroke-width: 2.2; }
+/* легенда */
+.xr-legend .xr-sw.xag-swt { background: none; border: 2px solid var(--accent); }
+.xr-legend .xr-sw.xag-swc { background: var(--accent); }
+
 /* ===== сцены изнутри: конец ===== */
 /* ---------- живой разбор ---------- */
 .lv-card { padding: 12px 14px; border-radius: var(--r); border: 1px solid var(--border); background: var(--surface-2); display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; font-size: 13px; }
@@ -5053,11 +5267,15 @@ html.calm .lc2 *, html.calm .lc2 *::before, html.calm .lc2 *::after { animation:
 <script src="js/xray-search.js"></script>
 <script src="js/xray-gateway.js"></script>
 <script src="js/xray-ws.js"></script>
+<script src="js/xray-llm.js"></script>
+<script src="js/xray-vectordb.js"></script>
+<script src="js/xray-agent.js"></script>
 <script src="js/arch-lens.js"></script>
 <script src="js/ops-console.js"></script>
 <script src="js/ops-ui.js"></script>
 <script src="js/levels-dtrack.js"></script>
 <script src="js/cloud.js"></script>
+<script src="js/k8s-sim.js"></script>
 <script src="js/ux.js"></script>
 <script src="js/learn.js"></script>
 <script src="js/walk.js"></script>
