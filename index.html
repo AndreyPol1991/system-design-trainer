@@ -1861,6 +1861,20 @@ html.calm .lt *, html.calm .lt *::before, html.calm .lt *::after { animation-del
 .nf-d b { color: var(--text); } .nf-d p { margin: 2px 0 0; } .nf-d small { display: block; margin-top: 3px; font-size: 12px; color: var(--text-muted); }
 .nf-d.bad small { color: var(--bad); } .nf-d.ok small { color: var(--ok); }
 .nf-sum { margin: 0; font: 600 12.5px var(--f-mono); color: var(--text-2); }
+/* ---------- API и контракты ---------- */
+.ap-tabs { margin-bottom: 12px; flex-wrap: wrap; }
+.ap-cases { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 10px; }
+.ap-case { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface-2); font-size: 13px; color: var(--text-2); }
+.ap-case.good { border-color: var(--ok); } .ap-case.ok { border-color: var(--warn); } .ap-case.bad { border-color: var(--bad); }
+.ap-case > b { color: var(--text); } .ap-case > small { font-size: 12px; color: var(--text-muted); }
+.ap-case .seg { flex-wrap: wrap; } .ap-case .seg button { font-size: 12.5px; padding: 4px 9px; }
+.ap-why { margin: 0; line-height: 1.45; } .ap-why span { font: 600 12px var(--f-mono); }
+.ap-case.good .ap-why span { color: var(--ok); } .ap-case.ok .ap-why span { color: var(--warn); } .ap-case.bad .ap-why span { color: var(--bad); }
+.ap-sum, .ap-note { margin: 10px 0; font-size: 13px; color: var(--text-2); line-height: 1.5; }
+.ap-code { margin-top: 10px; }
+.ap-check { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; }
+.ap-check > div { padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface-2); font-size: 13px; color: var(--text-2); line-height: 1.5; }
+.ap-check b { color: var(--text); } .ap-check p { margin: 4px 0; } .ap-check code { font: 12px var(--f-mono); color: var(--info); }
 .pred-pop { position: fixed; z-index: 60; width: 300px; display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border-strong); box-shadow: var(--shadow); font-size: 12.5px; line-height: 1.45; color: var(--text-2); animation: chgIn .2s ease-out; }
 .pred-pop[hidden] { display: none; }
 .pred-pop b { color: var(--text); font-size: 13.5px; }
@@ -3301,6 +3315,7 @@ html.calm .lt *, html.calm .lt *::before, html.calm .lt *::after { animation-del
 <script src="js/calc.js"></script>
 <script src="js/lab-table.js"></script>
 <script src="js/lab-nfr.js"></script>
+<script src="js/lab-api.js"></script>
 <script src="js/xray-sqldata.js"></script>
 <script src="js/free.js"></script>
 <script src="js/share.js"></script>
