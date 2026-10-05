@@ -20,7 +20,7 @@
     { id: 'arch', name: 'Архитектура и границы сервисов', an: 'Цеха завода и проходные между ними', items: ['lab:nfr', 'lab:api', 'micro', 'legacy', 'ddd', 'a-dbper', 'a-gateway', 'a-split', 'f-shareddb', 'f-distmono', 'i-layers', 'i-ports', 'i-modular', 'i-nplus1'] },
     { id: 'ops', name: 'Наблюдаемость и эксплуатация', an: 'Приборная панель и дежурный', items: ['monitoring', 'o-metrics', 'o-alerts', 'o-logs', 'o-traces', 'o-k8s', 'lab:deploy', 'lab:slo', 'lab:oncall'] },
     { id: 'data', name: 'Данные и аналитика', an: 'Склад отчётов отдельно от магазина', items: ['analytics', 'd-reports', 'd-clicks', 'd-columns', 'd-lake', 'f-oltpreports', 'lab:stream'] },
-    { id: 'cloud', name: 'Облако и стоимость', an: 'Аренда вместо своего здания', items: ['c-az', 'c-spot', 'c-storage', 'c-serverless', 'photos', 'video', 'p-cdn', 'p-presigned'] },
+    { id: 'cloud', name: 'Облако и стоимость', an: 'Аренда вместо своего здания', items: ['c-az', 'c-spot', 'c-storage', 'c-serverless', 'lab:cloudnet', 'photos', 'video', 'p-cdn', 'p-presigned'] },
     { id: 'rt', name: 'Realtime и особые хранилища', an: 'Рация вместо писем', items: ['chat', 'feed', 'social', 'geo'] },
     { id: 'front', name: 'Клиентская часть и сеть', an: 'От нажатия до готового экрана', items: ['lab:front', 'photos', 'video', 'p-cdn', 'p-presigned', 'chat'] },
     { id: 'ai', name: 'AI-системы', an: 'Умный помощник с правилами', items: ['support', 'voice', 'aiscale', 'agent', 'p-router'] }
