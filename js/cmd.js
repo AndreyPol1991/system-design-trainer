@@ -104,9 +104,11 @@
     if (SD.labs) add('Открыть', 'Поток событий вживую', 'окна, опоздания, ровно один раз, join, происхождение данных', () => SD.labs.open('stream'), 'flink kafka streams watermark lineage контракт данных лаборатория');
     if (SD.labs) add('Открыть', 'От экрана до сервера', 'загрузка страницы, SSR/CSR, BFF, кэш браузера, офлайн', () => SD.labs.open('front'), 'фронтенд клиент мобильное ssr csr bff lcp лаборатория');
     if (SD.labs) add('Открыть', 'Выкладка вживую', 'rolling, blue-green, канарейка, флаги, миграция базы', () => SD.labs.open('deploy'), 'деплой релиз canary blue-green лаборатория');
+    if (SD.labs && SD.labDeploy) add('Открыть', 'Выкладка модели: версия ИИ-ассистента', 'модель + подсказка + индекс, канарейка по качеству, тень, откат связкой', () => SD.labDeploy.open('model'), 'llm ии ai модель подсказка промпт индекс rag canary shadow эталоны сигнальный набор выкладка лаборатория');
     if (SD.labs) add('Открыть', 'SLO и бюджет ошибок', 'SLI, бюджет, burn rate, девятки', () => SD.labs.open('slo'), 'sre slo sli алерты девятки лаборатория');
     if (SD.labs) add('Открыть', 'API и контракты', 'REST, gRPC, события, WebSocket; OpenAPI, protobuf, AsyncAPI по схеме', () => SD.labs.open('api'), 'api rest grpc openapi asyncapi контракт лаборатория');
     if (SD.labs) add('Открыть', 'От требований к архитектуре', '99,9 %, RPO, RTO → решения и проверка схемы', () => SD.labs.open('nfr'), 'нфт требования nfr sla доступность лаборатория');
+    if (SD.labs) add('Открыть', 'Учение по восстановлению', 'RTO и RPO, копии, резервные площадки, план восстановления', () => SD.labs.open('dr'), 'dr disaster recovery rto rpo бэкап резервная копия площадка учения лаборатория');
     if (SD.labs) add('Открыть', 'Таблица вживую', 'типы, вес, партиции, шарды, решардинг, путь запроса', () => SD.labs.open('table'), 'лаборатория users партиционирование шардирование');
     if (SD.calc) add('Открыть', 'Как посчитать нагрузку уровня', 'от пользователей до серверов, кэша, реплик и шардов', () => SD.calc.open(), 'расчёт салфетка оценка rps');
     if (SD.share) add('Действие', 'Поделиться схемой и экспорт', 'ссылка со схемой, Mermaid, C4 для PlantUML', () => SD.share.open(), 'ссылка экспорт mermaid plantuml c4 документация');
@@ -139,7 +141,7 @@
       }, 'добавить узел ' + k);
     });
     /* уровни */
-    const lists = [SD.LEVELS, SD.PRACTICE, SD.FIXES, SD.INNER, SD.KNOBS, SD.ARCHL, SD.OPSL];
+    const lists = [SD.LEVELS, SD.PRACTICE, SD.FIXES, SD.INNER, SD.KNOBS, SD.ARCHL, SD.OPSL, SD.DATAL, SD.CLOUDL, SD.SAASL];
     lists.forEach(list => (list || []).forEach(L => {
       const i = SD.LEVELS.indexOf(L), st = (S.progress[L.id] || {}).stars || 0;
       add('Уровень', L.title, `${i >= 0 ? 'уровень ' + (i + 1) : SD.levelLabel(L)}${st ? ' · ' + '★'.repeat(st) : ''}`, () => { closeModals(); SD.app.loadLevel(L); }, (L.chips || []).join(' '));

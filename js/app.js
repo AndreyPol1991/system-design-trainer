@@ -111,7 +111,7 @@
   /* ---------- шапка и палитра ---------- */
   function renderHeader() {
     const L = A.level, i = SD.LEVELS.indexOf(L);
-    $('lvlTag').textContent = L.free ? 'СВОБОДНО' : L.daily ? 'СОБЫТИЕ ДНЯ' : L.sandbox ? 'ПЕСОЧНИЦА' : L.interview ? 'СОБЕСЕДОВАНИЕ' : L.innerLvl ? 'ВНУТРИ СЕРВИСА' : L.knobLvl ? 'НАСТРОЙКА' : L.cloudLvl ? 'ОБЛАКО' : L.dataLvl ? 'ДАННЫЕ' : L.opsLvl ? 'ЭКСПЛУАТАЦИЯ' : L.archLvl ? 'АРХИТЕКТУРА' : L.practice ? 'ПРАКТИКУМ' : L.fix ? 'ИНЦИДЕНТ' : `УР. ${i + 1}/${SD.LEVELS.length}`;
+    $('lvlTag').textContent = L.free ? 'СВОБОДНО' : L.daily ? 'СОБЫТИЕ ДНЯ' : L.sandbox ? 'ПЕСОЧНИЦА' : L.interview ? 'СОБЕСЕДОВАНИЕ' : L.innerLvl ? 'ВНУТРИ СЕРВИСА' : L.knobLvl ? 'НАСТРОЙКА' : L.saasLvl ? 'SAAS' : L.cloudLvl ? 'ОБЛАКО' : L.dataLvl ? 'ДАННЫЕ' : L.opsLvl ? 'ЭКСПЛУАТАЦИЯ' : L.archLvl ? 'АРХИТЕКТУРА' : L.practice ? 'ПРАКТИКУМ' : L.fix ? 'ИНЦИДЕНТ' : `УР. ${i + 1}/${SD.LEVELS.length}`;
     $('lvlName').textContent = L.title;
     const st = (A.progress[L.id] || {}).stars || 0;
     $('lvlStars').textContent = L.sandbox || L.interview ? '' : SD.panels.stars(st);

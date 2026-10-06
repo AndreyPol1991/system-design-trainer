@@ -1,7 +1,10 @@
 /* Лаборатория «Выкладка вживую»: 10 подов под живым трафиком, выкатываем v2 с возможным багом пятью способами —
    всё сразу (recreate), rolling update, blue-green, канарейка, фича-флаг. Графики ошибок, задержки и доли трафика на v2,
    сколько покупателей увидели ошибку, время отката; сравнение стратегий; миграция базы expand/contract.
-   Переключатель «Техника | Бизнес» — как в «Таблице вживую»: в бизнес-режиме те же прогоны в заказах и рублях. */
+   Переключатель «Техника | Бизнес» — как в «Таблице вживую»: в бизнес-режиме те же прогоны в заказах и рублях.
+   Вкладка «Версия модели»: выкатываем не код, а связку «модель + подсказка + индекс» ИИ-ассистента — канарейка смотрит
+   и на долю верных ответов на сигнальном наборе, теневой прогон, откат связкой против отката по частям.
+   SD.labDeploy.open('model') открывает лабораторию сразу на нужной вкладке. */
 (function () {
   if (!window.SD) return;
   const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -354,7 +357,7 @@
   }
   function chartSVG(W, H, o) {
     const ml = 46, mr = 10, mt = 8, mb = o.axis ? 20 : 6, iw = W - ml - mr, ih = H - mt - mb;
-    const X = s => ml + iw * s / o.T, Y = v => mt + ih * (1 - Math.min(1, v / o.max));
+    const lo = o.min || 0, X = s => ml + iw * s / o.T, Y = v => mt + ih * (1 - Math.max(0, Math.min(1, (v - lo) / (o.max - lo))));
     let h = `<svg class="ld-chart" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="${esc(o.aria)}">`;
     (o.down || []).forEach(([a, b]) => { h += `<rect class="ld-downband" x="${X(a).toFixed(1)}" y="${mt}" width="${Math.max(2, X(b) - X(a)).toFixed(1)}" height="${ih}"/>`; if (X(b) - X(a) > 46) h += `<text class="ld-downt" x="${((X(a) + X(b)) / 2).toFixed(1)}" y="${mt + 14}" text-anchor="middle">простой</text>`; });
     o.ticks.forEach(v => { h += `<line class="ld-grid" x1="${ml}" x2="${W - mr}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}"/><text class="ld-ax" x="${ml - 6}" y="${(Y(v) + 4).toFixed(1)}" text-anchor="end">${o.fmt(v)}</text>`; });
@@ -365,7 +368,8 @@
     if (seg) pts.push(seg);
     if (o.area && o.data.length) { const last = o.data.length; h += `<path class="ld-area ${o.cls}" d="M${X(0.5 * o.b).toFixed(1)} ${Y(0)} ${o.data.map((v, i) => `L${X((i + 0.5) * o.b).toFixed(1)} ${Y(v || 0).toFixed(1)}`).join(' ')} L${X((last - 0.5) * o.b).toFixed(1)} ${Y(0)} Z"/>`; }
     pts.forEach(d => { h += `<path class="ld-line ${o.cls}" d="${d}"/>`; });
-    if (o.axis) { const step = o.T <= 360 ? 60 : o.T <= 900 ? 120 : 300; for (let s = 0; s <= o.T; s += step) if (X(s) < W - 22) h += `<text class="ld-ax" x="${X(s).toFixed(1)}" y="${H - 5}" text-anchor="middle">${clock(s)}</text>`; }
+    (o.dots || []).forEach(d => { h += `<circle class="ldm-dot ${d.cls || ''}" cx="${X(d.t).toFixed(1)}" cy="${Y(d.v).toFixed(1)}" r="4.5"/>`; });
+    if (o.axis) { const step = o.tstep || (o.T <= 360 ? 60 : o.T <= 900 ? 120 : 300); for (let s = 0; s <= o.T; s += step) if (X(s) < W - 22) h += `<text class="ld-ax" x="${X(s).toFixed(1)}" y="${H - 5}" text-anchor="middle">${o.tfmt ? o.tfmt(s) : clock(s)}</text>`; }
     if (o.empty) h += `<text class="ld-ax" x="${ml + iw / 2}" y="${mt + ih / 2 + 4}" text-anchor="middle">${esc(o.empty)}</text>`;
     return h + '</svg>';
   }
@@ -434,11 +438,13 @@
     ['Стратегии', ['Всё сразу — простой на каждой выкатке и на каждом откате.', 'Rolling — без простоя, но баг доходит до всех, а откат такой же долгий.', 'Blue-green — откат за секунду, но баг сразу у 100 % и двойная мощность на время окна.', 'Канарейка — баг видит 1 % на секунды, откат автоматический; платим скоростью выкатки.', 'Фича-флаг — выкладка кода отдельно от включения функции, kill switch за секунду.']],
     ['Обнаружение важнее отката', ['Время до восстановления = обнаружить + решить + откатить. Человек по алерту — минуты, автомат по метрикам — секунды.', 'Kubernetes проверяет только готовность пода: баг в логике он не видит.', 'Порог анализа задаёт, какие баги проскочат: маленькая доля ошибок проходит любую канарейку.']],
     ['Настройки rolling', ['maxSurge — быстрее за счёт лишних подов.', 'maxUnavailable — быстрее за счёт мощности: под нагрузкой это ошибки и тормоза.']],
+    ['Версия модели', ['ИИ-выкладка — это модель, подсказка и индекс. Ошибки и задержка их порчу почти не видят: ворота канарейки — доля верных на сигнальном наборе.', 'Теневой прогон проверяет новую версию на копии живых вопросов — ни одного плохого ответа людям, платим только токенами.', 'Модель, подсказка и индекс — одна версия: иначе подсказка и индекс меняются сразу у всех, а откат возвращает только модель.', 'Сигнальный набор из 50 вопросов шумит ±9 п. п.: хорошую версию откатят, плохую пропустят. Нужны сотни.']],
     ['База при выкладке', ['Две версии работают одновременно почти при любой стратегии — схема базы должна подходить обеим.', 'Expand/contract: сначала добавить, потом переключить, удалить старое — в самом конце.', 'Переименование колонки за один шаг ломает старую версию и отрезает путь отката.']]
   ];
   const MEMO_BIZ = [
     ['Деньги и покупатели', ['Цена выкатки — не серверы, а покупатели, которые увидели ошибку и ушли.', 'Двойное окружение на 5 минут стоит копейки; постоянное — как вторая зарплата сервиса.', 'Простой при выкатке «всё сразу» повторяется при каждом релизе и каждом откате.']],
     ['Скорость против риска', ['Канарейка и флаги медленнее выкатывают, но баг задевает единицы покупателей.', 'Автоматический откат не будит людей ночью: дежурный нужен реже.']],
+    ['Ассистент и качество', ['Испорченная модель не роняет сервис — она тихо отвечает хуже: люди уходят к оператору, а это деньги.', 'Проверка качества на канарейке стоит минут и пары долларов токенов, а ловит то, что иначе находят по жалобам через дни.']],
     ['Миграции', ['Схему базы меняют в несколько релизов — это дни работы, а не минуты, но без единой ошибки у покупателей.', 'Сломанная за один шаг схема — простой оплаты и невозможный откат.']]
   ];
 
@@ -465,15 +471,158 @@
     ]
   };
 
+  /* ================= «Версия модели»: выкатываем не код, а мозги ассистента ================= */
+  /* Ассистент поддержки: 10 вопросов в секунду. Версия — связка «модель + подсказка + индекс документов».
+     Ошибки и задержка такие выкладки почти не меняют — меняется смысл ответов. Поэтому канарейка смотрит ещё
+     и на долю верных ответов на сигнальном наборе вопросов, а теневой прогон проверяет новую версию на копии
+     живых вопросов, не показывая ответы людям. Если подсказка и индекс лежат отдельно от версии, они меняются
+     сразу у всех — канарейке нечего сравнивать, а откат возвращает только модель. Время — в минутах. */
+  const MRPS = 10, MT0 = 10, MHOLD = 25, MSIG = 8, MSHADOW = 30, MTMAX = 180, MTAIL = 25, MHUMAN = 20, MALL = 60;
+  const MBASE = { acc: 0.88, err: 0.002, p95: 1800, tok: 3400, idk: 0.08 }, MFLOOR = 0.84, MDROP = 0.03, MUSD_TOK = 2.5e-6;
+  const MSTEPS = [0.05, 0.25, 0.5, 1];
+  const MV = { m: ['Средняя · 2026-08'], p: ['Подсказка p-14'], i: ['Индекс idx-0930'] };
+  const M_SCN = [
+    { k: 'prompt', n: 'Новая подсказка', en: 'короче и вежливее', v2: { p: 'Подсказка p-15' } },
+    { k: 'quiet', n: 'Модель дешевле', en: 'тихо хуже на 9 п. п.', v2: { m: 'Средняя · 2026-10' } },
+    { k: 'index', n: 'Переиндексация', en: '40 % документов выпало', v2: { i: 'Индекс idx-1006' } },
+    { k: 'combo', n: 'Модель + подсказка', en: 'подсказка под новую модель', v2: { m: 'Средняя · 2026-10', p: 'Подсказка p-16' } },
+    { k: 'slow', n: 'Модель больше', en: 'умнее, но таймауты', v2: { m: 'Большая · 2026-09' } }
+  ];
+  const M_STR = [
+    { k: 'all', n: 'Всё сразу', en: 'переключить 100 %' },
+    { k: 'canary', n: 'Канарейка', en: 'смотрит ошибки и задержку' },
+    { k: 'canaryq', n: 'Канарейка + качество', en: '+ сигнальный набор' },
+    { k: 'shadow', n: 'Тень → канарейка', en: 'сначала без людей' }
+  ];
+  const MSN = Object.fromEntries(M_STR.map(s => [s.k, s.n]));
+  const MZ = [0.3, -1.3, 0.8, -0.2, 0.5, -0.9, 0.1, 0.7, -0.4, 0.2];   // разброс замеров сигнального набора (в сигмах)
+  /* что видно на сигнальном наборе: вопрос, эталон, ответ новой версии */
+  const MEX = {
+    prompt: [['Можно вернуть дрель через 20 дней без коробки?', 'Да, 30 дней, с чеком (п. 4.2)', 'Да — 30 дней, нужен чек (п. 4.2).', 1], ['Сколько идёт доставка в Тверь?', '2–3 дня', '2–3 дня.', 1], ['Какая гарантия на «Сокол»?', '3 года', '3 года (политика 2026).', 1]],
+    quiet: [['Можно вернуть дрель через 20 дней без коробки?', 'Да, 30 дней, с чеком (п. 4.2)', 'Обычно возврат — 14 дней в оригинальной упаковке.', 0], ['Сколько идёт доставка в Тверь?', '2–3 дня', '2–3 рабочих дня.', 1], ['Какая гарантия на «Сокол»?', '3 года', 'Стандартная гарантия — 1 год.', 0]],
+    index: [['Какой патрон у ПФ-2610-М?', 'SDS-max', 'Не нашёл информации о ПФ-2610-М.', 0], ['Можно вернуть дрель через 20 дней без коробки?', 'Да, 30 дней, с чеком (п. 4.2)', 'Не нашёл правил возврата в документах.', 0], ['Сколько идёт доставка в Тверь?', '2–3 дня', '2–3 дня.', 1]],
+    combo: [['Можно вернуть дрель через 20 дней без коробки?', 'Да, 30 дней, с чеком (п. 4.2)', 'Да, 30 дней.', 1], ['Какая гарантия на «Сокол»?', '3 года', 'Гарантия есть, подробности у менеджера.', 0], ['Есть ли кейс у УШМ-125 «Бриз»?', 'Да, пластиковый', 'Кейсы продаются отдельно.', 0]],
+    slow: [['Можно вернуть дрель через 20 дней без коробки?', 'Да, 30 дней, с чеком (п. 4.2)', 'Да, 30 дней с чеком (п. 4.2 правил).', 1], ['Сколько идёт доставка в Тверь?', '2–3 дня', '— таймаут: ответ не пришёл за 10 с', 0], ['Какая гарантия на «Сокол»?', '3 года', '3 года.', 1]]
+  };
+  /* метрики конфигурации: c = { m, p, i }, 1 — старое, 2 — новое */
+  function mMet(scn, c) {
+    const r = Object.assign({}, MBASE), M = c.m === 2, P = c.p === 2, I = c.i === 2;
+    if (scn === 'prompt' && P) { r.acc += 0.01; r.tok *= 0.88; r.p95 -= 60; }
+    if (scn === 'quiet' && M) { r.acc -= 0.09; r.p95 -= 250; r.tok *= 0.7; r.idk -= 0.02; }
+    if (scn === 'index' && I) { r.acc -= 0.28; r.idk += 0.22; r.p95 -= 20; }
+    if (scn === 'combo') { if (M && P) r.acc -= 0.07; else if (P) r.acc -= 0.05; else if (M) r.acc -= 0.04; if (M) r.p95 -= 200; }
+    if (scn === 'slow' && M) { r.acc += 0.02; r.err += 0.04; r.p95 += 1600; r.tok *= 1.1; }
+    return r;
+  }
+  const isV1 = c => c.m === 1 && c.p === 1 && c.i === 1;
+  function mkM(o) {
+    const sc = M_SCN.find(x => x.k === o.scn) || M_SCN[1];
+    return { o: Object.assign({}, o), sc, ch: { m: !!sc.v2.m, p: !!sc.v2.p, i: !!sc.v2.i }, t: 0, ph: 'base', stable: { m: 1, p: 1, i: 1 }, cand: null, w: 0, shadow: false,
+      stepI: -1, pt: 0, chk: 0, rb: false, rbAt: null, rbBy: null, alertAt: null, humanAt: null, fin: null, done: false, liveAt: null, deployAt: null,
+      bad: 0, errs: 0, shadowUsd: 0, ev: [], mk: 0, ser: { err: [], p95: [], acc: [], w: [] }, sig: [] };
+  }
+  const mlog = (S, text, cls, mark) => { const e = { t: S.t, text, cls: cls || '' }; if (mark) e.n = ++S.mk; S.ev.push(e); };
+  const mParts = (S, c) => ['m', 'p', 'i'].filter(k => S.ch[k] && c[k] === 2).map(k => ({ m: 'модель', p: 'подсказка', i: 'индекс' })[k]);
+  function mBegin(S) {
+    const o = S.o, loose = o.mode === 'loose', ch = S.ch, full = { m: ch.m ? 2 : 1, p: ch.p ? 2 : 1, i: ch.i ? 2 : 1 };
+    S.deployAt = S.t;
+    if (o.strat === 'all') { S.stable = full; S.ph = 'allLive'; S.liveAt = S.t; S.fin = S.t + MALL; mlog(S, `Всё сразу: новая версия (${mParts(S, full).join(' + ')}) отвечает всем 100 % вопросов. Следим час`, 'warn', true); return; }
+    if (loose && (ch.p || ch.i)) {
+      S.stable = { m: 1, p: full.p, i: full.i };
+      mlog(S, `${ch.i ? 'Индекс' : 'Подсказка'}${ch.i && ch.p ? ' и подсказка' : ''} лежат отдельно от версии и сменились сразу у всех 100 % — в канарейке только модель`, 'warn', true);
+    }
+    S.cand = loose ? Object.assign({}, S.stable, { m: full.m }) : full;
+    if (loose && isV1(S.cand) === false && JSON.stringify(S.cand) === JSON.stringify(S.stable)) mlog(S, 'Модель та же — канарейке не с чем сравнивать: обе группы уже на новом', 'warn');
+    if (o.strat === 'shadow') { S.ph = 'shadow'; S.shadow = true; S.pt = S.t; mlog(S, 'Теневой прогон: новая версия получает копию всех вопросов, её ответы никому не показываем — только сравниваем', '', true); }
+    else { S.ph = 'step'; S.stepI = 0; S.w = MSTEPS[0]; S.pt = S.t; mlog(S, 'Канарейка: 5 % вопросов идут в новую версию', '', true); }
+  }
+  const mReach = S => S.o.mode === 'loose' && (S.ch.p || S.ch.i) ? 'Новая модель до людей не дошла — но изменённые части уже у всех.' : 'До людей новая версия не дошла.';
+  const mLeft = S => { const p = mParts(S, S.stable); return p.length > 1 ? p.join(' и ') + ' остались новыми' : p[0] === 'подсказка' ? 'подсказка осталась новой' : (p[0] || 'часть') + ' остался новым'; };
+  const mTechBad = S => { const a = mMet(S.o.scn, S.cand), b = mMet(S.o.scn, S.stable); return a.err - b.err > 0.01 ? `ошибок ${pc(a.err)} против ${pc(b.err)}` : a.p95 - b.p95 > 500 ? `p95 ${nf(a.p95)} мс против ${nf(b.p95)} мс` : ''; };
+  function mCheck(S) {
+    const n = S.o.sig, sg = Math.sqrt(MBASE.acc * (1 - MBASE.acc) / n);
+    const a = mMet(S.o.scn, S.cand).acc + sg * MZ[S.chk % MZ.length], b = mMet(S.o.scn, S.stable).acc + sg * MZ[(S.chk + 5) % MZ.length];
+    S.chk++;
+    const fail = a < b - MDROP || a < MFLOOR;
+    const r = { t: S.t, v: a, b, fail, sg, why: a < MFLOOR ? `ниже порога ${pc(MFLOOR)}` : `на ${dec((b - a) * 100, 0)} п. п. хуже текущей` };
+    S.sig.push(r);
+    return r;
+  }
+  function mRollback(S, by, why) {
+    const loose = S.o.mode === 'loose';
+    S.rb = true; S.rbAt = S.t; S.rbBy = by;
+    if (S.ph === 'allLive') S.stable = loose ? Object.assign({}, S.stable, { m: 1 }) : { m: 1, p: 1, i: 1 };
+    else if (!loose) S.stable = { m: 1, p: 1, i: 1 };
+    S.cand = null; S.w = 0; S.shadow = false; S.ph = 'live'; S.fin = S.t;
+    const left = mParts(S, S.stable);
+    mlog(S, `${why} ${loose ? `Откатили модель${left.length ? `, а ${left.join(' и ')} — нет: они лежат отдельно от версии` : ''}` : 'Откат связкой: модель, подсказка и индекс вернулись к прежней версии одной командой'}`, left.length ? 'bad' : 'ok', true);
+    const acc = mMet(S.o.scn, S.stable).acc;
+    if (acc < MBASE.acc - 0.005) mlog(S, `Качество не вернулось: ${pc(acc)} верных вместо ${pc(MBASE.acc)}`, 'bad');
+  }
+  function mControl(S) {
+    const t = S.t;
+    if (S.ph === 'base') { if (t >= MT0) mBegin(S); return; }
+    if (S.ph === 'shadow') {
+      const dt = t - S.pt;
+      if (dt === 5) { const tb = mTechBad(S); if (tb) { mRollback(S, 'shadow', `Тень: у новой версии ${tb}. ${mReach(S)}`); return; } }
+      if (dt === MSIG) { const r = mCheck(S); if (r.fail) { mRollback(S, 'shadow', `Тень: сигнальный набор (${S.o.sig} вопросов) — ${pc(r.v)} верных, ${r.why}. ${mReach(S)}`); return; } mlog(S, `Тень: сигнальный набор — ${pc(r.v)} верных при ${pc(r.b)} у текущей. Ответы на живые вопросы совпадают`, 'ok'); }
+      if (dt >= MSHADOW) { S.shadow = false; S.ph = 'step'; S.stepI = 0; S.w = MSTEPS[0]; S.pt = t; mlog(S, 'Тень чистая — канарейка: 5 % вопросов идут в новую версию', '', true); }
+      return;
+    }
+    if (S.ph === 'step') {
+      const dt = t - S.pt;
+      if (dt > 0 && dt % 5 === 0) { const tb = mTechBad(S); if (tb) { mRollback(S, 'tech', `Анализ канарейки: ${tb} (порог +1 п. п. или +500 мс).`); return; } }
+      if (S.o.strat !== 'canary' && dt === MSIG) { const r = mCheck(S); if (r.fail) { mRollback(S, 'quality', `Сигнальный набор на канарейке: ${pc(r.v)} верных, ${r.why}.`); return; } mlog(S, `Сигнальный набор на канарейке: ${pc(r.v)} верных при ${pc(r.b)} у текущей — в норме`, 'ok'); }
+      if (dt >= MHOLD) {
+        S.stepI++; S.w = MSTEPS[S.stepI]; S.pt = t;
+        if (S.w >= 1) { S.stable = S.cand; S.cand = null; S.w = 0; S.ph = 'live'; S.fin = t; S.liveAt = t; mlog(S, 'Канарейка прошла все шаги: новая версия отвечает всем', '', true); }
+        else mlog(S, `${S.o.strat === 'canary' ? 'Ошибки и задержка в норме' : 'Ошибки, задержка и качество в норме'} — ${pc(S.w)} на новой версии`, '', true);
+      }
+    }
+  }
+  function mTraffic(S) {
+    const sc = S.o.scn, gs = [{ c: S.stable, s: 1 - (S.cand && !S.shadow ? S.w : 0) }];
+    if (S.cand && !S.shadow && S.w > 0) gs.push({ c: S.cand, s: S.w });
+    const j = Math.sin(S.t * 1.7) * 0.5 + Math.sin(S.t * 0.37) * 0.5;
+    let err = 0, p95 = 0, acc = 0, nw = 0;
+    gs.forEach(g => {
+      const m = mMet(sc, g.c);
+      err += g.s * m.err; p95 += g.s * m.p95; acc += g.s * m.acc; if (!isV1(g.c)) nw += g.s;
+      S.bad += MRPS * 60 * g.s * Math.max(0, MBASE.acc - m.acc); S.errs += MRPS * 60 * g.s * Math.max(0, m.err - MBASE.err);
+    });
+    if (S.shadow && S.cand) S.shadowUsd += MRPS * 60 * mMet(sc, S.cand).tok * MUSD_TOK;
+    S.ser.err.push(Math.max(0, err * (1 + 0.15 * j))); S.ser.p95.push(p95 * (1 + 0.03 * j)); S.ser.acc.push(acc); S.ser.w.push(nw);
+  }
+  function mMonitor(S) {
+    if (S.alertAt == null && S.ph !== 'base' && S.ser.err.length >= 5) {
+      const e = S.ser.err.slice(-5).reduce((a, x) => a + x, 0) / 5, p = S.ser.p95.slice(-5).reduce((a, x) => a + x, 0) / 5;
+      if (e > A_ERR || p > 3000) { S.alertAt = S.t; S.humanAt = S.t + MHUMAN; mlog(S, `Алерт: ${e > A_ERR ? `ошибок ${pc(e)} (порог 2 %)` : `p95 ${nf(p)} мс (порог 3 000 мс)`}. Дежурный открывает графики…`, 'bad', true); }
+    }
+    if (S.humanAt === S.t && !S.rb && S.ph === 'allLive') mRollback(S, 'human', `Через ${MHUMAN} мин после алерта дежурный нашёл причину — новая версия.`);
+  }
+  function mStep(S) {
+    if (S.done) return;
+    S.t++;
+    mControl(S); mTraffic(S); mMonitor(S);
+    if (S.fin != null && S.t >= S.fin + MTAIL && !(S.humanAt != null && S.t <= S.humanAt && !S.rb)) S.done = true;
+    if (S.t >= MTMAX) S.done = true;
+  }
+  function mSum(S) {
+    const end = mMet(S.o.scn, S.stable);
+    return { bad: S.bad, errs: S.errs, endAcc: end.acc, worse: end.acc < MBASE.acc - 0.005, rb: S.rb, by: S.rbBy, detect: S.rbAt != null && S.deployAt != null ? S.rbAt - S.deployAt : null,
+      live: S.liveAt != null && S.deployAt != null ? S.liveAt - S.deployAt : null, shadowUsd: S.shadowUsd, goodRelease: S.o.scn === 'prompt' };
+  }
+
   /* ================= экземпляр лаборатории ================= */
   const MODE_KEY = 'amp-stroyka-ld-mode';
   const readMode = () => { try { return localStorage.getItem(MODE_KEY) === 'biz' ? 'biz' : 'tech'; } catch (e) { return 'tech'; } };
-  const TABS = [['live', '1', 'Выкладка'], ['cmp', '2', 'Сравнение'], ['mig', '3', 'Миграция базы'], ['memo', '✓', 'Итоги']];
+  const TABS = [['live', '1', 'Выкладка'], ['cmp', '2', 'Сравнение'], ['mig', '3', 'Миграция базы'], ['model', '4', 'Версия модели'], ['memo', '✓', 'Итоги']];
   const PRESETS = [['Без бага', 0, 0], ['Мелкий баг 1 %', 0.01, 0], ['Баг 10 %', 0.1, 0], ['Тормоза +300 мс', 0, 300]];
 
   function makeLab(EL, doneFn) {
     let MODE = readMode();
-    const U = { tab: 'live', strat: 'rolling', P: { err: 0.1, lat: 0, surge: 1, unav: 0 }, spd: 3, scale: 1, run: null, timer: 0, paused: false, dots: [], mem: {}, logN: -1, cmp: null, mig: { path: 'brk', i: 0 }, alive: true };
+    const P0 = SD.labDeployTab || null; SD.labDeployTab = null;
+    const U = { tab: P0 && TABS.some(x => x[0] === P0) ? P0 : 'live', mm: { scn: 'quiet', strat: 'canary', mode: 'bundle', sig: 300, run: null, timer: 0, paused: false, logN: -1, seen: {} }, strat: 'rolling', P: { err: 0.1, lat: 0, surge: 1, unav: 0 }, spd: 3, scale: 1, run: null, timer: 0, paused: false, dots: [], mem: {}, logN: -1, cmp: null, mig: { path: 'brk', i: 0 }, alive: true };
     const done = id => { try { doneFn(id); } catch (e) { /* задания не засчитываются — не страшно */ } };
     const isBiz = () => MODE === 'biz';
     const $ = s => EL.querySelector(s);
@@ -514,6 +663,7 @@
 
     /* ---------- шапка: вкладки и режим ---------- */
     function setTab(k) {
+      if (k !== 'model' && U.mm.timer) { mStop(); U.mm.paused = true; }
       U.tab = k;
       EL.querySelectorAll('[data-tab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === k)));
       render();
@@ -533,9 +683,11 @@
       if (U.tab === 'live') v.innerHTML = liveHTML();
       else if (U.tab === 'cmp') v.innerHTML = cmpHTML();
       else if (U.tab === 'mig') v.innerHTML = migHTML();
+      else if (U.tab === 'model') v.innerHTML = mHTML();
       else v.innerHTML = memoHTML();
       if (U.tab === 'live') drawLive();
       if (U.tab === 'cmp') growBars();
+      if (U.tab === 'model') mDraw();
     }
 
     /* ---------- вкладка «Выкладка» ---------- */
@@ -690,6 +842,148 @@
         <div class="ld-card info"><b>Как выбрать.</b> ${isBiz() ? 'Внутренний сервис, ночь, простой не страшен — «всё сразу». Обычный сервис — rolling. Платежи и оформление заказа — канарейка с автоматическим анализом. Новая функция для покупателей — флаг. Нужен откат за секунду любой ценой — blue-green.' : 'Простой допустим — recreate. По умолчанию — rolling с maxUnavailable 0. Критичный путь (оплата) — canary с анализом метрик. Новая функция — за флагом. Мгновенный откат важнее денег — blue-green. И всегда: схема базы совместима с двумя версиями.'}</div>`;
     }
 
+    /* ---------- вкладка «Версия модели» ---------- */
+    function mStop() { if (U.mm.timer) clearInterval(U.mm.timer); U.mm.timer = 0; }
+    function mReset() { mStop(); U.mm.run = null; U.mm.paused = false; U.mm.logN = -1; }
+    const mOpts = () => ({ scn: U.mm.scn, strat: U.mm.strat, mode: U.mm.mode, sig: U.mm.sig });
+    function mGo() {
+      mReset(); U.mm.run = mkM(mOpts());
+      if (isCalm()) { while (!U.mm.run.done) mStep(U.mm.run); mFinish(); return; }
+      U.mm.timer = setInterval(mFrame, 110); mDraw();
+    }
+    function mFrame() {
+      if (!U.alive || !U.mm.run || U.tab !== 'model') { mStop(); return; }
+      if (U.mm.paused) return;
+      const S = U.mm.run;
+      for (let k = 0; k < U.spd && !S.done; k++) mStep(S);
+      mDraw();
+      if (S.done) { mStop(); mFinish(); }
+    }
+    function mToEnd() { if (!U.mm.run) U.mm.run = mkM(mOpts()); mStop(); while (!U.mm.run.done) mStep(U.mm.run); mFinish(); }
+    function mFinish() {
+      const S = U.mm.run; if (!S) return;
+      const m = mSum(S), o = S.o, sn = U.mm.seen;
+      if (o.strat === 'canary' && o.scn === 'quiet' && !m.rb && m.worse) done('mquiet');
+      if ((o.strat === 'canaryq' || o.strat === 'shadow') && o.scn === 'quiet' && m.rb && !m.worse && m.bad < 1000) done('mgate');
+      if (o.strat === 'shadow' && o.scn === 'index' && o.mode === 'bundle' && m.rb && m.bad < 1) done('mshadow');
+      if ((o.scn === 'index' || o.scn === 'combo') && m.rb) { if (o.mode === 'loose' && m.worse) sn.loose = 1; if (o.mode === 'bundle' && !m.worse) sn.bundle = 1; }
+      if (sn.loose && sn.bundle) done('mbundle');
+      mDraw();
+    }
+    function mPanel() {
+      const M = U.mm, B = isBiz();
+      return `<div class="ld-ctl"><b>Как устроены версии</b>${seg('mmode', [['bundle', 'Связкой'], ['loose', 'По отдельности']], M.mode)}<small class="ld-sub">${M.mode === 'bundle' ? 'Модель, подсказка и индекс выкатываются и откатываются одним номером версии.' : 'В канарейке только модель. Подсказка в общем конфиге, индекс пересобирается на месте — меняются сразу у всех.'}</small></div>
+        <div class="ld-ctl"><b>Сигнальный набор</b>${seg('msig', [[50, '50 вопросов'], [300, '300 вопросов']], M.sig)}<small class="ld-sub">разброс доли верных ±${dec(196 * Math.sqrt(MBASE.acc * (1 - MBASE.acc) / M.sig), 0)} п. п.${B ? ' — на маленьком наборе случайность похожа на беду' : ''}</small></div>
+        <div class="ld-btns"><button type="button" class="btn primary" data-mact="go">${M.run ? 'Выкатить заново' : 'Выкатить версию'}</button><button type="button" class="btn" data-mact="pause" ${M.run && !M.run.done ? '' : 'disabled'}>${M.paused ? 'Дальше' : 'Пауза'}</button><button type="button" class="btn" data-mact="end" ${M.run && M.run.done ? 'disabled' : ''}>До конца</button><button type="button" class="btn ghost" data-mact="reset" ${M.run ? '' : 'disabled'}>Сначала</button></div>
+        <div class="ld-ctl"><b>Скорость показа</b>${seg('spd', [[1, 'Медленно'], [3, 'Обычно'], [10, 'Быстро']], U.spd)}</div>`;
+    }
+    function mHTML() {
+      const M = U.mm, B = isBiz(), sc = M_SCN.find(x => x.k === M.scn);
+      let h = ana('Повар тот же, но поставщик сменил муку, кто-то переписал рецепт и переложил картотеку. Ни одна тарелка не разбилась, подача не медленнее — а пирог хуже. Узнать можно, только пробуя: контрольный кусок по эталонному вкусу перед тем, как нести в зал.',
+        'Выкатываем не код, а «мозги» ассистента: модель, подсказку и индекс документов. Ошибки и задержка такие выкладки почти не меняют — меняется смысл ответов. Поэтому канарейка смотрит ещё и на долю верных ответов на наборе контрольных вопросов, а тень проверяет новую версию на копии живых вопросов, не показывая ответы людям.',
+        B ? '' : '<b>Сигнальный (золотой) набор</b> — сотни вопросов с эталонными ответами; доля верных — ворота канарейки: не хуже текущей версии на 3 п. п. и не ниже 84 %. <b>Теневой прогон (shadow)</b> — новая версия отвечает на копию трафика, ответы только сравниваются. <b>Версия-связка</b> — модель + подсказка + индекс под одним номером: канарейка и откат касаются всех трёх сразу.');
+      h += `<div class="ld-strats ldm-scn" role="group" aria-label="Что выкатываем">${M_SCN.map(s => `<button type="button" data-mscn="${s.k}" aria-pressed="${s.k === M.scn}"><b>${s.n}</b><small>${s.en}</small></button>`).join('')}</div>`;
+      h += `<div class="ld-strats ldm-str" role="group" aria-label="Как выкатываем">${M_STR.map(s => `<button type="button" data-mstr="${s.k}" aria-pressed="${s.k === M.strat}"><b>${s.n}</b><small>${s.en}</small></button>`).join('')}</div>`;
+      h += `<div class="ld-work"><div class="ld-panel" id="ldmPanel">${mPanel()}</div><div class="ld-stagecol"><div class="ldm-stage" id="ldmStage"></div><div class="ld-kpis" id="ldmKpis"></div></div></div>
+        <div class="ld-charts" id="ldmCharts"></div>
+        <div class="ld-bottom"><div class="ld-logbox"><b class="ld-h">Журнал выкладки</b><ol class="ld-log" id="ldmLog"></ol></div><div class="ldm-right"><div id="ldmRes"></div>
+        <div class="ld-tablewrap"><table class="ld-table ldm-ex"><caption>Сигнальный набор: «${esc(sc.n.toLowerCase())}» — что изменилось в ответах</caption><thead><tr><th>Вопрос</th><th>Эталон</th><th>Новая версия</th></tr></thead><tbody>${MEX[M.scn].map(r => `<tr><td>${esc(r[0])}</td><td>${esc(r[1])}</td><td class="${r[3] ? 'ok' : 'bad'}">${r[3] ? '✓ ' : '✗ '}${esc(r[2])}</td></tr>`).join('')}</tbody></table></div></div></div>`;
+      return h;
+    }
+    function mStage(S) {
+      const M = U.mm, sc = S.sc, cur = S.t ? (S.cand ? 'canary' : 'one') : 'idle', loose = S.o.mode === 'loose';
+      const row = (k, label, c, side) => {
+        const isNew = c && c[k] === 2, shared = loose && k !== 'm' && S.ch[k];
+        const name = isNew ? sc.v2[k] : MV[k][0];
+        return `<li class="${isNew ? 'chg' : ''}"><span>${label}</span><b>${esc(name)}</b>${shared && side ? '<em>общая для всех</em>' : ''}</li>`;
+      };
+      const card = (title, c, share, cls, sub) => `<div class="ldm-b ${cls}"><div class="ldm-bh"><b>${title}</b><small>${sub}</small></div><ul>${row('m', 'Модель', c, 1)}${row('p', 'Подсказка', c, 1)}${row('i', 'Индекс', c, 1)}</ul><div class="ldm-share"><i style="width:${(share * 100).toFixed(1)}%"></i></div></div>`;
+      const sShare = S.cand && !S.shadow ? 1 - S.w : 1;
+      let h = card(S.cand ? 'Текущая версия' : 'Работает', S.stable, sShare, 'a', `${pc(sShare)} вопросов${!isV1(S.stable) ? ' · уже с новым' : ''}`);
+      if (S.cand) h += card(S.shadow ? 'Новая версия · тень' : 'Новая версия · канарейка', S.cand, S.shadow ? 0 : S.w, 'b', S.shadow ? 'копия всех вопросов, ответы никому не показываем' : `${pc(S.w)} вопросов`);
+      else if (!S.t) { const v2 = { m: S.ch.m ? 2 : 1, p: S.ch.p ? 2 : 1, i: S.ch.i ? 2 : 1 }; h += card('Новая версия · ждёт', v2, 0, 'b mut', 'нажми «Выкатить версию»'); }
+      const last = S.sig[S.sig.length - 1];
+      let sg = '';
+      if (last) {
+        const n = 30, okN = Math.round(n * Math.max(0, Math.min(1, last.v))), bN = Math.round(n * Math.max(0, Math.min(1, last.b)));
+        sg = `<div class="ldm-sig"><div class="ldm-sigh"><b>Последний замер сигнального набора · ${S.o.sig} вопросов</b><small>квадрат ≈ ${dec(S.o.sig / n, 0)} вопр.</small></div><div class="ldm-sr"><span>новая</span><div class="ldm-cells">${Array.from({ length: n }, (_, i) => `<i class="${i < okN ? 'ok' : 'bad'}"></i>`).join('')}</div><b class="${last.fail ? 'bad' : 'ok'}">${pc(last.v)}</b></div><div class="ldm-sr"><span>текущая</span><div class="ldm-cells">${Array.from({ length: n }, (_, i) => `<i class="${i < bN ? 'ok' : 'bad'}"></i>`).join('')}</div><b>${pc(last.b)}</b></div></div>`;
+      }
+      return `<div class="ldm-cards ${cur}">${h}</div>${sg}<span class="ldm-clock">${S.t ? '⏱ ' + S.t + ' мин' : ''}</span>`;
+    }
+    function mKpis(S) {
+      const m = mSum(S), running = S.t > 0 && !S.done, cur = S.ser.acc.length ? S.ser.acc[S.ser.acc.length - 1] : MBASE.acc;
+      const byT = { quality: 'сигнальный набор', tech: 'ошибки и задержка', shadow: 'теневой прогон', human: 'алерт и дежурный' };
+      const who = S.rb ? byT[S.rbBy] : !S.t ? '—' : running ? 'пока никто' : m.worse ? 'никто — узнают из жалоб' : 'не понадобилось';
+      return tile('Плохих ответов людям', nf(m.bad), 'сверх обычных 12 % промахов', m.bad >= 1 ? (m.bad > 3000 ? 'bad' : 'warn') : 'ok')
+        + tile('Ошибок у людей', nf(m.errs), '5xx и таймауты', m.errs >= 1 ? 'bad' : 'ok')
+        + tile('Верных ответов сейчас', pc(cur), `было ${pc(MBASE.acc)}`, cur < MBASE.acc - 0.005 ? 'bad' : 'ok')
+        + tile('Кто заметил', who, S.rbAt != null ? `через ${S.rbAt - S.deployAt} мин после старта` : '', S.rb ? (m.goodRelease ? 'warn' : 'ok') : !running && m.worse ? 'bad' : '')
+        + tile('Новая версия у всех', m.live != null ? 'через ' + m.live + ' мин' : S.rb ? 'не дошла' : S.t ? 'идёт…' : '—', '', '')
+        + (S.o.strat === 'shadow' ? tile('Цена тени', '$' + nf(m.shadowUsd), 'токены на копию вопросов', '') : '');
+    }
+    function mChart(W, H, o) { return chartSVG(W, H, Object.assign({ tfmt: s => s + ' мин', tstep: 30 }, o)); }
+    function mCharts(S, W) {
+      const T = MTMAX, b = 2, n = S.t;
+      const err = series(S.ser.err, 0, n, b), p95 = series(S.ser.p95, 0, n, b), acc = series(S.ser.acc, 0, n, b), w = series(S.ser.w, 0, n, b);
+      const marks = S.ev.filter(e => e.n).map(e => ({ t: e.t, n: e.n, cls: e.cls }));
+      const dots = S.sig.map(r => ({ t: r.t, v: r.v, cls: r.fail ? 'bad' : 'ok' }));
+      const last = a => a.length ? a[a.length - 1] : null;
+      const lab = (t, v, cls) => `<div class="ld-ch-h"><b>${t}</b><span class="${cls || ''}">${v}</span></div>`;
+      const ce = last(S.ser.err), cp = last(S.ser.p95), ca = last(S.ser.acc), cw = last(S.ser.w);
+      const empty = n ? '' : 'нажми «Выкатить версию» — графики пойдут по минутам';
+      return `<div class="ld-ch">${lab('Ошибки, % вопросов', n ? 'сейчас ' + pc(ce) : '', ce > A_ERR ? 'bad' : '')}${mChart(W, 84, { T, b, data: err, max: 0.06, ticks: [0, 0.03, 0.06], fmt: v => pc(v), thr: A_ERR, thrLabel: 'алерт 2 %', cls: 'err', marks, markNums: true, aria: 'Ошибки по минутам', empty })}</div>
+        <div class="ld-ch">${lab('Задержка p95, мс', n ? 'сейчас ' + nf(cp) + ' мс' : '', cp > 3000 ? 'bad' : '')}${mChart(W, 74, { T, b, data: p95, max: 4000, ticks: [0, 2000, 4000], fmt: v => nf(v), thr: 3000, thrLabel: 'алерт 3 000 мс', cls: 'lat', marks, aria: 'Задержка по минутам' })}</div>
+        <div class="ld-ch">${lab('Верных ответов у людей, % · точки — сигнальный набор на новой версии', n ? 'сейчас ' + pc(ca) : '', ca < MBASE.acc - 0.005 ? 'bad' : '')}${mChart(W, 104, { T, b, data: acc, min: 0.5, max: 1, ticks: [0.6, 0.8, 1], fmt: v => pc(v), thr: MFLOOR, thrLabel: 'ворота 84 %', cls: 'q', marks, dots, aria: 'Доля верных ответов по минутам' })}</div>
+        <div class="ld-ch">${lab('Вопросов на новом (модель, подсказка или индекс), %', n ? 'сейчас ' + pc(cw) : '')}${mChart(W, 84, { T, b, data: w, max: 1, ticks: [0, 0.5, 1], fmt: v => pc(v), cls: 'v2', area: true, marks, axis: true, aria: 'Доля вопросов на новой версии' })}</div>`;
+    }
+    function mResult(S) {
+      if (!S.done) return `<div class="ld-card"><b>${S.t ? 'Идёт выкладка…' : 'Готов к выкладке.'}</b> ${S.t ? 'Смотри на третий график: ошибки и задержка могут быть спокойными, а доля верных — падать.' : 'Выбери, что выкатываем и как, нажми «Выкатить версию».'}</div>`;
+      const m = mSum(S), o = S.o, B = isBiz(), nm = MSN[o.strat];
+      let cls = 'ok', h = `<b>Итог: ${esc(nm)}${o.mode === 'loose' ? ', части по отдельности' : ''}.</b> `;
+      if (m.goodRelease && m.rb) { cls = 'warn'; h += `Ложная тревога: хорошую подсказку откатили — на ${o.sig} вопросах случайный провал похож на беду. Возьми 300 вопросов.`; }
+      else if (m.goodRelease) h += `Хорошая версия дошла до всех за ${m.live} мин, верных ответов ${pc(m.endAcc)}.`;
+      else if (m.rb && !m.worse) h += `${{ quality: 'Сигнальный набор', tech: 'Анализ ошибок и задержки', shadow: 'Теневой прогон', human: 'Дежурный по алерту' }[m.by]} остановил плохую версию через ${m.detect} мин. ${m.bad >= 1 ? `Людям ушло ≈ ${nf(m.bad)} ${plural(m.bad, 'плохой ответ', 'плохих ответа', 'плохих ответов')}` : 'Ни одного плохого ответа людям'}${m.errs >= 1 ? ` и ${nf(m.errs)} ошибок` : ''}. Качество вернулось.`;
+      else if (m.rb) { cls = 'bad'; h += `Откатили модель, но ${mLeft(S)} — у всех ${pc(m.endAcc)} верных вместо ${pc(MBASE.acc)}. Связка откатилась бы одной командой.`; }
+      else if (m.worse) { cls = 'bad'; h += `Новая версия у всех: ошибок и тормозов нет, а верных ответов ${pc(m.endAcc)} вместо ${pc(MBASE.acc)}. ${o.strat === 'canary' ? 'Обычная канарейка смотрит только на ошибки и задержку — тихую порчу смысла она пропускает.' : o.mode === 'loose' ? 'Канарейке было не с чем сравнивать: изменение лежало вне версии и сразу ушло всем.' : 'Проверять было нечем.'} Узнаете из жалоб — через дни.`; }
+      else h += 'Новая версия у всех, качество в норме.';
+      if (B) h += `<p class="ld-sub">≈ ${nf(m.bad)} плохих ответов — это ≈ ${nf(m.bad * 0.3)} обращений к живому оператору по ≈ 120 ₽: ${rub(m.bad * 0.3 * 120)}.</p>`;
+      return `<div class="ld-card ${cls}">${h}</div>`;
+    }
+    function mDraw() {
+      if (U.tab !== 'model' || !U.alive) return;
+      const S = U.mm.run || mkM(mOpts());
+      const st = $('#ldmStage'), ch = $('#ldmCharts'), kp = $('#ldmKpis'), lg = $('#ldmLog'), rs = $('#ldmRes');
+      if (st) st.innerHTML = mStage(S);
+      if (ch) ch.innerHTML = mCharts(S, Math.max(320, ch.clientWidth - 20 || 760));
+      if (kp) kp.innerHTML = mKpis(S);
+      if (lg && U.mm.logN !== S.ev.length) {
+        U.mm.logN = S.ev.length;
+        lg.innerHTML = S.ev.length ? S.ev.map(e => `<li class="${e.cls}"><span class="ld-lt">${e.t} мин</span>${e.n ? `<i class="ld-ln ${e.cls}">${e.n}</i>` : ''}<span>${esc(e.text)}</span></li>`).join('') : `<li class="mut"><span class="ld-lt">0 мин</span><span>Ассистент отвечает ${MRPS} вопросов в секунду, ${pc(MBASE.acc)} верных на сигнальном наборе. Ждём выкладку.</span></li>`;
+        lg.scrollTop = lg.scrollHeight;
+      }
+      if (rs) { const k = S.done ? 'd' + S.t + MODE : S.t ? 'r' : 'i'; if (rs.dataset.k !== k) { rs.dataset.k = k; rs.innerHTML = mResult(S); } }
+      const pa = EL.querySelector('[data-mact="pause"]'); if (pa) { pa.disabled = !(U.mm.run && !U.mm.run.done); pa.textContent = U.mm.paused ? 'Дальше' : 'Пауза'; }
+      const en = EL.querySelector('[data-mact="end"]'); if (en) en.disabled = !!(U.mm.run && U.mm.run.done);
+      const rr = EL.querySelector('[data-mact="reset"]'); if (rr) rr.disabled = !U.mm.run;
+      const go = EL.querySelector('[data-mact="go"]'); if (go) go.textContent = U.mm.run ? 'Выкатить заново' : 'Выкатить версию';
+    }
+    function mClick(d, b) {
+      if (d.mscn) { U.mm.scn = d.mscn; mReset(); render(); return true; }
+      if (d.mstr) { U.mm.strat = d.mstr; mReset(); render(); return true; }
+      if (d.mact) {
+        const a = d.mact;
+        if (a === 'go') mGo(); else if (a === 'pause') { U.mm.paused = !U.mm.paused; mDraw(); } else if (a === 'end') mToEnd(); else if (a === 'reset') { mReset(); mDraw(); }
+        return true;
+      }
+      if (d.set && /^m(mode|sig):/.test(d.set)) {
+        const i = d.set.indexOf(':'), k = d.set.slice(1, i), v = d.set.slice(i + 1);
+        U.mm[k] = k === 'sig' ? +v : v; mReset(); markSeg(b);
+        const p = $('#ldmPanel'); if (p) p.innerHTML = mPanel(); mDraw();
+        return true;
+      }
+      return false;
+    }
+
     /* ---------- события ---------- */
     const markSeg = b => b.parentNode.querySelectorAll('button').forEach(x => x.setAttribute('aria-selected', String(x === b)));
     function afterParam() {
@@ -697,11 +991,12 @@
       else render();
     }
     function onClick(e) {
-      const b = e.target.closest('[data-tab],[data-mode],[data-strat],[data-set],[data-act],[data-pre],[data-mi],[data-path]');
+      const b = e.target.closest('[data-tab],[data-mode],[data-strat],[data-set],[data-act],[data-pre],[data-mi],[data-path],[data-mscn],[data-mstr],[data-mact]');
       if (!b || !EL.contains(b) || b.disabled) return;
       const d = b.dataset;
       if (d.tab) return setTab(d.tab);
       if (d.mode) return setMode(d.mode);
+      if (U.tab === 'model' && mClick(d, b)) return;
       if (d.strat) { U.strat = d.strat; resetRun(); render(); return; }
       if (d.pre != null) { const p = PRESETS[+d.pre]; U.P.err = p[1]; U.P.lat = p[2]; afterParam(); return; }
       if (d.path) { U.mig = { path: d.path, i: 0 }; render(); return; }
@@ -735,12 +1030,13 @@
     EL.innerHTML = `<div class="ld"><div class="ld-tabs" role="tablist" aria-label="Разделы лаборатории">${TABS.map(([k, n, t]) => `<button type="button" role="tab" data-tab="${k}" aria-selected="${U.tab === k}"><b>${n}</b>${t}</button>`).join('')}<div class="seg ld-mode" role="group" aria-label="Как объяснять">${[['tech', 'Техника'], ['biz', 'Бизнес']].map(([k, t]) => `<button type="button" data-mode="${k}" aria-selected="${MODE === k}">${t}</button>`).join('')}</div></div><div class="ld-view" id="ldView"></div></div>`;
     EL.addEventListener('click', onClick); EL.addEventListener('input', onInput);
     let raf = 0, lastW = 0;
-    const ro = window.ResizeObserver ? new ResizeObserver(() => { const w = EL.clientWidth; if (w === lastW) return; lastW = w; cancelAnimationFrame(raf); raf = requestAnimationFrame(() => { if (U.tab === 'live') drawLive(); }); }) : null;
+    const ro = window.ResizeObserver ? new ResizeObserver(() => { const w = EL.clientWidth; if (w === lastW) return; lastW = w; cancelAnimationFrame(raf); raf = requestAnimationFrame(() => { if (U.tab === 'live') drawLive(); else if (U.tab === 'model') mDraw(); }); }) : null;
     if (ro) ro.observe(EL);
     render();
+    if (U.tab !== 'live') requestAnimationFrame(() => { const tb = $('.ld-tabs'); if (tb && tb.scrollIntoView) tb.scrollIntoView({ block: 'start' }); });
     return {
       destroy() {
-        U.alive = false; stopTimer();
+        U.alive = false; stopTimer(); mStop();
         EL.removeEventListener('click', onClick); EL.removeEventListener('input', onInput);
         if (ro) ro.disconnect(); cancelAnimationFrame(raf);
       }
@@ -751,18 +1047,23 @@
   SD.LABS = SD.LABS || [];
   SD.LABS.push({
     id: 'deploy', title: 'Выкладка вживую', lede: 'Всё сразу, rolling, blue-green, канарейка, флаги',
-    intro: 'Сервис из 10 подов версии v1 работает под живым трафиком: 6 000 покупателей, 200 запросов в секунду. Выкатываем v2, в которой может быть баг — ползунками задаёшь долю ошибок и рост задержки. Пять стратегий, графики ошибок и задержки, сколько покупателей увидели ошибку и сколько длился откат. Переключатель «Техника | Бизнес» переводит всё в заказы и рубли.',
+    intro: 'Сервис из 10 подов версии v1 работает под живым трафиком: 6 000 покупателей, 200 запросов в секунду. Выкатываем v2, в которой может быть баг — ползунками задаёшь долю ошибок и рост задержки. Пять стратегий, графики ошибок и задержки, сколько покупателей увидели ошибку и сколько длился откат. Переключатель «Техника | Бизнес» переводит всё в заказы и рубли. Вкладка «Версия модели» — то же для ИИ-ассистента: выкатываем модель, подсказку и индекс, а канарейка смотрит ещё и на долю верных ответов.',
     tasks: [
       { id: 'down', text: 'Выкати v2 «всё сразу» и найди простой на графике ошибок' },
       { id: 'rolling', text: 'Rolling update с багом от 10 %: дождись алерта и ручного отката' },
       { id: 'bg', text: 'Blue-green: откати плохую версию одним переключением балансировщика' },
       { id: 'canary', text: 'Канарейка сама откатывает баг, пока он задел меньше 2 % покупателей' },
       { id: 'compare', text: 'Сравни пять стратегий на одном баге' },
-      { id: 'expand', text: 'Проведи миграцию базы через expand/contract без единой ошибки' }
+      { id: 'expand', text: 'Проведи миграцию базы через expand/contract без единой ошибки' },
+      { id: 'mquiet', text: 'Версия модели: обычная канарейка пропускает «модель дешевле» — ошибок нет, а качество упало' },
+      { id: 'mgate', text: 'Канарейка с сигнальным набором (или тень) сама останавливает «модель дешевле»' },
+      { id: 'mshadow', text: 'Теневой прогон ловит сломанный индекс — ни одного плохого ответа людям' },
+      { id: 'mbundle', text: 'Откат по частям не возвращает качество, откат связкой — возвращает (индекс или модель + подсказка)' }
     ],
     mount(el, api) {
       const inst = makeLab(el, tid => api && api.done(tid));
       return () => inst.destroy();
     }
   });
+  SD.labDeploy = { open(tab) { SD.labDeployTab = tab || null; if (SD.labs) return SD.labs.open('deploy'); } };
 })();

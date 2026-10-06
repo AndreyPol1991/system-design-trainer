@@ -18,13 +18,17 @@
     { id: 'async', name: 'Очереди и асинхронность', an: 'Почта: отправил и занимаешься своим', items: ['email', 'order', 'p-outbox', 'p-dlq', 'p-workers', 'k-acks', 'k-batch', 'a-notify', 'a-events', 'i-outbox', 'i-consumer'] },
     { id: 'rel', name: 'Надёжность и отказоустойчивость', an: 'Запасной выход и предохранители', items: ['cascade', 'p-resilience', 'p-retry', 'p-ratelimit', 'f-retrystorm', 'f-spof', 'f-notimeout', 'k-health', 'k-rl', 'c-az', 'lab:resil', 'lab:bucket'] },
     { id: 'arch', name: 'Архитектура и границы сервисов', an: 'Цеха завода и проходные между ними', items: ['lab:nfr', 'lab:api', 'micro', 'legacy', 'ddd', 'a-dbper', 'a-gateway', 'a-split', 'f-shareddb', 'f-distmono', 'i-layers', 'i-ports', 'i-modular', 'i-nplus1'] },
-    { id: 'ops', name: 'Наблюдаемость и эксплуатация', an: 'Приборная панель и дежурный', items: ['monitoring', 'o-metrics', 'o-alerts', 'o-logs', 'o-traces', 'o-k8s', 'lab:deploy', 'lab:slo', 'lab:oncall'] },
+    { id: 'ops', name: 'Наблюдаемость и эксплуатация', an: 'Приборная панель и дежурный', items: ['monitoring', 'o-metrics', 'o-alerts', 'o-logs', 'o-traces', 'o-k8s', 'aiobs', 'lab:deploy', 'lab:slo', 'lab:oncall'] },
     { id: 'data', name: 'Данные и аналитика', an: 'Склад отчётов отдельно от магазина', items: ['analytics', 'd-reports', 'd-clicks', 'd-columns', 'd-lake', 'f-oltpreports', 'lab:stream'] },
     { id: 'cloud', name: 'Облако и стоимость', an: 'Аренда вместо своего здания', items: ['c-az', 'c-spot', 'c-storage', 'c-serverless', 'lab:cloudnet', 'photos', 'video', 'p-cdn', 'p-presigned'] },
     { id: 'rt', name: 'Realtime и особые хранилища', an: 'Рация вместо писем', items: ['chat', 'feed', 'social', 'geo'] },
     { id: 'front', name: 'Клиентская часть и сеть', an: 'От нажатия до готового экрана', items: ['lab:front', 'photos', 'video', 'p-cdn', 'p-presigned', 'chat'] },
-    { id: 'ai', name: 'AI-системы', an: 'Умный помощник с правилами', items: ['support', 'voice', 'aiscale', 'agent', 'p-router'] }
+    { id: 'ai', name: 'AI-системы', an: 'Умный помощник с правилами', items: ['support', 'ragfix', 'aiobs', 'voice', 'aiscale', 'agent', 'p-router', 'lab:deploy'] }
   ];
+  /* много клиентов (SaaS), счёт за облако и учение по восстановлению: js/levels-tenant.js, js/cloud.js, js/lab-nfr.js */
+  SK.splice(SK.findIndex(s => s.id === 'ai'), 0, { id: 'saas', name: 'Много клиентов в одном сервисе (SaaS)', an: 'Бизнес-центр: вход общий, офисы свои', items: ['t-leak', 't-noisy', 't-cells', 't-big'] });
+  SK.find(s => s.id === 'rel').items.push('t-cells', 'lab:dr');
+  SK.find(s => s.id === 'cloud').items.push('c-bill');
   const ROLES = [
     { id: 'sa', name: 'Системный аналитик', skills: ['calc', 'db', 'tx', 'async', 'arch', 'data', 'rel'] },
     { id: 'be', name: 'Бэкенд-разработчик', skills: ['scale', 'cache', 'db', 'tx', 'async', 'rel', 'arch', 'front'] },
@@ -32,9 +36,11 @@
     { id: 'de', name: 'Дата-инженер', skills: ['data', 'db', 'async', 'cloud', 'calc'] },
     { id: 'arc', name: 'Архитектор', skills: SK.map(s => s.id) }
   ];
+  ['sa', 'be'].forEach(id => { const r = ROLES.find(x => x.id === id); if (r && !r.skills.includes('saas')) r.skills.push('saas'); });
 
   /* ---------- прогресс ---------- */
   const SHORT = { 'Практикум паттернов': 'Практикум', 'Настройки на пальцах': 'Настройка', 'Найди и перестрой': 'Инцидент', 'Архитектура из сервисов': 'Архитектура', 'Эксплуатация и инструменты': 'Эксплуатация', 'Данные: от события до дашборда': 'Данные', 'Внутри сервиса': 'Внутри сервиса', 'Облако': 'Облако' };
+  SHORT['Много клиентов: SaaS'] = 'SaaS';
   const labDef = id => (SD.LABS || []).find(l => l.id === id);
   function itemOf(key) {
     const A = SD.app && SD.app.A;
@@ -55,7 +61,7 @@
   function retry() {
     const A = SD.app && SD.app.A, out = [];
     if (!A || !SD.learn) return out;
-    const all = [].concat(SD.LEVELS, SD.PRACTICE || [], SD.FIXES || [], SD.INNER || [], SD.KNOBS || [], SD.ARCHL || [], SD.OPSL || [], SD.DATAL || [], SD.CLOUDL || []);
+    const all = [].concat(SD.LEVELS, SD.PRACTICE || [], SD.FIXES || [], SD.INNER || [], SD.KNOBS || [], SD.ARCHL || [], SD.OPSL || [], SD.DATAL || [], SD.CLOUDL || [], SD.SAASL || []);
     all.forEach(L => { const t = SD.learn.tries(L.id); if (t.length && !t.some(x => x.ok) && !((A.progress[L.id] || {}).stars)) out.push({ L, n: t.length }); });
     return out.slice(0, 6);
   }
