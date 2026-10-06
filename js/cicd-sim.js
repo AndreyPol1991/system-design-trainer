@@ -12,7 +12,11 @@
       · rolling — экземпляры меняются по одному за ≈ 5 мин, откат идёт тем же порядком;
       · blue-green — 100 % трафика переключается разом, откат — переключение назад за секунду; серверов на время выкладки ×2;
       · канарейка — 5 → 25 → 50 → 100 % трафика, по ≈ 2 мин на шаг; откат — снять долю канарейки.
+        Ровно 5 % — только если перед сервисом балансировщик L7 или API Gateway: они делят запросы по весам.
+        Иначе (L4, нет балансировщика, обработчик очереди) канарейка — по экземплярам: один новый из N, доля 1/N.
       В режиме испытания плохие экземпляры отвечают ошибкой через opts.sick — тот же механизм, что «Сосед болеет».
+      Фоновые задачи развёрнутых обработчиков падают с той же долей (routePost → случайные ошибки обработки):
+      у очереди с «Повторы + DLQ» они повторятся после отката или лягут в DLQ, без них — теряются.
    3. Метрики DORA в результате (res.cicd.dora): частота выкладок, доля неудачных изменений, время восстановления (MTTR),
       время от коммита до прода и минуты простоя от релизов в месяц.
    Схемы без узла CI/CD считаются ровно как раньше. Уровни — в трек «Эксплуатация» (SD.OPSL). */
@@ -63,7 +67,7 @@
   const PROPS = [
     { key: 'strategy', label: 'Стратегия выкладки', type: 'select', def: 'rolling',
       options: [['canary', 'Канарейка — сначала 5 % трафика'], ['bg', 'Blue-green — второе окружение и переключение'], ['rolling', 'Rolling — менять экземпляры по одному'], ['recreate', 'Всё сразу — остановить старые, запустить новые']],
-      help: 'Как новая версия заменяет старую. Канарейка — новая версия получает 5 %, потом 25, 50 и 100 % трафика. Blue-green — рядом поднимается второе окружение, трафик переключается целиком, откат — за секунду, но серверов на время выкладки вдвое больше. Rolling — без простоя, экземпляры меняются по одному за ≈ 5 мин. Всё сразу — ≈ 30 с простоя на каждой выкладке.' },
+      help: 'Как новая версия заменяет старую. Канарейка — новая версия получает 5 %, потом 25, 50 и 100 % трафика; ровно 5 % — если балансировщик L7 или API Gateway делит запросы по весам, иначе доля по числу экземпляров (из 2 один новый — половина). Blue-green — рядом поднимается второе окружение, трафик переключается целиком, откат — за секунду, но серверов на время выкладки вдвое больше. Rolling — без простоя, экземпляры меняются по одному за ≈ 5 мин. Всё сразу — ≈ 30 с простоя на каждой выкладке.' },
     { key: 'tests', label: 'Автотесты перед выкладкой', type: 'select', def: 'unit',
       options: [['int', 'Юнит + интеграционные — ловят ≈ 4 из 5'], ['unit', 'Юнит-тесты — ловят ≈ половину багов'], ['none', 'Нет — что собралось, то и выкладываем']],
       help: 'Сборка, которая не прошла тесты, в прод не попадает. Юнит-тесты проверяют функции по отдельности — быстро и дёшево. Интеграционные запускают сервис с настоящей базой и соседями на тестовом стенде — ловят ошибки на стыках, но стенд и прогоны стоят денег.' },
@@ -100,7 +104,7 @@
     'Метрики DORA показывают, как работает доставка: как часто релизы, какая доля ломается и как быстро чинится.'
   ];
   if (SD.PROP_SIMPLE) SD.PROP_SIMPLE.cicd = {
-    strategy: 'Как поменять меню в ресторане. Всё сразу — закрыть зал, поменять меню, открыть. Rolling — менять меню по одному столику. Blue-green — открыть второй зал с новым меню и пересадить всех гостей разом: не понравилось — пересадить обратно. Канарейка — сначала дать новое блюдо одному столику из двадцати.',
+    strategy: 'Как поменять меню в ресторане. Всё сразу — закрыть зал, поменять меню, открыть. Rolling — менять меню по одному столику. Blue-green — открыть второй зал с новым меню и пересадить всех гостей разом: не понравилось — пересадить обратно. Канарейка — сначала дать новое блюдо одному столику из двадцати. Но если столиков всего два, «один столик» — это уже половина зала: нужен официант, который сам даёт новое блюдо каждому двадцатому гостю, — балансировщик, который делит запросы по весам.',
     tests: 'Повар пробует суп перед подачей. Юнит-тесты — пробует каждый ингредиент отдельно. Интеграционные — пробует готовое блюдо целиком. Чем больше проб, тем реже недовольный гость, но каждая проба — время и деньги.',
     autoRollback: 'Дегустатор на кухне: если новое блюдо пошло назад с жалобами, он сам снимает его с меню, не дожидаясь шефа. Автооткат сравнивает ошибки новой версии со старой и возвращает старую за минуту. Но дегустатор должен видеть тарелки: без мониторинга он слепой.',
     freq: 'Маленькие порции весь день или огромный банкет раз в неделю. Подгорела маленькая порция — выбросил одну сковородку. Большой релиз копит много изменений: ломается чаще, и найти, что именно сломалось, труднее.'
@@ -110,7 +114,7 @@
       recreate: 'Все экземпляры останавливаются разом — ≈ 30 с никто не отвечает. Плохая версия сразу у всех, откат — ещё один простой.',
       rolling: 'Экземпляры меняются по одному за ≈ 5 мин, без простоя. Плохая версия расползается на всех, и откат такой же долгий.',
       bg: 'Новая версия поднимается рядом, трафик переключается целиком. Откат — переключить обратно за секунду, но до отката плохую версию видят все. На время выкладки серверов вдвое больше.',
-      canary: 'Новая версия сначала получает 5 % запросов, потом 25, 50 и 100 %. Плохую версию видит малая доля, откат — убрать канарейку.'
+      canary: 'Новая версия сначала получает 5 % запросов, потом 25, 50 и 100 %. Плохую версию видит малая доля, откат — убрать канарейку. 5 % по весам делит балансировщик L7 или API Gateway; без них канарейка — один экземпляр из N: при 2 экземплярах это половина трафика.'
     };
     SD.OPT_SIMPLE['cicd.tests'] = {
       none: 'Без тестов каждый 4-й ежедневный релиз ломает прод.',
@@ -131,7 +135,8 @@
   /* ---------- модель: плохой релиз и DORA ---------- */
   /* td — через сколько минут решили откатывать. Возвращает: пик доли запросов на плохой версии, «минуты полного простоя»
      (доля × время), время восстановления и простой самой выкладки */
-  function incident(st, td) {
+  /* first — доля трафика у канарейки на первом шаге: 5 % по весам или 1/N, если делить можно только экземплярами */
+  function incident(st, td, first) {
     if (st === 'recreate') return { peak: 1, E: DOWN_RC + td + DOWN_RC, D: DOWN_RC + td + DOWN_RC, deployDown: DOWN_RC };
     if (st === 'rolling') {
       const sd = Math.min(1, td / ROLL_MIN);
@@ -140,10 +145,11 @@
       return { peak: sd, E: before + sd * rb / 2, D: td + rb, deployDown: 0 };
     }
     if (st === 'bg') return { peak: 1, E: td, D: td, deployDown: 0 };
+    const steps = STEPS.map(x => Math.max(x, first || STEPS[0]));
     let E = 0, t = 0, peak = 0;
-    for (let i = 0; i < STEPS.length && t < td; i++) {
-      const dt = Math.min(i < STEPS.length - 1 ? STEP_MIN : Infinity, td - t);
-      E += STEPS[i] * dt; peak = STEPS[i]; t += dt;
+    for (let i = 0; i < steps.length && t < td; i++) {
+      const dt = Math.min(i < steps.length - 1 ? STEP_MIN : Infinity, td - t);
+      E += steps[i] * dt; peak = steps[i]; t += dt;
     }
     const full = td >= STEP_MIN * (STEPS.length - 1);     // канарейка уже стала 100 % — откатываем rolling'ом
     return { peak, E: E + (full ? ROLL_MIN / 2 : 0), D: td + (full ? ROLL_MIN : 0), deployDown: 0 };
@@ -160,6 +166,13 @@
   function analyze(g) {
     const by = id => g.nodes.find(n => n.id === id);
     const kidsOf = id => g.edges.filter(e => e.from === id).map(e => by(e.to)).filter(Boolean);
+    const parentsOf = id => g.edges.filter(e => e.to === id).map(e => by(e.from)).filter(Boolean);
+    /* делить трафик по весам умеют балансировщик L7 и API Gateway; L4 видит только соединения */
+    const splitOf = x => {
+      const routers = parentsOf(x.id).filter(p => p.type === 'lb' || p.type === 'gateway');
+      const l4 = routers.find(p => p.type === 'lb' && (p.props || {}).mode === 'l4');
+      return { weighted: x.type === 'app' && routers.length > 0 && !l4, router: routers[0] || null, l4: l4 || null };
+    };
     const owner = {}, pipes = [];
     g.nodes.filter(n => n.type === 'cicd').forEach(c => {
       const list = [];
@@ -173,11 +186,23 @@
       const strategy = pick(p.strategy, STRATS, 'rolling'), tests = pick(p.tests, TESTS, 'unit'), freq = pick(p.freq, FREQS, 'week');
       const mon = hasMon(g), autoWanted = !!p.autoRollback, auto = autoWanted && mon;
       const how = auto ? 'auto' : humanHow(g), td = DETECT[how];
-      const inc = incident(strategy, td);
+      /* каждый развёрнутый сервис отдельно: у канарейки доля зависит от того, чем делят трафик */
+      const units = svc.map(x => {
+        const N = Math.max(1, Math.round(+(x.props || {}).count || 1)), sp = splitOf(x);
+        const first = strategy === 'canary' ? (sp.weighted ? STEPS[0] : Math.max(STEPS[0], 1 / N)) : null;
+        const inc = incident(strategy, td, first);
+        const qs = parentsOf(x.id).filter(q => q.type === 'queue');
+        return { id: x.id, name: lbl(x), type: x.type, N, weighted: sp.weighted, router: sp.router ? lbl(sp.router) : null, l4: sp.l4 ? lbl(sp.l4) : null, first,
+          peak: inc.peak, E: inc.E, mttr: inc.D, queues: qs.map(q => q.id), retries: qs.length > 0 && qs.every(q => !!(q.props || {}).retries) };
+      });
+      const users = units.filter(u => u.type === 'app'), jobs = units.filter(u => u.type === 'worker'), main = users.length ? users : units;
+      const inc = incident(strategy, td, STEPS[0]);
+      const mx = (arr, k, d) => arr.length ? Math.max(...arr.map(u => u[k])) : d;
+      const peak = mx(main, 'peak', inc.peak), E = mx(main, 'E', inc.E), mttr = mx(units, 'mttr', inc.D);
       const R = PER_MONTH[freq], cfr = cfrOf(freq, tests), bad = R * cfr;
       pipes.push({
-        id: c.id, name: lbl(c), svc: svc.map(x => x.id), svcNames: svc.map(lbl), strategy, tests, freq, mon, autoWanted, auto, how, td,
-        peak: inc.peak, E: inc.E, mttr: inc.D, deployDown: inc.deployDown, R, cfr, bad, downMonth: R * inc.deployDown + bad * inc.E,
+        id: c.id, name: lbl(c), svc: svc.map(x => x.id), svcNames: svc.map(lbl), units, strategy, tests, freq, mon, autoWanted, auto, how, td,
+        peak, E, mttr, jobPeak: mx(jobs, 'peak', 0), deployDown: inc.deployDown, R, cfr, bad, downMonth: R * inc.deployDown + bad * E,
         lead: LEAD[freq] + LEAD_T[tests]
       });
     });
@@ -212,11 +237,21 @@
       /* испытание «плохой релиз»: новая версия отвечает ошибкой — на той доле запросов, что успела на неё попасть */
       if (ctx.opts.badRelease) {
         const sick = Object.assign({}, ctx.opts.sick || {});
-        M.pipes.forEach(P => P.svc.forEach(id => { const s0 = sick[id] || {}; sick[id] = Object.assign({}, s0, { fail: 1 - (1 - (s0.fail || 0)) * (1 - P.peak) }); }));
+        M.badJob = {};
+        M.pipes.forEach(P => P.units.forEach(u => {
+          if (u.type === 'app') { const s0 = sick[u.id] || {}; sick[u.id] = Object.assign({}, s0, { fail: 1 - (1 - (s0.fail || 0)) * (1 - u.peak) }); }
+          M.badJob[u.id] = u.peak;   // задачи из очереди обработчик считает сам (корень расчёта) — им ошибки задаём в routePost
+        }));
         ctx.opts.sick = sick;
       }
     }
     ctx.cicd = M;
+  }
+  /* плохой релиз у обработчика: часть задач падает при обработке. Это случайный отказ (rand), поэтому дальше считает
+     сам симулятор: у очереди с «Повторы + DLQ» задача повторится (после отката — успешно) или ляжет в DLQ, без них — потеряна */
+  function routePost(ctx, n, kind, r) {
+    const M = ctx.cicd, f = M && M.badJob && kind === 'job' ? M.badJob[n.id] : 0;
+    if (f > 0) r.rand = 1 - (1 - (r.rand || 0)) * (1 - f);
   }
   function collect(ctx, res) {
     const M = ctx.cicd; if (!M) return;
@@ -234,10 +269,15 @@
       P.svcCost = P.svc.reduce((s, id) => s + ((res.nodes[id] || {}).cost || 0), 0);
       const add = bad ? now : avg;   // во время выкладки — все лишние серверы; в обычном месяце — в среднем за окна выкладок
       if (add > 0) { res.cost += add; if (res.nodes[P.id]) res.nodes[P.id].cost = (res.nodes[P.id].cost || 0) + add; }
+      /* фоновые задачи: сколько их упадёт за один плохой релиз и что с ними будет */
+      P.jobs = P.units.filter(u => u.type === 'worker').map(u => {
+        const rate = ((res.nodes[u.id] || {}).load || {}).job || 0;
+        return { id: u.id, name: u.name, rate, peak: u.peak, perIncident: rate * 60 * u.E, retries: u.retries, queues: u.queues };
+      });
     });
-    res.cicd = { pipes: M.pipes, dora: dora(M.pipes), reverse: M.reverse, manual: M.manual, badRelease: bad };
+    res.cicd = { pipes: M.pipes, dora: dora(M.pipes), reverse: M.reverse, manual: M.manual, badRelease: bad, jobsLost: bad ? res.jobs.lostRate : null };
   }
-  (SD.simExts = SD.simExts || []).push({ prepare, collect });
+  (SD.simExts = SD.simExts || []).push({ prepare, routePost, collect });
 
   /* ---------- советы прораба ---------- */
   function cicdAdvice(level, graph, res) {
@@ -250,7 +290,16 @@
       if (P.strategy === 'recreate') A.push({ sev: P.R >= 20 ? 'bad' : 'warn', node: P.id, text: `«Всё сразу»: на каждой выкладке ≈ 30 с никто не отвечает. ${cnt(P.R, 'выкладка', 'выкладки', 'выкладок')} в месяц — ≈ ${mins(P.R * DOWN_RC)} простоя ещё до всяких багов. Rolling, blue-green и канарейка выкладывают без простоя.` });
       if (!P.auto) A.push({ sev: P.mttr > 10 ? 'bad' : 'warn', node: P.id, text: `Откат вручную: ${HOW[P.how][1]} — это ≈ ${mins(P.td)}. До отката плохую версию ${who} видят до ${pc(P.peak)} запросов, восстановление ≈ ${mins(P.mttr)}. Автооткат по метрикам справится за ≈ 1 мин.` });
       else if (P.strategy === 'bg') A.push({ sev: 'info', node: P.id, text: `Blue-green: откат за секунду, но до него плохую версию видят все запросы — ≈ 1 мин. Во время выкладки работают оба окружения: серверов ${who} вдвое больше (+${usd(P.extraNow)} в месяц, если держать так постоянно; за ${cnt(P.R, 'выкладку', 'выкладки', 'выкладок')} по ≈ ${BG_WIN} мин — +${usd(P.extraAvg)}).` });
-      else if (P.strategy === 'rolling') A.push({ sev: 'info', node: P.id, text: `Rolling с автооткатом: пока автомат замечает ошибки, новая версия успевает занять ≈ ${pc(P.peak)} экземпляров, и откат идёт тем же порядком — ≈ ${mins(P.mttr)} до восстановления. Канарейка ограничила бы долю пятью процентами.` });
+      else if (P.strategy === 'rolling') A.push({ sev: 'info', node: P.id, text: `Rolling с автооткатом: пока автомат замечает ошибки, новая версия успевает занять ≈ ${pc(P.peak)} экземпляров, и откат идёт тем же порядком — ≈ ${mins(P.mttr)} до восстановления. Канарейка с делением по весам ограничила бы долю пятью процентами.` });
+      if (P.strategy === 'canary') P.units.filter(u => u.type === 'app' && !u.weighted && u.first > STEPS[0] + 1e-9).forEach(u => A.push({ sev: u.first >= 0.25 ? 'bad' : 'warn', node: u.id,
+        text: `Канарейка по экземплярам: ${u.l4 ? `балансировщик «${u.l4}» работает на L4 и не умеет делить запросы по весам` : `перед «${u.name}» нет балансировщика L7 или API Gateway`}, поэтому новая версия получает долю по числу экземпляров — один из ${u.N}, это ${u.N === 2 ? 'половина' : pc(u.first)} трафика. Нужна канарейка по доле запросов — через балансировщик L7 или API Gateway, они делят запросы по весам, — или больше экземпляров.` }));
+      (P.jobs || []).filter(j => j.rate > 0).forEach(j => {
+        const many = SD.fmt ? SD.fmt.num(j.perIncident) : String(Math.round(j.perIncident));
+        const how = P.strategy === 'canary' ? ` (у обработчика очереди весов нет: канарейка — один экземпляр из ${(P.units.find(u => u.id === j.id) || {}).N}, ${pc(j.peak)} задач)` : '';
+        A.push(j.retries
+          ? { sev: 'info', node: j.id, text: `Плохой релиз «${j.name}» роняет часть фоновых задач${how}: ≈ ${many} за одну аварию. У очереди включены «Повторы + DLQ»: задачи повторятся после отката, а безнадёжные лягут в DLQ — ничего не потеряется.` }
+          : { sev: 'warn', node: j.id, text: `Плохой релиз «${j.name}» роняет фоновые задачи${how}: ≈ ${many} за одну аварию, и без «Повторы + DLQ» у очереди они теряются. Включи повторы: упавшие задачи повторятся после отката, безнадёжные лягут в DLQ.` });
+      });
       if (P.tests === 'none') A.push({ sev: P.cfr > 0.2 ? 'bad' : 'warn', node: P.id, text: `Без автотестов каждый ${nth(P.cfr)}-й релиз ломает прод (доля неудачных изменений ${pc(P.cfr)}): ≈ ${cnt(P.bad, 'авария', 'аварии', 'аварий')} в месяц. Юнит-тесты отсекут половину багов, юнит + интеграционные — 4 из 5.` });
       A.push({ sev: 'info', node: P.id, text: `DORA «${P.name}»: релизы ${F_NAME[P.freq]} (≈ ${P.R} в месяц), неудачных ${pc(P.cfr)}, восстановление ≈ ${mins(P.mttr)}, простой от релизов ≈ ${mins(P.downMonth)} в месяц.` });
     });
@@ -279,7 +328,14 @@
       const list = pipesOf(res); if (!list.length) return noPipe;
       const r = SD.sim.run(L, g, { mul: 1, badRelease: true });
       const share = Math.max(0, res.total.success - r.total.success), P = worstBy(list, x => x.peak);
-      return { ok: share <= max + 1e-9, detail: `при плохом релизе ошибку получают ${pc(share)} запросов (${S_NAME[P.strategy]}, заметит ${HOW[P.how][0]} через ≈ ${mins(P.td)})` };
+      const byInst = P.strategy === 'canary' ? P.units.find(u => u.type === 'app' && !u.weighted && u.first > STEPS[0] + 1e-9) : null;
+      return { ok: share <= max + 1e-9, detail: `при плохом релизе ошибку получают ${pc(share)} запросов (${byInst ? `канарейка по экземплярам: один из ${byInst.N}` : S_NAME[P.strategy]}, заметит ${HOW[P.how][0]} через ≈ ${mins(P.td)})` };
+    }),
+    badJobs: () => custom('Плохой релиз не теряет фоновые задачи', (g, res, L) => {
+      const list = pipesOf(res).filter(P => (P.jobs || []).some(j => j.rate > 0)); if (!list.length) return { ok: false, detail: 'конвейер не выкладывает обработчиков с задачами' };
+      const r = SD.sim.run(L, g, { mul: 1, badRelease: true }), lost = r.jobs.lostRate - res.jobs.lostRate;
+      const n = list.reduce((s, P) => s + P.jobs.reduce((a, j) => a + j.perIncident, 0), 0), many = SD.fmt ? SD.fmt.num(n) : String(Math.round(n));
+      return { ok: lost < 0.01, detail: lost < 0.01 ? `≈ ${many} задач за аварию упадут, но повторятся после отката или лягут в DLQ` : `≈ ${many} задач за аварию теряются: у очереди нет «Повторы + DLQ»` };
     }),
     mttr: max => custom(`Плохой релиз откатывается за ${dec(max)} мин или быстрее (MTTR)`, (g, res) => {
       const list = pipesOf(res); if (!list.length) return noPipe;
@@ -415,6 +471,11 @@
       ['Простой от релизов', `≈ ${mins(P.downMonth)} в месяц`, P.downMonth <= 5 ? 'ok' : P.downMonth <= 20 ? 'warn' : 'bad'],
       ['От коммита до прода', P.lead]
     ];
+    if (P.svc.length && P.strategy === 'canary') {
+      const u = P.units.find(x => x.type === 'app' && !x.weighted && x.first > STEPS[0] + 1e-9);
+      rows.splice(6, 0, ['Канарейка делит', u ? `по экземплярам: 1 из ${u.N} — ${pc(u.first)}` : 'по весам: 5 % запросов', u ? (u.first >= 0.25 ? 'bad' : 'warn') : 'ok']);
+    }
+    (P.jobs || []).filter(j => j.rate > 0).forEach(j => rows.push([`Задачи «${esc(j.name)}» за аварию`, `≈ ${SD.fmt ? SD.fmt.num(j.perIncident) : Math.round(j.perIncident)} ${j.retries ? '— повторы и DLQ' : '— теряются'}`, j.retries ? 'ok' : 'bad']));
     if (P.svc.length) rows.push(['Во время выкладки', { recreate: ['простой ≈ 30 с', 'bad'], rolling: [`+${P.extraInst || 1} сервер на ≈ ${ROLL_MIN} мин`, ''], canary: [`+${P.extraInst || 1} сервер на ≈ ${STEP_MIN * (STEPS.length - 1)} мин`, ''], bg: [`×2 серверов на ≈ ${BG_WIN} мин`, 'warn'] }[P.strategy][0], { recreate: 'bad', bg: 'warn' }[P.strategy] || '']);
     if (r) rows.push(['Стоимость', usd(r.cost || 0) + ' /мес']);
     dl.innerHTML = rows.map(([k, v, c]) => `<dt>${k}</dt><dd class="${c || ''}">${v}</dd>`).join('');
@@ -425,18 +486,38 @@
     SD.inspector.render = function (A) { baseRender.apply(this, arguments); try { patchInspector(A); } catch (e) { /* инспектор как был */ } };
   }
 
-  /* полоса метрик: плитка «Релизы», только если на схеме есть конвейер */
+  /* полоса метрик: плитка «Релизы», только если на схеме есть конвейер.
+     Плитку держит ensureTile: её зовёт обёртка над SD.panels.metrics (быстрый путь) и наблюдатель за #metrics —
+     если полосу перерисовал кто угодно другой, плитка вернётся сама. Повторный вызов ничего не меняет, когда плитка
+     уже свежая, поэтому собственные правки наблюдателя не зацикливают. Лишние копии удаляются */
+  let mBox = null, mObs = null;
+  function watchMetrics(box) {
+    if (mBox === box || typeof MutationObserver === 'undefined') return;
+    if (mObs) mObs.disconnect();
+    mBox = box; mObs = new MutationObserver(() => { try { ensureTile(); } catch (e) { /* без плитки */ } });
+    mObs.observe(box, { childList: true });
+  }
+  function ensureTile(A) {
+    const box = document.getElementById('metrics'); if (!box) return;
+    watchMetrics(box);
+    A = A || (SD.app && SD.app.A);
+    const D = A && A.res && A.res.cicd && A.res.cicd.dora, tiles = box.querySelectorAll('.cicd-metric');
+    if (!D) { tiles.forEach(t => t.remove()); return; }
+    for (let i = 1; i < tiles.length; i++) tiles[i].remove();
+    const sig = `${pc(D.cfr)}|${mins(D.mttr)}|${cfrCls(D.cfr)}`;
+    let t = tiles[0];
+    if (!t) { t = document.createElement('div'); t.className = 'metric cicd-metric'; t.title = 'Метрики DORA: доля неудачных изменений, время восстановления, частота выкладок'; box.appendChild(t); }
+    if (t.getAttribute('data-sig') !== sig) { t.setAttribute('data-sig', sig); t.innerHTML = `<small>Релизы</small><b class="${cfrCls(D.cfr)}">${pc(D.cfr)}</b><span>неудачных · MTTR ≈ ${mins(D.mttr)}</span>`; }
+  }
   if (HAS_DOM && SD.panels && SD.panels.metrics) {
     const baseMetrics = SD.panels.metrics;
     SD.panels.metrics = function (A) {
-      baseMetrics.apply(this, arguments);
-      try {
-        const D = A && A.res && A.res.cicd && A.res.cicd.dora, box = document.getElementById('metrics');
-        if (!D || !box) return;
-        box.insertAdjacentHTML('beforeend', `<div class="metric cicd-metric" title="Метрики DORA: доля неудачных изменений, время восстановления, частота выкладок"><small>Релизы</small><b class="${cfrCls(D.cfr)}">${pc(D.cfr)}</b><span>неудачных · MTTR ≈ ${mins(D.mttr)}</span></div>`);
-      } catch (e) { /* без плитки */ }
+      const out = baseMetrics.apply(this, arguments);
+      try { ensureTile(A); } catch (e) { /* без плитки */ }
+      return out;
     };
   }
+  if (HAS_DOM) { const b0 = document.getElementById('metrics'); if (b0) watchMetrics(b0); }
 
   /* подпись узла на холсте: стратегия и кто откатывает */
   function subOf(n) { const p = n.props || {}; return `${S_NAME[pick(p.strategy, STRATS, 'rolling')]} · ${p.autoRollback ? 'автооткат' : 'откат вручную'}`; }
@@ -458,6 +539,7 @@
         const gN = document.getElementById('nodesG');
         if (gN && !obs && typeof MutationObserver !== 'undefined') { obs = new MutationObserver(fixSubs); obs.observe(gN, { childList: true }); }
         fixSubs();
+        ensureTile();   // на случай, если #metrics заменили целиком: наблюдатель переедет на новый элемент
       } catch (e) { /* подпись по умолчанию */ }
       return out;
     };
@@ -491,6 +573,8 @@
     });
     h += `</tbody></table>`;
     if (d.key === 'autoRollback' && !rows[0].P.mon) h += `<p class="note">Автооткату не на что смотреть: на схеме нет мониторинга (Prometheus или Alertmanager), поэтому «включено» и «выключено» сейчас одинаковы.</p>`;
+    const can = rows.map(r => r.P).find(P => P.strategy === 'canary'), byInst = can && can.units.find(u => u.type === 'app' && !u.weighted && u.first > STEPS[0] + 1e-9);
+    if (byInst) h += `<p class="note">Канарейка здесь — по экземплярам: ${byInst.l4 ? `балансировщик «${esc(byInst.l4)}» на L4 не делит запросы по весам` : `перед «${esc(byInst.name)}» нет балансировщика L7 или API Gateway`}, и один новый экземпляр из ${byInst.N} получает ${byInst.N === 2 ? 'половину' : pc(byInst.first)} трафика. Нужна канарейка по доле запросов через балансировщик L7 или шлюз — или больше экземпляров.</p>`;
     wrap.insertAdjacentHTML('beforeend', h + '</div>');
   }
   if (HAS_DOM && SD.guide && SD.guide.open) {
@@ -519,7 +603,9 @@
   }
   if (HAS_DOM) document.addEventListener('click', e => {
     const b = e.target && e.target.closest && e.target.closest('[data-cicdlab]');
-    if (b && SD.labs) SD.labs.open('deploy');
+    if (!b || !SD.labs || !SD.labs.open) return;
+    const p = SD.labs.open('deploy');   // лаборатория грузится по требованию (labs-lazy.js): open возвращает Promise
+    if (p && typeof p.catch === 'function') p.catch(() => { /* не загрузилась — окно лабораторий само скажет */ });
   });
 
   SD.cicd = { analyze, incident, dora, goals, advice: cicdAdvice, levels: LEVELS, consts: { PER_MONTH, SIZE, BUG, CATCH, DETECT, DOWN_RC, ROLL_MIN, STEPS, STEP_MIN, BG_WIN, COST } };
