@@ -4305,6 +4305,41 @@ html.calm .e2e *, html.calm .e2e *::before, html.calm .e2e *::after { animation:
 @media (prefers-reduced-motion: reduce) {
   .lf-fg-it, .lf-fg-box { transition: none; }
 }
+/* ===== «Сквозная аналитика»: Бизнес и узкий экран (lab-e2e-2) ===== */
+/* ===== «Сквозная аналитика вживую», часть 2 (js/lab-e2e.js, префикс .e2e-): «Техника | Бизнес» и узкие таблицы списком =====
+   Вставлять ПОСЛЕ lab-e2e.css. Только переменные :root проекта, текст от 12 px. */
+.e2e-mode { margin-left: auto; padding: 2px; background: var(--surface); flex: none; }
+.e2e-mode button { font-size: 12.5px; padding: 5px 11px; }
+.e2e-mode button[aria-selected="true"] { background: var(--accent-soft); color: var(--text); box-shadow: inset 0 0 0 1px var(--accent); }
+.e2e-card.biz { border-left: 3px solid var(--warn); background: var(--surface); }
+.e2e-card.biz.bad { border-color: var(--bad); border-left-width: 3px; background: var(--bad-soft); }
+.e2e-tag.b { color: var(--warn); }
+
+/* вердикты по каналам */
+.e2e-verdicts { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; }
+.e2e-verdict { border: 1px solid var(--border); border-left: 3px solid var(--c); border-radius: 10px; background: var(--surface); padding: 9px 11px; display: flex; flex-direction: column; gap: 4px; font-size: 13px; line-height: 1.5; color: var(--text-2); min-width: 0; }
+.e2e-verdict b.big { font: 700 22px/1.2 var(--f-mono); color: var(--ok); }
+.e2e-verdict.bad b.big { color: var(--bad); }
+
+/* узкий экран: карточки «канал → цифры» вместо широких таблиц */
+.e2e-narrowonly { display: none; }
+.e2e-vlist { display: flex; flex-direction: column; gap: 8px; }
+.e2e-vrow { border: 1px solid var(--border); border-radius: 10px; background: var(--surface); padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.e2e-vh { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 650; color: var(--text); }
+.e2e-vrow dl { margin: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 0; font-size: 13px; }
+.e2e-vrow dl > div { display: contents; }
+.e2e-vrow dt { color: var(--text-muted); padding: 2px 8px 2px 4px; border-radius: 6px 0 0 6px; min-width: 0; }
+.e2e-vrow dd { margin: 0; padding: 2px 4px 2px 8px; text-align: right; font-family: var(--f-mono); color: var(--text); border-radius: 0 6px 6px 0; overflow-wrap: anywhere; }
+.e2e-vrow .cur dt, .e2e-vrow .cur dd { background: var(--accent-soft); color: var(--text); font-weight: 650; }
+.e2e-vrow .pos dd { color: var(--ok); font-weight: 650; }
+.e2e-vrow .neg dd { color: var(--bad); font-weight: 650; }
+.e2e-vrow .warnv dd { color: var(--warn); font-weight: 650; }
+
+@container e2e (max-width: 760px) {
+  .e2e-wideonly { display: none; }
+  .e2e-narrowonly { display: block; }
+  .e2e-tabs .e2e-mode { position: sticky; right: 0; margin-left: 6px; box-shadow: -8px 0 10px -4px var(--surface-2); }
+}
 .pred-pop { position: fixed; z-index: 60; width: 300px; display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border-strong); box-shadow: var(--shadow); font-size: 12.5px; line-height: 1.45; color: var(--text-2); animation: chgIn .2s ease-out; }
 .pred-pop[hidden] { display: none; }
 .pred-pop b { color: var(--text); font-size: 13.5px; }

@@ -42,6 +42,9 @@
   /* свои — показываются на экране: маржа 35 % — как в «Потоке событий» (закупка 65 % выручки); покупок за жизнь, расходы сентября */
   const OWN = { margin: 0.35, buys: 3, spend: { ads: 5200, soc: 3000 }, mailUsd: 15, loadH: 23 };
   const LTV = A.check * OWN.margin * OWN.buys;
+  /* «Техника | Бизнес» — общий для всего тренажёра выбор, тот же ключ, что у «Таблицы вживую» */
+  const MODE_KEY = 'amp-stroyka-lt-mode';
+  const readMode = () => { try { return localStorage.getItem(MODE_KEY) === 'biz' ? 'biz' : 'tech'; } catch (e) { return 'tech'; } };
 
   /* ================= каналы ================= */
   const CH = {
@@ -214,6 +217,23 @@
     });
   }
 
+  /* бюджет октября для сравнения моделей: те же деньги, поделённые пропорционально выручке, которую модель засчитала
+     платным каналам; целые рубли, сумма ровно равна нынешнему бюджету */
+  const BUDGET = OWN.spend.ads + OWN.spend.soc + OWN.mailUsd * A.usdRub;
+  function budgetSplit(model, hl) {
+    const by = attrTrue(model, hl).by, s = PAID.reduce((a, c) => a + by[c], 0), r = splitRub(BUDGET, PAID.map(c => by[c] / s));
+    return Object.fromEntries(PAID.map((c, i) => [c, r[i]]));
+  }
+  /* что каждая пара значит для денег владельца магазина */
+  const PAIR_BIZ = {
+    1: 'Без меток не узнать, какая реклама привела покупателя, — и платить приходится за всю вслепую.',
+    2: 'Если трекер не сработал, заказ есть, а откуда он — неизвестно: эти деньги нельзя приписать ни одной рекламе.',
+    3: 'Без склейки один покупатель выглядит тремя посетителями: конверсия кажется хуже, а реклама на телефоне — бесполезной.',
+    4: 'Считаем только оплаченные и невозвращённые заказы — иначе реклама выглядит прибыльнее, чем есть.',
+    5: 'Пока счёт за рекламу не загружен, она кажется бесплатной. По неполным цифрам решений о бюджете не принимают.',
+    6: 'Итог: сколько рублей маржи вернул каждый рубль рекламы и сколько стоит привести нового покупателя. По этому и делят бюджет.'
+  };
+
   /* ================= «Простыми словами»: шесть пар «аналогия ↔ термин» ================= */
   const PAIRS = [
     { k: 1, a: 'Листовка с купоном', t: 'UTM-метка, click id', term: 'Рекламный канал и метка: UTM, click id',
@@ -330,11 +350,13 @@
       roi: { sched: 'daily', cur: 'raw', q: null },
       arch: { mode: 'look', sel: null, broken: null, sym: 0, solved: {}, pick: null }
     };
+    let MODE = readMode();
+    const isBiz = () => MODE === 'biz';
     const done = id => { try { doneFn(id); } catch (e) { /* задание не засчиталось — не страшно */ } };
     const $ = s => EL.querySelector(s);
 
     /* общие кусочки разметки */
-    const ana = (life, plain, term) => `<div class="e2e-ana"><p class="e2e-life"><span class="e2e-tag">Как в жизни</span>${life}</p>${plain ? `<p>${plain}</p>` : ''}${term ? `<p><span class="e2e-tag t">Термины</span>${term}</p>` : ''}</div>`;
+    const ana = (life, plain, term) => `<div class="e2e-ana"><p class="e2e-life"><span class="e2e-tag">Как в жизни</span>${life}</p>${plain ? `<p>${plain}</p>` : ''}${term && !isBiz() ? `<p><span class="e2e-tag t">Термины</span>${term}</p>` : ''}</div>`;
     const seg = (name, items, cur, label) => `<div class="seg e2e-seg" role="group" aria-label="${esc(label)}">${items.map(([v, t]) => `<button type="button" data-a="${name}:${v}" aria-selected="${String(v) === String(cur)}">${t}</button>`).join('')}</div>`;
     const ctl = (label, html) => `<div class="e2e-ctl"><b>${label}</b>${html}</div>`;
     const tile = (label, val, sub, cls) => `<div class="e2e-kpi ${cls || ''}"><span>${label}</span><b>${val}</b>${sub ? `<small>${sub}</small>` : ''}</div>`;
@@ -343,6 +365,9 @@
     const legend = items => `<div class="e2e-legend">${items.map(([c, t]) => `<span><i class="e2e-lg ${c}"></i>${t}</span>`).join('')}</div>`;
     const nextBtn = k => NEXT[k] ? `<div class="e2e-next"><button type="button" class="btn" data-go="${NEXT[k][0]}">Дальше: ${NEXT[k][1]} →</button></div>` : '';
     const quiz = (name, q, opts, picked, fb) => `<div class="e2e-quiz"><b class="e2e-qh">${q}</b><div class="e2e-qopts">${opts.map(([v, t]) => `<button type="button" class="e2e-qo${picked === v ? ' on' : ''}" data-a="${name}:${v}" aria-pressed="${picked === v}">${t}</button>`).join('')}</div>${fb ? `<div class="e2e-qfb ${fb.ok ? 'ok' : 'bad'}">${fb.ok ? '✓ ' : '✗ '}${fb.h}</div>` : ''}</div>`;
+    const bizCard = (html, cls) => card('biz ' + (cls || ''), `<b>Для владельца.</b> ${html}`);
+    /* узкий экран: вместо широкой таблицы — карточки «канал → цифры» */
+    const vlist = rows => `<div class="e2e-vlist">${rows.map(r => `<div class="e2e-vrow"><div class="e2e-vh">${r.head}</div><dl>${r.items.map(([k, v, c]) => `<div class="${c || ''}"><dt>${k}</dt><dd>${v}</dd></div>`).join('')}</dl></div>`).join('')}</div>`;
     const W0 = (sel, min) => { const el = $(sel); return Math.max(min || 300, Math.floor((el && el.clientWidth) || 860)); };
 
     const VIEWS = {}, DRAWS = {}, ACTS = {}, INPUTS = {};
@@ -365,12 +390,21 @@
     }
     function startTimer(fn, ms) { stopTimer(); U.timer = setInterval(() => { if (!U.alive) { stopTimer(); return; } fn(); }, ms); }
     function stopTimer() { if (U.timer) clearInterval(U.timer); U.timer = 0; }
+    function setMode(m) {
+      MODE = m === 'biz' ? 'biz' : 'tech';
+      try { localStorage.setItem(MODE_KEY, MODE); } catch (e) { /* без хранилища */ }
+      EL.querySelectorAll('[data-mode]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.mode === MODE)));
+      U.path.play = false; stopTimer();
+      const box = EL.closest('.lab-main'), y = box ? box.scrollTop : 0;
+      render(); if (box) box.scrollTop = y;
+    }
 
     /* ================= 0. Простыми словами ================= */
     VIEWS.plain = () => `<section class="e2e-hero"><span class="e2e-eyebrow">Простыми словами</span>
         <p class="e2e-thesis">Сквозная аналитика связывает каждый рубль выручки с тем, <b>откуда пришёл покупатель</b>, и с тем, <b>сколько стоило его привести</b>. Так видно, какая реклама окупается, а какая только тратит деньги.</p></section>
       <div class="e2e-ana"><p class="e2e-life"><span class="e2e-tag">Как в магазине</span>Магазин раздаёт листовки с купонами в трёх местах: у метро, в газете и через друзей — у каждого места свой код. На входе кассир смотрит купон и записывает, откуда пришёл покупатель. Карта постоянного покупателя связывает его визиты: в первый раз он только посмотрел, во второй купил. Каждая покупка — это чек. В конце месяца бухгалтер раскладывает чеки по купонам, кладёт рядом счета за печать листовок и видит, какие листовки принесли больше, чем стоили, а какие — меньше.</p>
         <p><span class="e2e-tag t">В системе</span>Всё то же самое: вместо купонов — метки в ссылках, вместо кассира — трекер на сайте, вместо карты — склейка id, вместо чеков — заказы из CRM, вместо счетов — расходы из рекламных кабинетов, вместо бухгалтера — хранилище и витрина с отчётом.</p></div>
+      ${isBiz() ? plainBiz() : ''}
       <div class="e2e-picbox"><div class="e2e-pichead"><b>Цепочка целиком</b><span>Наведи или нажми на предмет — подсвечу пару «аналогия ↔ термин»</span></div><div class="e2e-pic" id="e2ePic"></div></div>
       <div class="e2e-pairwrap"><div class="e2e-pairs" id="e2ePairs"></div><div class="e2e-detwrap" id="e2eDetail"></div></div>
       ${nextBtn('plain')}`;
@@ -382,7 +416,7 @@
       const p = PAIRS.find(x => x.k === (U.plain.hl || U.plain.sel));
       if (!p) return card('e2e-detail mut', '<b>Начни с листовки.</b> Нажми на любой предмет на картинке или на строку слева — здесь появится, как он выглядит в магазине и как в системе, с примером из жизни данных.');
       return `<div class="e2e-detail"><b class="e2e-dh"><span class="e2e-pn">${p.k}</span>${esc(p.a)} ↔ ${esc(p.term)}</b>
-        <p><span class="e2e-tag">В магазине</span>${p.shop}</p><p><span class="e2e-tag t">В системе</span>${p.sys}</p><pre class="e2e-code">${p.ex}</pre></div>`;
+        <p><span class="e2e-tag">В магазине</span>${p.shop}</p>${isBiz() ? `<p><span class="e2e-tag b">Для денег</span>${PAIR_BIZ[p.k]}</p>` : `<p><span class="e2e-tag t">В системе</span>${p.sys}</p><pre class="e2e-code">${p.ex}</pre>`}</div>`;
     }
     DRAWS.plain = () => {
       const pic = $('#e2ePic'); if (!pic) return;
@@ -419,6 +453,7 @@
       ${legend([['e2e-c-ads', 'Реклама'], ['e2e-c-soc', 'Соцсети'], ['e2e-c-mail', 'Рассылка'], ['e2e-c-seo', 'Поиск'], ['e2e-c-dir', 'Прямой заход'], ['dm', 'телефон'], ['dd', 'ноутбук'], ['dw', 'рабочий ПК'], ['ord', 'заказ']])}
       <div class="e2e-kpis" id="e2eKpis"></div>
       <div class="e2e-two"><div class="e2e-box"><b class="e2e-h">События трекера <small>сначала свежие</small></b><ol class="e2e-feed" id="e2eFeed"></ol></div><div class="e2e-box" id="e2ePerson"></div></div>
+      ${isBiz() ? pathBiz() : ''}
       ${card('mut', `Условные 40 человек: покупателей среди них больше, чем в жизни (в среднем магазине покупают ≈ ${pc(A.conv)} посетителей), — чтобы путь каждого был виден. Средний чек — ${rub(A.check)}, как во всём тренажёре.`)}
       ${nextBtn('path')}`;
     const shape = (x, y, dev, cls) => dev === 'm' ? cir(x, y, 5.6, cls) : dev === 'd' ? rc(x - 5, y - 5, 10, 10, cls, 2.5) : `<polygon class="${cls}" points="${f1(x)},${f1(y - 6.6)} ${f1(x + 6.6)},${f1(y)} ${f1(x)},${f1(y + 6.6)} ${f1(x - 6.6)},${f1(y)}"/>`;
@@ -474,9 +509,18 @@
         ${multi ? `<p class="e2e-note2">${cnt(p.devs.length, 'устройство', 'устройства', 'устройств')} — для аналитики это ${cnt(p.devs.length, 'разный посетитель', 'разных посетителя', 'разных посетителей')}, пока их не склеят. Об этом — вкладка «Склейка».</p>` : ''}
         ${p.order && mix ? `<p class="e2e-note2 acc">Пришёл из «${CH[ts[0].ch].n}», купил после «${CH[ts[ts.length - 1].ch].n}». Какому каналу засчитать ${rub(p.order.amt)}? Это вопрос атрибуции — следующая вкладка.</p>` : ''}`;
     }
+    function plainBiz() {
+      const L = attrTrue('last', U.hl).by, F = attrTrue('first', U.hl).by, firstSoc = TRUE_ORDERS.filter(o => o.touches[0] && o.touches[0].ch === 'soc').length;
+      return bizCard(`В сентябре на рекламу ушло ${rub(BUDGET)} при выручке ${rub(TOTAL)}. Без сквозной аналитики бюджет делят «на глаз» или по отчёту каждого кабинета — а каждый кабинет приписывает продажу себе. Со сквозной видно: соцсети, которым «последний клик» засчитал всего ${rub(L.soc)}, первыми привели ${firstSoc} из ${BUYERS.length} покупателей — ${rub(F.soc)} выручки, — а реклама в поиске, «звезда» последнего клика, по другим моделям не окупается. Дальше на вкладках — те же 40 посетителей сентября в рублях и решениях.`);
+    }
+    function pathBiz() {
+      const O = TRUE_ORDERS, mix = O.filter(o => o.touches.length > 1 && o.touches[0].ch !== o.touches[o.touches.length - 1].ch).length, one = O.filter(o => o.touches.length <= 1).length, multi = BUYERS.filter(p => p.devs.length > 1).length;
+      return bizCard(`Только ${one} из ${O.length} покупателей купили с первого захода — остальным понадобилось 2–4 касания. У ${mix} из ${O.length} первое и последнее касание — разные каналы: если платить только тому, кто «закрыл» продажу, вы недоплатите тем, кто привёл человека, и через месяц новых людей станет меньше. ${multi} из ${O.length} покупателей заходили с нескольких устройств — для отчёта это разные люди, пока их не склеят.`);
+    }
     function pathKpis() {
       const D = U.path.day, vis = PEOPLE.filter(p => p.touches.some(t => t.day <= D)).length, tc = PEOPLE.reduce((a, p) => a + p.touches.filter(t => t.day <= D).length, 0);
       const ords = BUYERS.filter(p => p.order.day <= D), rev = ords.reduce((a, p) => a + p.order.amt, 0), tb = ords.reduce((a, p) => a + p.touches.filter(t => t.day <= p.order.day).length, 0);
+      if (isBiz()) return tile('Зашли на сайт', vis, 'человек за месяц') + tile('Купили', `${ords.length} из ${vis}`, vis ? pc(ords.length / vis) + ' — в жизни ≈ ' + pc(A.conv) : '') + tile('Выручка', rub(rev), 'средний чек ' + rub(ords.length ? rev / ords.length : 0)) + tile('Заходов до покупки', ords.length ? dec(tb / ords.length, 1) : '—', 'с одной рекламы продают редко', ords.length ? 'inf' : '');
       return tile('Посетителей', vis, 'людей с хотя бы одним касанием') + tile('Событий-касаний', tc, 'каждое — с меткой источника') + tile('Покупателей', ords.length, vis ? pc(ords.length / vis) + ' от посетителей' : '') + tile('Выручка', rub(rev), 'средний чек ' + rub(ords.length ? rev / ords.length : 0)) + tile('Касаний до покупки', ords.length ? dec(tb / ords.length, 1) : '—', 'в среднем у покупателя', ords.length ? 'inf' : '');
     }
     function playBar() {
@@ -522,8 +566,9 @@
       <div class="e2e-tblw" id="e2eAttrT"></div>
       <div class="e2e-two"><div class="e2e-box" id="e2eMatrix"></div><div class="e2e-box" id="e2eSplit"></div></div>
       <div id="e2eAttrNote"></div>
+      ${isBiz() ? '<div id="e2eBudget"></div>' : ''}
       <div id="e2eAttrQ"></div>
-      ${asm([`14 заказов сентября, ${rub(TOTAL)} выручки, средний чек ${rub(A.check)} — как во всём тренажёре`, `расходы за сентябрь: Реклама ${rub(SPEND_M.ads)}, Соцсети ${rub(SPEND_M.soc)}, Рассылка $${OWN.mailUsd} = ${rub(SPEND_M.mail)} по курсу ${A.usdRub} ₽ за $`, `маржа ${pc(OWN.margin)}: закупка — 65 % выручки, как в «Потоке событий»`, 'ROMI = (выручка канала × маржа − расход) ÷ расход', 'Поиск и прямой заход бесплатны — ROMI у них не считаем', 'доли заказа округлены до рубля так, что их сумма ровно равна заказу'])}
+      ${asm([`14 заказов сентября, ${rub(TOTAL)} выручки, средний чек ${rub(A.check)} — как во всём тренажёре`, `расходы за сентябрь: Реклама ${rub(SPEND_M.ads)}, Соцсети ${rub(SPEND_M.soc)}, Рассылка $${OWN.mailUsd} = ${rub(SPEND_M.mail)} по курсу ${A.usdRub} ₽ за $`, `маржа ${pc(OWN.margin)}: закупка — 65 % выручки, как в «Потоке событий»`, 'ROMI = (выручка канала × маржа − расход) ÷ расход', 'Поиск и прямой заход бесплатны — ROMI у них не считаем', 'доли заказа округлены до рубля так, что их сумма ровно равна заказу', isBiz() ? 'бюджет октября делим пропорционально выручке, которую модель засчитала платным каналам, — упрощение для сравнения моделей, а не рецепт' : ''])}
       ${nextBtn('attr')}`;
     function attrTable() {
       const at = attrTrue(U.model, U.hl), max = Math.max(1, ...CHS.map(c => at.by[c]));
@@ -534,10 +579,10 @@
     }
     function attrMatrix() {
       const R = MODELS.map(([m]) => ({ m, at: attrTrue(m, U.hl) }));
-      return `<b class="e2e-h">ROMI по моделям <small>те же 14 заказов</small></b><div class="e2e-tblw"><table class="e2e-tbl"><thead><tr><th>Канал</th>${MODELS.map(([m, n]) => `<th class="num${m === U.model ? ' cur' : ''}">${n}</th>`).join('')}</tr></thead><tbody>
+      return `<b class="e2e-h">ROMI по моделям <small>те же 14 заказов</small></b><div class="e2e-tblw e2e-wideonly"><table class="e2e-tbl"><thead><tr><th>Канал</th>${MODELS.map(([m, n]) => `<th class="num${m === U.model ? ' cur' : ''}">${n}</th>`).join('')}</tr></thead><tbody>
         ${PAID.map(c => `<tr><td><span class="e2e-chn">${cdot(c)}${CH[c].n}</span></td>${R.map(x => { const v = romiOf(x.at.by[c], c); return `<td class="num ${rcls(v)}${x.m === U.model ? ' cur' : ''}">${romiS(v)}</td>`; }).join('')}</tr>`).join('')}
         <tr><td><small>Урезать бюджет</small></td>${R.map(x => { const bad = PAID.filter(c => romiOf(x.at.by[c], c) < -0.005); return `<td class="num${x.m === U.model ? ' cur' : ''}"><small>${bad.length ? bad.map(c => CH[c].n).join(', ') : 'никому'}</small></td>`; }).join('')}</tr>
-        </tbody></table></div>`;
+        </tbody></table></div>` + matrixList(R);
     }
     function attrSplit() {
       const bi = BUYERS.findIndex(p => p.i === U.abuyer), p = BUYERS[bi] || BUYERS[0], at = attrTrue(U.model, U.hl), parts = at.parts[BUYERS.indexOf(p)];
@@ -560,6 +605,7 @@
     DRAWS.attr = () => {
       const t = $('#e2eAttrT'); if (!t) return;
       t.innerHTML = attrTable(); $('#e2eMatrix').innerHTML = attrMatrix(); $('#e2eSplit').innerHTML = attrSplit(); $('#e2eAttrNote').innerHTML = attrNote(); $('#e2eAttrQ').innerHTML = attrQuiz();
+      const bg = $('#e2eBudget'); if (bg) bg.innerHTML = budgetHTML();
     };
     ACTS.model = v => { U.model = v; render(); };
     ACTS.hl = v => { U.hl = +v; render(); };
@@ -582,11 +628,12 @@
           ${ctl('Отказались от cookie', `<label class="e2e-range"><input type="range" data-r="pR" min="0" max="50" step="5" value="${Math.round(L.pR * 100)}" aria-label="Доля отказавшихся от cookie"><output id="e2eOR">${pc(L.pR)}</output></label>`)}</div>
         <div class="e2e-lossw"><div class="e2e-box"><b class="e2e-h">100 заказов недели <small>цвет — источник, который увидела аналитика</small></b><div class="e2e-grid" id="e2eGrid"></div>
           ${legend([['e2e-c-ads', 'Реклама'], ['e2e-c-soc', 'Соцсети'], ['e2e-c-mail', 'Рассылка'], ['e2e-c-seo', 'Поиск'], ['e2e-c-dir', 'Прямой'], ['lost', 'без источника: блокировщик'], ['refuse', 'без источника: отказ'], ['back', 'вернул сервер']])}</div>
-          <div class="e2e-view"><div class="e2e-kpis" id="e2eLossK"></div><div id="e2eCell"></div><div class="e2e-tblw" id="e2eLossT"></div></div></div>
+          <div class="e2e-view"><div class="e2e-kpis" id="e2eLossK"></div><div id="e2eCell"></div><div id="e2eLossT"></div></div></div>
+        <div id="e2eLossBiz"></div>
         ${card('info', `<b>Что делает серверный сбор.</b> 1) События идут на свой домен (например, track.shop.ru), и блокировщики по спискам их чаще пропускают. 2) Метки UTM и click id из адреса первой страницы сервер сам кладёт в заказ — даже если скрипт в браузере не загрузился. 3) Cookie ставит сервер, и Safari не стирает её через 7 дней. <b>Чего он не делает:</b> не отменяет отказ человека. И часть блокировщиков узнаёт и свой домен — здесь не вернулся каждый пятый заблокированный заказ.`)}
         ${card('law', '<b>Согласие и закон — коротко и честно.</b> По 152-ФЗ персональные данные обрабатывают с согласия человека, а id посетителя и cookie вместе с другими данными о нём могут считаться персональными. С 1 сентября 2025 года согласие оформляют отдельным документом, а не строкой в оферте. Данные граждан России при сборе записывают и хранят в базах на территории России. Отсюда три правила: баннер с выбором — до запуска аналитики; отказ уважаем и в браузере, и на сервере; хранилище — в России. Точные формулировки согласуйте с юристом.')}
         <div id="e2eLossQ"></div>
-        ${asm([`средний чек ${rub(A.check)} — как во всём тренажёре; выручка без источника = заказы × чек`, '100 заказов недели: Реклама 32, Рассылка 24, Поиск 16, Соцсети 14, Прямой заход 14', 'блокировщик и отказ — у случайных посетителей, независимо от канала; у каждого заказа 3–9 событий', `серверный сбор не возвращает каждый пятый заблокированный заказ: блокировщик узнал и свой домен`])}
+        ${asm([`средний чек ${rub(A.check)} — как во всём тренажёре; выручка без источника = заказы × чек`, '100 заказов недели: Реклама 32, Рассылка 24, Поиск 16, Соцсети 14, Прямой заход 14', 'блокировщик и отказ — у случайных посетителей, независимо от канала; у каждого заказа 3–9 событий', `серверный сбор не возвращает каждый пятый заблокированный заказ: блокировщик узнал и свой домен`, isBiz() ? 'месяц ≈ 4,3 недели: выручка за месяц = за неделю × 30 ÷ 7' : ''])}
         ${nextBtn('loss')}`;
     };
     const LOSS_TXT = {
@@ -598,6 +645,7 @@
     function lossGrid(R) { return LOSS.map((o, i) => { const s = R.st[i], cls = s === 'block' ? 'lost' : s === 'refuse' ? 'refuse' : s === 'back' ? 'back' : ''; return `<button type="button" tabindex="-1" class="e2e-cell e2e-c-${o.ch} ${cls}${U.loss.cell === i ? ' on' : ''}" data-a="cell:${i}" aria-label="Заказ ${o.n}: ${s === 'ok' || s === 'back' ? CH[o.ch].n : 'без источника'}">${s === 'block' ? '?' : s === 'refuse' ? '×' : ''}</button>`; }).join(''); }
     function lossKpis(R) {
       const L = U.loss;
+      if (isBiz()) return lossKpisBiz(R);
       return tile('Без источника', `${R.lost} из 100`, `≈ ${rubK(R.lost * A.check)} выручки не знает, откуда пришла`, R.lost > 15 ? 'bad' : R.lost > 5 ? 'warn' : 'ok')
         + tile('Событий дошло', pc(R.evOk / R.ev), `${nf(R.evOk)} из ${nf(R.ev)}`, R.evOk / R.ev < 0.85 ? 'warn' : '')
         + tile('Вернул сервер', L.mode === 'server' ? String(R.back) : '—', L.mode === 'server' ? 'заказов, которые браузер потерял' : 'включи серверный сбор', L.mode === 'server' && R.back ? 'ok' : '')
@@ -605,9 +653,11 @@
     }
     function lossTable() {
       const L = U.loss, B = lossRun('browser', L.pB, L.pR), S = lossRun('server', L.pB, L.pR), cb = L.mode === 'browser' ? ' cur' : '', cs = L.mode === 'server' ? ' cur' : '';
-      return `<table class="e2e-tbl"><thead><tr><th>Канал</th><th class="num">На самом деле</th><th class="num${cb}">Видно в браузере</th><th class="num${cs}">Видно с сервера</th></tr></thead><tbody>
+      const pct = (s, r) => r ? ` (−${pc(1 - s / r)})` : '';
+      const list = `<div class="e2e-narrowonly">${vlist(CHS.map(c => { const r = B.byCh[c].real; return { head: `${cdot(c)}${CH[c].n}`, items: [['На самом деле', String(r)], ['Видно в браузере', B.byCh[c].seen + pct(B.byCh[c].seen, r), cb.trim()], ['Видно с сервера', S.byCh[c].seen + pct(S.byCh[c].seen, r), cs.trim()]] }; }).concat([{ head: 'Без источника', items: [['В браузере', String(B.lost), cb.trim()], ['С сервера', String(S.lost), cs.trim()]] }]))}</div>`;
+      return `<div class="e2e-tblw e2e-wideonly"><table class="e2e-tbl"><thead><tr><th>Канал</th><th class="num">На самом деле</th><th class="num${cb}">Видно в браузере</th><th class="num${cs}">Видно с сервера</th></tr></thead><tbody>
         ${CHS.map(c => { const r = B.byCh[c].real; return `<tr><td><span class="e2e-chn">${cdot(c)}${CH[c].n}</span></td><td class="num">${r}</td><td class="num${cb}">${B.byCh[c].seen} <small>${r ? '−' + pc(1 - B.byCh[c].seen / r) : ''}</small></td><td class="num${cs}">${S.byCh[c].seen} <small>${r ? '−' + pc(1 - S.byCh[c].seen / r) : ''}</small></td></tr>`; }).join('')}
-        </tbody><tfoot><tr><td>Без источника</td><td class="num">0</td><td class="num${cb}">${B.lost}</td><td class="num${cs}">${S.lost}</td></tr></tfoot></table>`;
+        </tbody><tfoot><tr><td>Без источника</td><td class="num">0</td><td class="num${cb}">${B.lost}</td><td class="num${cs}">${S.lost}</td></tr></tfoot></table></div>` + list;
     }
     function lossCell() {
       const i = U.loss.cell; if (i == null) return card('mut', 'Нажми на клетку — покажу, что случилось с этим заказом в браузере и на сервере.');
@@ -626,6 +676,7 @@
       const g = $('#e2eGrid'); if (!g) return;
       const L = U.loss, R = lossRun(L.mode, L.pB, L.pR);
       g.innerHTML = lossGrid(R); $('#e2eLossK').innerHTML = lossKpis(R); $('#e2eLossT').innerHTML = lossTable(); $('#e2eCell').innerHTML = lossCell(); $('#e2eLossQ').innerHTML = lossQuiz();
+      const lb = $('#e2eLossBiz'); if (lb) lb.innerHTML = isBiz() ? lossBiz() : '';
       const ob = $('#e2eOB'), or = $('#e2eOR'); if (ob) ob.textContent = pc(L.pB); if (or) or.textContent = pc(L.pR);
     };
     ACTS.lmode = v => { U.loss.mode = v === 'server' ? 'server' : 'browser'; if (U.loss.mode === 'server') done('server'); render(); };
@@ -643,7 +694,8 @@
       <div class="e2e-stage" id="e2eId"></div>
       <div class="e2e-kpis" id="e2eStK"></div>
       <div id="e2eStNote"></div>
-      <div class="e2e-tblw" id="e2eStT"></div>
+      <div id="e2eStBiz"></div>
+      <div id="e2eStT"></div>
       ${nextBtn('stitch')}`;
     const FEAT = [['Аня', 'd'], ['Аня', 'w'], ['Аня', 'm'], ['Галина', 'm'], ['Олег', 'w'], ['Ира', 'w']];
     function idSVG(W) {
@@ -702,16 +754,57 @@
       const none = stitch({}), A0 = attribute('first', U.hl, none.orders).by, A1 = attribute('first', U.hl, S.orders).by, AT = attrTrue('first', U.hl).by;
       const B0 = attribute('last', U.hl, none.orders).by, B1 = attribute('last', U.hl, S.orders).by, BT = attrTrue('last', U.hl).by;
       const cell = (v, t) => `<td class="num${v !== t ? ' warnv' : ''}">${rub(v)}</td>`;
-      return `<table class="e2e-tbl"><thead><tr><th>Канал</th><th class="num">Первый клик: без склейки</th><th class="num cur">сейчас</th><th class="num">правда</th><th class="num hn">Последний клик: без склейки</th><th class="num hn">сейчас</th></tr></thead><tbody>
+      const wv = (v, t) => v !== t ? 'warnv' : '';
+      const list = `<div class="e2e-narrowonly">${vlist(CHS.map(c => ({ head: `${cdot(c)}${CH[c].n}`, items: [['Первый клик без склейки', rub(A0[c]), wv(A0[c], AT[c])], ['Первый клик сейчас', rub(A1[c]), ['cur', wv(A1[c], AT[c])].join(' ')], ['Первый клик — правда', rub(AT[c])], ['Последний клик без склейки', rub(B0[c]), wv(B0[c], BT[c])], ['Последний клик сейчас', rub(B1[c]), wv(B1[c], BT[c])]] })))}<p class="e2e-mut">Выручка 14 заказов (${rub(TOTAL)}) по каналам. Оранжевым — где цифра расходится с правдой.</p></div>`;
+      return `<div class="e2e-tblw e2e-wideonly"><table class="e2e-tbl"><thead><tr><th>Канал</th><th class="num">Первый клик: без склейки</th><th class="num cur">сейчас</th><th class="num">правда</th><th class="num hn">Последний клик: без склейки</th><th class="num hn">сейчас</th></tr></thead><tbody>
         ${CHS.map(c => `<tr><td><span class="e2e-chn">${cdot(c)}${CH[c].n}</span></td>${cell(A0[c], AT[c])}<td class="num cur${A1[c] !== AT[c] ? ' warnv' : ''}">${rub(A1[c])}</td><td class="num">${rub(AT[c])}</td><td class="num hn${B0[c] !== BT[c] ? ' warnv' : ''}">${rub(B0[c])}</td><td class="num hn${B1[c] !== BT[c] ? ' warnv' : ''}">${rub(B1[c])}</td></tr>`).join('')}
-        </tbody><tfoot><tr><td colspan="6"><small>Выручка 14 заказов (${rub(TOTAL)}) по каналам. Оранжевым — где цифра расходится с правдой: без склейки заказ видит только касания со своего устройства, а заказ без касаний становится «прямым заходом».</small></td></tr></tfoot></table>`;
+        </tbody><tfoot><tr><td colspan="6"><small>Выручка 14 заказов (${rub(TOTAL)}) по каналам. Оранжевым — где цифра расходится с правдой: без склейки заказ видит только касания со своего устройства, а заказ без касаний становится «прямым заходом».</small></td></tr></tfoot></table></div>` + list;
     }
     DRAWS.stitch = () => {
       const st = $('#e2eId'); if (!st) return;
       const S = stitch(U.st.on);
       st.innerHTML = idSVG(W0('#e2eId', 300)); $('#e2eStK').innerHTML = stKpis(S); $('#e2eStNote').innerHTML = stNote(S); $('#e2eStT').innerHTML = stTable(S);
+      const sb = $('#e2eStBiz'); if (sb) sb.innerHTML = isBiz() ? stBiz(S) : '';
     };
     ACTS.rule = v => { U.st.on[v] = !U.st.on[v]; if (stitch(U.st.on).exact) done('stitch'); render(); };
+
+    /* ---------- «Бизнес» и узкий экран для вкладок 2–4 ---------- */
+    function matrixList(R) {
+      return `<div class="e2e-narrowonly">${vlist(PAID.map(c => ({ head: `${cdot(c)}${CH[c].n}`, items: R.map(x => { const v = romiOf(x.at.by[c], c); return [MNAME[x.m], romiS(v), [rcls(v), x.m === U.model ? 'cur' : ''].join(' ')]; }) })).concat([{ head: 'Урезать бюджет', items: R.map(x => { const bad = PAID.filter(c => romiOf(x.at.by[c], c) < -0.005); return [MNAME[x.m], bad.length ? bad.map(c => CH[c].n).join(', ') : 'никому', x.m === U.model ? 'cur' : '']; }) }]))}</div>`;
+    }
+    function budgetHTML() {
+      const R = MODELS.map(([m, n]) => ({ m, n, b: budgetSplit(m, U.hl) })), cur = R.find(x => x.m === U.model), last = R.find(x => x.m === 'last');
+      const cc = m => m === U.model ? ' cur' : '';
+      const table = `<div class="e2e-tblw e2e-wideonly"><table class="e2e-tbl"><thead><tr><th>Канал</th><th class="num">Сейчас</th>${R.map(x => `<th class="num${cc(x.m)}">${x.n}</th>`).join('')}</tr></thead><tbody>
+        ${PAID.map(c => `<tr><td><span class="e2e-chn">${cdot(c)}${CH[c].n}</span></td><td class="num">${rub(SPEND_M[c])}</td>${R.map(x => `<td class="num${cc(x.m)}">${rub(x.b[c])}</td>`).join('')}</tr>`).join('')}
+        </tbody><tfoot><tr><td>Итого</td><td class="num">${rub(BUDGET)}</td>${R.map(x => `<td class="num${cc(x.m)}">${rub(PAID.reduce((a, c) => a + x.b[c], 0))}</td>`).join('')}</tr></tfoot></table></div>`;
+      const list = `<div class="e2e-narrowonly">${vlist(PAID.map(c => ({ head: `${cdot(c)}${CH[c].n}`, items: [['Сейчас', rub(SPEND_M[c])]].concat(R.map(x => [x.n, rub(x.b[c]), cc(x.m).trim()])) })))}</div>`;
+      const mv = PAID.map(c => ({ c, d: cur.b[c] - SPEND_M[c] })).sort((a, b) => b.d - a.d), up = mv[0], dn = mv[mv.length - 1];
+      const txt = `Если в октябре раздать те же ${rub(BUDGET)} по модели «${cur.n}», больше всех прибавит «${CH[up.c].n}» (${sgn(up.d)}${rub(Math.abs(up.d))} к нынешнему), больше всех потеряет «${CH[dn.c].n}» (${sgn(dn.d)}${rub(Math.abs(dn.d))}). ${U.model !== 'last' ? `А по «последнему клику» соцсетям досталось бы всего ${rub(last.b.soc)} — канал, который первым привёл больше половины покупателей, остался бы почти без денег, и в ноябре новых покупателей стало бы меньше.` : `Так делят бюджет многие кабинеты по умолчанию: соцсети, которые первыми привели больше половины покупателей, получают ${rub(last.b.soc)}. Переключи модель и сравни.`}`;
+      return `<div class="e2e-box"><b class="e2e-h">Бюджет октября по модели <small>те же ${rub(BUDGET)}, поделённые по выручке каналов</small></b>${table}${list}</div>` + bizCard(txt);
+    }
+    function lossKpisBiz(R) {
+      const L = U.loss, S = lossRun('server', L.pB, L.pR), ads = R.byCh.ads;
+      return tile('Выручка без источника', rubK(R.lost * A.check), `в неделю · ≈ ${rubK(R.lost * A.check * 30 / 7)} в месяц`, R.lost > 15 ? 'bad' : R.lost > 5 ? 'warn' : 'ok')
+        + tile(L.mode === 'server' ? 'Вернул сервер' : 'Вернул бы сервер', rubK(S.back * A.check), `${S.back} заказов в неделю`, S.back ? 'ok' : '')
+        + tile('Реклама недосчиталась', `${ads.real - ads.seen} из ${ads.real}`, 'своих заказов недели', ads.seen < ads.real ? 'warn' : '')
+        + tile('Не вернёт ничто', String(R.refuse), 'отказ от cookie — право покупателя', 'inf');
+    }
+    function lossBiz() {
+      const L = U.loss, B = lossRun('browser', L.pB, L.pR), S = lossRun('server', L.pB, L.pR), wk = n => rubK(n * A.check), mo = n => rubK(n * A.check * 30 / 7);
+      const ads = B.byCh.ads, miss = ads.real - ads.seen;
+      return bizCard(`${L.mode === 'browser' ? 'Сейчас' : 'Без серверного сбора'} отчёт не знает, откуда пришли ${B.lost} из 100 заказов недели — ≈ ${wk(B.lost)} выручки в неделю, ≈ ${mo(B.lost)} в месяц. Деньги не пропали — пропало знание: реклама в поиске недосчиталась ${miss} из ${ads.real} своих заказов, её выручка в отчёте занижена на ${pc(miss / ads.real)}, и окупаемость вместе с ней. По такому отчёту легко урезать канал, который работает. Серверный сбор вернёт в отчёт ${S.back} заказов — ≈ ${wk(S.back)} в неделю, ≈ ${mo(S.back)} в месяц. ${S.refuse} заказов тех, кто отказался от cookie, не вернёт ничто — и не должен.`);
+    }
+    function stBiz(S) {
+      const F = attribute('first', U.hl, S.orders).by, FT = attrTrue('first', U.hl).by;
+      if (S.exact) return bizCard(`Склейка точная: конверсия 35 %, и соцсетям по первому клику засчитано ${rub(FT.soc)} — ровно столько, сколько они привели. По таким цифрам можно делить бюджет.`);
+      let h = '';
+      if (S.conv < 0.349) h += `Конверсия в отчёте ${pc(S.conv, 1)} вместо 35 %: кажется, что сайт продаёт хуже${S.vis > 40 ? `, и чтобы получить ${BUYERS.length} заказов, вы закупите трафика на ${cnt(S.vis, 'посетителя', 'посетителя', 'посетителей')} вместо 40 — на ${pc((S.vis - 40) / 40)} больше рекламы, чем нужно` : ''}. `;
+      else if (S.conv > 0.351) h += `Конверсия в отчёте ${pc(S.conv, 1)} — выше настоящей: отчёт обещает больше заказов с того же трафика, чем будет. `;
+      if (F.soc < FT.soc) h += `Соцсети по первому клику недосчитались ${rub(FT.soc - F.soc)}: их окупаемость в отчёте ${romiS(romiOf(F.soc, 'soc'))} вместо ${romiS(romiOf(FT.soc, 'soc'))} — канал, который знакомит людей с магазином, урежут первым. `;
+      if (S.falseN) h += 'Ложная склейка: Аню с мамой отчёт считает одним покупателем — персональная скидка «за вторую покупку» уйдёт не тому, а покупки семьи сложатся в одного «очень ценного» клиента.';
+      return bizCard(h || 'Включай правила и смотри, во что обходится каждая неточность.');
+    }
 
     /* ================= 5. Расходы и окупаемость ================= */
     const CABS = { ads: 'Яндекс Директ', soc: 'VK Реклама', mail: 'Сервис рассылок' };
@@ -722,7 +815,8 @@
       <div class="e2e-ctls">${ctl('Загрузка расходов', seg('sched', [['daily', 'Раз в сутки, в 06:00'], ['hourly', 'Каждый час']], U.roi.sched, 'Расписание загрузки'))}${ctl('Расходы рассылки', seg('cur', [['raw', 'Как в кабинете'], ['rub', 'В рубли по курсу']], U.roi.cur, 'Валюта'))}${ctl('Модель атрибуции', seg('model', MODELS, U.model, 'Модель атрибуции'))}</div>
       <div class="e2e-imp" id="e2eImp"></div>
       <div class="e2e-kpis" id="e2eRoiK"></div>
-      <div class="e2e-tblw" id="e2eRoiT"></div>
+      ${isBiz() ? '<div id="e2eRoiBiz"></div>' : ''}
+      <div id="e2eRoiT"></div>
       <div id="e2eRoiNote"></div>
       <div id="e2eRoiQ"></div>
       ${asm([`средний чек ${rub(A.check)}, $1 = ${A.usdRub} ₽ — как во всём тренажёре (js/xray-biz.js)`, `маржа ${pc(OWN.margin)} — как в «Потоке событий»; покупок за жизнь покупателя — ${OWN.buys} (своё допущение), LTV = ${rub(A.check)} × ${pc(OWN.margin)} × ${OWN.buys} = ${rub(LTV)}`, `в сентябре Директ тратит ${rub(OWN.spend.ads / 30)} в день, VK — ${rub(OWN.spend.soc / 30)}; рассылка — $${OWN.mailUsd} абонентской платы 1-го числа`, 'новые покупатели — 12 из 14: Лев и Мира покупали раньше; CAC делим по той же модели атрибуции', 'выручка — по выбранной модели атрибуции, как во вкладке «Атрибуция»'])}
@@ -740,15 +834,20 @@
       const R = U.roi, sp = rows.reduce((a, r) => a + r.sp.dwh, 0), rev = rows.reduce((a, r) => a + r.rev, 0), spT = rows.reduce((a, r) => a + r.sp.now, 0);
       const romi = (rev * OWN.margin - sp) / sp, romiT = (rev * OWN.margin - spT) / spT, today = PAID.reduce((a, c) => a + spendOf(c, R.sched, R.cur).today, 0), todayT = PAID.reduce((a, c) => a + spendOf(c, R.sched, R.cur).todayNow, 0);
       const ok = Math.abs(romi - romiT) < 0.005;
+      const back = rev * OWN.margin / sp;
+      if (isBiz()) return tile('Рубль рекламы вернул', dec(back, 2) + ' ₽', ok ? 'маржи; меньше 1 ₽ — убыток' : R.cur === 'raw' ? 'доллары записаны как рубли — сначала почини импорт' : 'расходы за 30-е ещё не загружены — цифра чуть завышена', ok ? (back >= 1 ? 'ok' : 'bad') : 'warn')
+        + tile('Расход за 30-е в отчёте', rub(today), today < todayT * 0.5 ? `остальное (${rub(todayT - today)}) приедет завтра` : 'почти всё загружено', today < todayT * 0.5 ? 'warn' : '')
+        + tile('Покупатель за жизнь', rub(LTV), `маржи за ${OWN.buys} покупки`, 'inf')
+        + tile('Новых покупателей', '12 из 14', 'двое покупали раньше');
       return tile('ROMI рекламы за сентябрь', romiS(romi), ok ? 'данные сведены верно' : `по верным данным — ${romiS(romiT)}`, ok ? (romi >= 0 ? 'ok' : 'bad') : 'warn')
         + tile('Расход за 30-е в отчёте', rub(today), `на самом деле — ${rub(todayT)}`, today < todayT * 0.5 ? 'warn' : '')
         + tile('LTV покупателя', rub(LTV), `${rub(A.check)} × ${pc(OWN.margin)} × ${OWN.buys} покупки`, 'inf')
         + tile('Новых покупателей', '12 из 14', 'на них делим расход в CAC');
     }
     function roiTable(rows) {
-      return `<table class="e2e-tbl"><thead><tr><th>Канал</th><th class="num hn">В кабинете</th><th class="num">В хранилище</th><th class="num">Выручка · ${MNAME[U.model]}</th><th class="num">ROMI</th><th class="num hn">Новых</th><th class="num hn">CAC</th><th class="num">LTV / CAC</th></tr></thead><tbody>
+      return `<div class="e2e-tblw e2e-wideonly"><table class="e2e-tbl"><thead><tr><th>Канал</th><th class="num hn">В кабинете</th><th class="num">В хранилище</th><th class="num">Выручка · ${MNAME[U.model]}</th><th class="num">ROMI</th><th class="num hn">Новых</th><th class="num hn">CAC</th><th class="num">LTV / CAC</th></tr></thead><tbody>
         ${rows.map(r => `<tr><td><span class="e2e-chn">${cdot(r.ch)}${CH[r.ch].n}</span></td><td class="num hn">${r.ch === 'mail' ? '$' + OWN.mailUsd : rub(r.sp.now)}</td><td class="num${r.sp.raw ? ' neg' : r.sp.dwh < r.sp.now - 1 ? ' warnv' : ''}">${rub(r.sp.dwh)}</td><td class="num">${rub(r.rev)}</td><td class="num ${rcls(r.romi)}">${romiS(r.romi)}${Math.abs(r.romi - r.romiTrue) > 0.005 ? `<small>верно: ${romiS(r.romiTrue)}</small>` : ''}</td><td class="num hn">${dec(r.nw, 1)}</td><td class="num hn">${isFinite(r.cac) ? rub(r.cac) : '∞'}</td><td class="num ${r.lc >= 3 ? 'pos' : r.lc >= 1 ? 'warnv' : 'neg'}">${dec(r.lc, 1)}</td></tr>`).join('')}
-        </tbody></table>`;
+        </tbody></table></div>` + roiList(rows);
     }
     function roiNote(rows) {
       const R = U.roi, m = rows.find(r => r.ch === 'mail');
@@ -771,6 +870,7 @@
       const im = $('#e2eImp'); if (!im) return;
       const rows = roiRows(U.model, U.hl, U.roi.sched, U.roi.cur);
       im.innerHTML = roiImp(); $('#e2eRoiK').innerHTML = roiKpis(rows); $('#e2eRoiT').innerHTML = roiTable(rows); $('#e2eRoiNote').innerHTML = roiNote(rows); $('#e2eRoiQ').innerHTML = roiQuiz(rows);
+      const rb = $('#e2eRoiBiz'); if (rb) rb.innerHTML = roiBiz(rows);
     };
     ACTS.sched = v => { U.roi.sched = v === 'hourly' ? 'hourly' : 'daily'; render(); };
     ACTS.cur = v => { U.roi.cur = v === 'rub' ? 'rub' : 'raw'; render(); };
@@ -780,6 +880,30 @@
       if (U.roi.cur === 'rub' && r && r.romi < -0.005) done('roi');
       DRAWS.roi();
     };
+
+    function roiList(rows) {
+      return `<div class="e2e-narrowonly">${vlist(rows.map(r => ({ head: `${cdot(r.ch)}${CH[r.ch].n}`, items: [
+        ['В кабинете', r.ch === 'mail' ? '$' + OWN.mailUsd : rub(r.sp.now)],
+        ['В хранилище', rub(r.sp.dwh), r.sp.raw ? 'neg' : r.sp.dwh < r.sp.now - 1 ? 'warnv' : ''],
+        ['Выручка · ' + MNAME[U.model], rub(r.rev)],
+        ['ROMI', romiS(r.romi) + (Math.abs(r.romi - r.romiTrue) > 0.005 ? ` (верно: ${romiS(r.romiTrue)})` : ''), rcls(r.romi)],
+        ['Новых покупателей', dec(r.nw, 1)],
+        ['CAC', isFinite(r.cac) ? rub(r.cac) : '∞'],
+        ['LTV / CAC', dec(r.lc, 1), r.lc >= 3 ? 'pos' : r.lc >= 1 ? 'warnv' : 'neg']
+      ] })))}</div>`;
+    }
+    function roiBiz(rows) {
+      const R = U.roi, m = rows.find(r => r.ch === 'mail');
+      const v = rows.map(r => {
+        const back = r.rev * OWN.margin / r.sp.dwh, bad = r.romi < -0.005;
+        const life = r.lc >= 3 ? 'за жизнь покупателя окупится с запасом' : r.lc >= 1 ? 'окупится, только если покупатели вернутся' : 'не окупится даже повторными покупками';
+        return `<div class="e2e-verdict e2e-c-${r.ch} ${bad ? 'bad' : 'ok'}"><span class="e2e-chn">${cdot(r.ch)}${CH[r.ch].n}</span><b class="big">${dec(back, 2)} ₽</b><span>маржи на каждый рубль рекламы — ${bad ? 'первой покупкой не окупается' : 'окупается уже первой покупкой'}; ${life} (LTV/CAC ${dec(r.lc, 1)}).</span></div>`;
+      }).join('');
+      const bad = rows.filter(r => r.romi < -0.005).map(r => CH[r.ch].n);
+      const txt = R.cur === 'raw' ? `Пока расходы рассылки записаны в долларах как рубли, рассылка «возвращает» ${nf(m.rev * OWN.margin / m.sp.dwh)} ₽ на рубль — это ошибка импорта, а не успех. Сначала переведите расходы в рубли.`
+        : `${bad.length ? `По модели «${MNAME[U.model]}» реально не окупается: ${bad.join(', ')}.` : `По модели «${MNAME[U.model]}» окупаются все платные каналы.`} Рубль, вернувший меньше рубля маржи, — убыток, даже если выручка большая.${R.sched === 'daily' ? ' И помните: расходы за 30-е ещё не загружены — вечерние цифры чуть лучше настоящих.' : ''}`;
+      return `<div class="e2e-verdicts">${v}</div>` + bizCard(txt, R.cur === 'raw' ? 'bad' : '');
+    }
 
     /* ================= 6. Архитектура ================= */
     const BLK = {
@@ -798,6 +922,22 @@
       cab: { t: ['Рекламные', 'кабинеты'], s: 'Директ, VK', side: 5, type: 'external', what: 'Хранят расходы, показы и клики по кампаниям и отдают их по API.', brk: 'Истёк токен доступа; кабинет досчитывает расходы задним числом; валюта — не рубли.', num: 'Расходы за несколько дней — ноль, в журнале загрузки ошибка 401.' }
     };
     const EDGES = [['site', 'coll'], ['coll', 'queue'], ['queue', 'stream'], ['stream', 'dwh'], ['dwh', 'mart'], ['mart', 'bi'], ['crm', 'cdc'], ['cdc', 'queue'], ['pay', 'queue'], ['queue', 'lake'], ['lake', 'dwh'], ['batch', 'dwh'], ['cab', 'batch']];
+    /* «Бизнес»: чем поломка блока грозит деньгам владельца */
+    const BIZB = {
+      site: 'Треть заказов «ниоткуда» — реклама выглядит хуже, чем есть, и её урежут вместе с продажами.',
+      coll: 'В распродажу теряются визиты — отчёт занижает пик, и на следующую распродажу купят меньше рекламы, чем нужно.',
+      queue: 'Цифры на дашборде отстают на полчаса — в распродажу поздно заметите, что реклама «сгорела».',
+      stream: 'Выручка в отчёте на 9 % больше настоящей — планы и премии считают от денег, которых нет.',
+      dwh: 'Кампании задвоились — расход и выручка не сходятся, и не понять, какая кампания окупилась.',
+      mart: 'Посетителей «стало» на 40 % больше — кажется, что сайт продаёт хуже, и деньги уходят на ненужную переделку.',
+      bi: 'Без плашки свежести решают по вчерашним цифрам; маркетинг и финансы спорят, чья выручка правильная.',
+      crm: 'Заказы с новой формы и по телефону без источника — реклама недополучает заслуги, бюджет режут зря.',
+      cdc: 'Последний час заказов в отчёте не виден — вечерний итог занижен, а утром «чудесно» вырастает.',
+      pay: 'Возвраты на 500 тыс. ₽ не вычтены — реклама выглядит прибыльнее, премии маркетинга завышены.',
+      lake: 'Пересчитать историю по новой модели — сутки ожидания, решение о бюджете откладывается.',
+      batch: 'Вечером реклама «бесплатная» — соблазн поднять ставки до того, как придёт счёт.',
+      cab: 'Расходы за три дня — ноль: окупаемость «взлетает», и бюджет «удачной» рекламы увеличивают вслепую.'
+    };
     const DASH0 = { ordRep: 1400, ordCrm: 1400, revRep: 4.2e6, revBuh: 4.2e6, noSrc: 0.08, vis: 70000, spY: 27300, spT: 26200, spNote: 'загрузка каждый час', fresh: '5 мин назад', camp: '7 кампаний, расходы сведены' };
     const BRK = {
       site: { noSrc: 0.35, vis: 49000 }, coll: { noSrc: 0.14, vis: 57400 }, crm: { noSrc: 0.30 },
@@ -862,8 +1002,8 @@
       if (!b) return card('mut', 'Нажми на блок схемы — расскажу, что он делает, что в нём ломается и как поломку видно в цифрах. Кнопка «Сломать» покажет это на дашборде ниже.');
       const T = b.type && SD.TYPES && SD.TYPES[b.type], dv = T && T.dive && SD.DIVES && SD.DIVES[T.dive];
       return `<div class="e2e-card"><b class="e2e-h">${esc(b.t.join(' '))} <small>${esc(b.s)}</small></b>
-        <div class="e2e-blkd"><div><b>ЧТО ДЕЛАЕТ</b>${b.what}</div><div class="brk"><b>ЧТО ЛОМАЕТСЯ</b>${b.brk}</div><div class="num"><b>КАК ВИДНО В ЦИФРАХ</b>${b.num}</div></div>
-        ${T ? `<div class="e2e-node">${SD.icon ? SD.icon(b.type) : ''}<span><b>На площадке — узел «${esc(T.name)}» (${b.type})</b>${esc(T.short || '')}${T.info && T.info.what ? ' · ' + esc(T.info.what) : ''}</span></div>` : '<p class="e2e-mut">Отдельного узла на площадке нет: отчёты читают из «Аналитической БД» (olap).</p>'}
+        <div class="e2e-blkd"><div><b>ЧТО ДЕЛАЕТ</b>${b.what}</div>${isBiz() ? `<div class="brk"><b>ЧЕМ ГРОЗИТ ДЕНЬГАМ</b>${BIZB[id]}</div><div class="num"><b>КАК ЗАМЕТИТЬ</b>${b.num}</div>` : `<div class="brk"><b>ЧТО ЛОМАЕТСЯ</b>${b.brk}</div><div class="num"><b>КАК ВИДНО В ЦИФРАХ</b>${b.num}</div>`}</div>
+        ${T && !isBiz() ? `<div class="e2e-node">${SD.icon ? SD.icon(b.type) : ''}<span><b>На площадке — узел «${esc(T.name)}» (${b.type})</b>${esc(T.short || '')}${T.info && T.info.what ? ' · ' + esc(T.info.what) : ''}</span></div>` : isBiz() ? '' : '<p class="e2e-mut">Отдельного узла на площадке нет: отчёты читают из «Аналитической БД» (olap).</p>'}
         <div class="row-btns" style="margin-top:8px"><button type="button" class="btn ${R.broken === id ? '' : 'danger'}" data-a="break:${id}">${R.broken === id ? 'Починить' : 'Сломать этот блок'}</button>${dv ? `<button type="button" class="btn ghost" data-a="dive:${T.dive}">Пошаговый разбор: ${esc(SD.DIVES[T.dive].title)}</button>` : ''}${b.lab ? `<button type="button" class="btn ghost" data-a="olab:${b.lab}">Лаборатория «Поток событий вживую»</button>` : ''}</div></div>`;
     }
     function symCard() {
@@ -907,14 +1047,15 @@
     ACTS.olab = v => { if (SD.labs) SD.labs.open(v); };
 
     /* ================= итоги ================= */
-    VIEWS.memo = () => `<b class="e2e-h">Что запомнить</b><div class="e2e-memo">${MEMO.map(([t, xs]) => `<div class="e2e-card"><b>${t}</b><ul>${xs.map(x => `<li>${x}</li>`).join('')}</ul></div>`).join('')}</div>
-      ${card('info', `<b>Чек-лист требований для аналитика.</b> Прежде чем строить сквозную аналитику, договоритесь и запишите:<ol>${CHECK.map(x => `<li>${x}</li>`).join('')}</ol>`)}`;
+    VIEWS.memo = () => `<b class="e2e-h">${isBiz() ? 'Что запомнить владельцу' : 'Что запомнить'}</b><div class="e2e-memo">${(isBiz() ? MEMO_BIZ : MEMO).map(([t, xs]) => `<div class="e2e-card"><b>${t}</b><ul>${xs.map(x => `<li>${x}</li>`).join('')}</ul></div>`).join('')}</div>
+      ${isBiz() ? card('info', `<b>Что спросить у команды.</b> Прежде чем делить бюджет по отчёту, задайте шесть вопросов:<ol>${CHECK_BIZ.map(x => `<li>${x}</li>`).join('')}</ol>`) : card('info', `<b>Чек-лист требований для аналитика.</b> Прежде чем строить сквозную аналитику, договоритесь и запишите:<ol>${CHECK.map(x => `<li>${x}</li>`).join('')}</ol>`)}`;
 
     /* ================= события ================= */
     function onClick(e) {
-      const b = e.target.closest('[data-tab],[data-go],[data-a]');
+      const b = e.target.closest('[data-tab],[data-go],[data-mode],[data-a]');
       if (!b || !EL.contains(b) || b.disabled) return;
       if (b.dataset.tab) return setTab(b.dataset.tab);
+      if (b.dataset.mode) return setMode(b.dataset.mode);
       if (b.dataset.go) return setTab(b.dataset.go);
       const a = b.getAttribute('data-a'), i = a.indexOf(':'), k = i < 0 ? a : a.slice(0, i), v = i < 0 ? '' : a.slice(i + 1);
       if (k === 'pair') return pickPair(+v);
@@ -941,7 +1082,7 @@
     function onInput(e) { const t = e.target; if (t && t.dataset && t.dataset.r && INPUTS[t.dataset.r]) INPUTS[t.dataset.r](t.value, t); }
 
     /* ================= сборка ================= */
-    EL.innerHTML = `<div class="e2e"><div class="e2e-tabs" role="tablist" aria-label="Разделы лаборатории">${TABS.map(([k, n, t]) => `<button type="button" role="tab" data-tab="${k}" aria-selected="${U.tab === k}"><b>${n}</b>${t}</button>`).join('')}</div><div class="e2e-view" id="e2eView"></div></div>`;
+    EL.innerHTML = `<div class="e2e"><div class="e2e-tabs" role="tablist" aria-label="Разделы лаборатории">${TABS.map(([k, n, t]) => `<button type="button" role="tab" data-tab="${k}" aria-selected="${U.tab === k}"><b>${n}</b>${t}</button>`).join('')}<div class="seg e2e-mode" role="group" aria-label="Как объяснять">${[['tech', 'Техника'], ['biz', 'Бизнес']].map(([k, t]) => `<button type="button" data-mode="${k}" aria-selected="${MODE === k}">${t}</button>`).join('')}</div></div><div class="e2e-view" id="e2eView"></div></div>`;
     EL.addEventListener('click', onClick); EL.addEventListener('keydown', onKey); EL.addEventListener('input', onInput);
     EL.addEventListener('pointerover', onOver); EL.addEventListener('pointerout', onOut);
     EL.addEventListener('focusin', onFocusIn); EL.addEventListener('focusout', onFocusOut);
@@ -968,11 +1109,18 @@
     ['Потери и согласие', ['Блокировщики, отказ от cookie и Safari съедают часть событий браузера.', 'Серверный сбор возвращает потерянное техникой, но не отменяет отказ человека.', '152-ФЗ: согласие — отдельным документом, данные граждан России — в базах в России.']],
     ['Деньги', ['Расходы приходят по расписанию и с задержкой — у отчёта нужна плашка свежести.', 'Валюта — в рубли по курсу на дату траты; НДС — договориться, с ним или без.', 'ROMI — по марже, CAC — на новых покупателей, LTV/CAC от 3 — здоровый канал.']]
   ];
+  const MEMO_BIZ = [
+    ['Какой канал окупается', ['Окупаемость считают по марже, а не по выручке: рубль рекламы должен вернуть больше рубля маржи.', 'Смотрите на две-три модели атрибуции: канал, убыточный по «последнему клику», может приводить половину новых покупателей.', 'Канал, который не окупается первой покупкой, может окупиться повторными — для этого смотрят LTV/CAC.']],
+    ['Потери', ['Без серверного сбора часть выручки «ниоткуда», и отчёт недооценивает рекламу.', 'Отказ от cookie — право покупателя: такие заказы остаются без источника, и это нормально.']],
+    ['Склейка', ['Без склейки один покупатель — три посетителя: конверсия занижена, и трафика закупают больше, чем нужно.', 'Склейка «по похожести» объединяет разных людей — скидки и письма уходят не тем.']],
+    ['Расходы', ['Расходы приходят с задержкой: вечером реклама кажется бесплатной — не решайте по неполным цифрам.', 'Доллары переводят в рубли по курсу на дату траты, иначе канал выглядит почти бесплатным.']]
+  ];
+  const CHECK_BIZ = ['По какой модели атрибуции считаете и почему именно по ней?', 'Какая доля заказов без источника и что с ней делаете?', 'Когда загружены расходы и видно ли это на отчёте?', 'Сходится ли выручка в отчёте с бухгалтерией и с каким расхождением?', 'Как склеиваете покупателей и сколько среди них ложных склеек?', 'Как спрашиваем согласие и где хранятся данные?'];
   const CHECK = ['Какие метки обязательны в рекламных ссылках и кто проверяет их до запуска кампании', 'Где форма заказа сохраняет UTM и click id и что делать с заказами по телефону', 'Правило склейки: какие признаки точные и держим ли вероятностную склейку отдельно', 'Модель атрибуции по умолчанию и окно: на сколько дней назад смотрим', 'Расписание импорта расходов, допустимая задержка, валюта и курс, НДС', 'Свежесть дашборда и плашка «данные неполные»', 'Сверка с CRM и бухгалтерией: какое расхождение допустимо', 'Согласие, отказ и место хранения — по 152-ФЗ, вместе с юристом'];
 
   /* ================= регистрация ================= */
   /* чистые функции — для проверок и для других модулей */
-  SD.labE2E = { attrTrue, attribute, splitRub, stitch, lossRun, roiRows, spendOf, TOTAL, TOUCHES, PEOPLE, BUYERS, MODELS, PAIRS, A, OWN, LTV };
+  SD.labE2E = { budgetSplit, BUDGET, readMode, attrTrue, attribute, splitRub, stitch, lossRun, roiRows, spendOf, TOTAL, TOUCHES, PEOPLE, BUYERS, MODELS, PAIRS, A, OWN, LTV };
   SD.LABS = SD.LABS || [];
   SD.LABS.push({
     id: 'e2e', title: 'Сквозная аналитика вживую', lede: 'UTM, склейка, атрибуция, ROMI, потери событий',
