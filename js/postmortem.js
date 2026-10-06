@@ -18,9 +18,12 @@
   /* загрузка: проценты, а сверх ×3 — «в N раз выше потолка», так понятнее */
   const pu = u => {
     u = u || 0; if (u < 3) return Math.round(u * 100) + ' %';
+    if (u >= 1000) return 'более чем в 1000 раз выше потолка';
     const n = u < 10 ? Math.round(u * 10) / 10 : Math.round(u), i = Math.floor(n);
     return `в ${String(n).replace('.', ',')} ${n !== i || (i % 10 >= 2 && i % 10 <= 4 && !(i % 100 >= 12 && i % 100 <= 14)) ? 'раза' : 'раз'} выше потолка`;
   };
+  /* симулятор при шторме даёт «610092225 %» — такие числа переводим в «в N раз выше потолка» */
+  const big = s => String(s == null ? '' : s).replace(/(\d{4,}) %/g, (m, d) => pu(+d / 100));
   const usd = v => F().usd(v), pct = v => F().pct(v), ms = v => F().ms(v), num = v => F().num(v);
   const MONTHS = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
   const dayTxt = d => `${d.getDate()} ${MONTHS[d.getMonth()]}`;
@@ -52,6 +55,8 @@
     : ['lb', 'cdn', 'objstore', 'queue', 'worker', 'k8s', 'llm', 'embed', 'stt', 'tts', 'semcache'].includes(t) ? 'platform' : 'backend';
   const PRI = { success: 0, jobs: 1, latency: 2, survive: 3, cost: 4 };
   const pri = t => (t in PRI ? PRI[t] : 5);
+  const SYMPT = ['nolost', 'nodup', 'ordered', 'durable', 'fresh', 'consistent', 'quality'];
+  const epv = (k, v) => k === 'backoff' ? (v === 'exp' ? 'экспоненциальная' : 'сразу') : (k === 'cb' || k === 'fallback') ? (v ? 'вкл' : 'выкл') : k === 'timeout' ? (v ? v + ' мс' : 'нет') : String(v);
   const EP = { proto: 'протокол', timeout: 'таймаут', retries: 'повторы', backoff: 'пауза между повторами', cb: 'предохранитель', fallback: 'запасной ответ' };
 
   /* без поиска виноватых: слова, которые ищут человека, а не причину */
@@ -64,6 +69,17 @@
     const res = SD.sim.run(L, g, { mul: 1 }), ch = SD.sim.chaos(L, g), an = SD.sim.analyze(L, g, res);
     let adv = []; try { adv = SD.sim.advise(L, g, res, an) || []; } catch (e) { adv = []; }
     return { res, ch, goals: SD.evalGoals(L, g, res, ch, an), adv };
+  }
+  /* правка для шторма повторов: экспоненциальная пауза и предохранитель на этой связи — проверяем прогоном */
+  function stormFix(D, start, edId, gi) {
+    const g = copy(start), e = g.edges.find(x => x.id === edId); if (!e) return null;
+    Object.assign(e.props, { backoff: 'exp', cb: true });
+    let r; try { r = run(D, g); } catch (err) { return null; }
+    const inf = (r.res.edges[edId] || {}).info || {}, ok = !!(r.goals[gi] && r.goals[gi].ok);
+    /* если одной паузы мало — сколько мощности нужно уже со спокойными повторами */
+    let more = '', moreOk = false;
+    if (!ok) { try { const w = SD.learn.analyze(D, g, gi); if (w && w.fix) { more = fixText(g, w.fix); moreOk = !!(w.fixInfo && w.fixInfo.ok); } } catch (err) { more = ''; } }
+    return { amp: inf.amp || 1, util: (r.res.nodes[e.to] || {}).util || 0, ok, more, moreOk, red: r.goals.filter(x => !x.ok).length };
   }
   const gsig = g => JSON.stringify(g.nodes.map(n => [n.id, n.type, n.props]).sort()) + JSON.stringify(g.edges.map(e => e.from + '>' + e.to + JSON.stringify(e.props)).sort());
   const fixText = (g, fix) => (fix || []).map(c => { const n = g.nodes.find(x => x.id === c.id); return `«${nm(n)}»${c.key === 'count' ? '' : ' · ' + String(c.label || c.key).toLowerCase()}: ${c.from} → ${c.to}${c.key === 'count' ? ' экз.' : ''}`; }).join(', ');
@@ -95,7 +111,7 @@
       const o = E0.get(ek(e));
       if (!o) { out.push({ k: 'eadd', from: e.from, to: e.to, text: `новая связь «${nmOf(mine, e.from)}» → «${nmOf(mine, e.to)}»` }); return; }
       const keys = Object.keys(EP).filter(k => JSON.stringify((o.props || {})[k]) !== JSON.stringify((e.props || {})[k]));
-      if (keys.length) out.push({ k: 'eprop', from: e.from, to: e.to, keys, text: `связь «${nmOf(mine, e.from)}» → «${nmOf(mine, e.to)}»: ${keys.map(k => EP[k] + ' ' + String((o.props || {})[k]) + ' → ' + String((e.props || {})[k])).join(', ')}` });
+      if (keys.length) out.push({ k: 'eprop', from: e.from, to: e.to, keys, text: `связь «${nmOf(mine, e.from)}» → «${nmOf(mine, e.to)}»: ${keys.map(k => EP[k] + ' ' + epv(k, (o.props || {})[k]) + ' → ' + epv(k, (e.props || {})[k])).join(', ')}` });
     });
     start.edges.forEach(o => { if (removed.has(o.from) || removed.has(o.to) || E1.has(ek(o))) return; out.push({ k: 'edel', from: o.from, to: o.to, text: `убрана связь «${nmOf(start, o.from)}» → «${nmOf(start, o.to)}»` }); });
     return out;
@@ -141,6 +157,8 @@
     const why = red.slice(0, 3).map(o => { let w = null; try { w = SD.learn.analyze(D, start, o.i); } catch (err) { w = null; } return Object.assign({}, o, { w: w || { marks: [], emarks: [], lines: [], fix: null, rem: '' } }); });
     P.red = red; P.why = why;
     root(P); chrono(P); diff(P); suggest(P); incident(P);
+    P.chrono = P.chrono.map(big); P.worked = P.worked.map(big); P.notWorked = P.notWorked.map(big);
+    P.root.right = big(P.root.right); P.root.explain = big(P.root.explain); P.root.opts.forEach(o => { o.t = big(o.t); o.why = big(o.why); });
     return P;
   }
 
@@ -151,22 +169,31 @@
     P.root = R;
     if (!m) return;
     const w = m.w, t = m.lg.t;
-    const mk = w.marks.find(x => start.nodes.some(n => n.id === x.id));
+    let mk = w.marks.find(x => start.nodes.some(n => n.id === x.id));
+    /* шторм повторов: связь без паузы между повторами бьёт по узлу, который и так в беде, — это и есть корень */
+    const storm = t === 'cost' || t === 'survive' ? null : (w.emarks || []).map(x => ({ x, ed: start.edges.find(q => q.id === x.id) }))
+      .filter(o => o.ed && /^повтор/.test(o.x.tag) && (!mk || w.marks.some(q => q.id === o.ed.to)))
+      .sort((a, b) => (((r0.res.edges[b.ed.id] || {}).info || {}).amp || 0) - (((r0.res.edges[a.ed.id] || {}).info || {}).amp || 0))[0];
+    if (storm) mk = w.marks.find(q => q.id === storm.ed.to) || { id: storm.ed.to, tag: '' };
     const n = mk ? start.nodes.find(x => x.id === mk.id) : null;
     const nr = n ? r0.res.nodes[n.id] || {} : {}, nb = n ? b0.res.nodes[n.id] || {} : {};
     const adv = n ? (r0.adv.find(a => a.node === n.id && a.sev === 'bad') || r0.adv.find(a => a.node === n.id)) : null;
     const fix = w.fix ? fixText(start, w.fix) : '', fixOk = w.fixInfo && w.fixInfo.ok;
-    const em = w.emarks && w.emarks[0], ed = em && start.edges.find(x => x.id === em.id);
+    const em = storm ? storm.x : w.emarks && w.emarks[0], ed = em && start.edges.find(x => x.id === em.id);
     const ename = ed ? `«${nm(start.nodes.find(q => q.id === ed.from))}» → «${nm(start.nodes.find(q => q.id === ed.to))}»` : '';
     let kind = 'other';
     if (t === 'cost') kind = 'cost';
     else if (t === 'survive') kind = 'survive';
+    else if (storm) kind = 'edge';
     else if (n && nr.dead) kind = 'dead';
     else if (n && nr.util > 1) kind = 'hot';
     else if (n && t === 'latency') kind = 'slow';
     else if (ed) kind = 'edge';
     else if (n) kind = 'hot';
     R.kind = kind; R.node = n ? n.id : null; R.name = n ? nm(n) : ''; R.u0 = nb.util || 0; R.u1 = nr.util || 0; R.tag = mk ? mk.tag : ''; R.fix = fix; R.fixOk = fixOk; R.ename = ename; R.etag = em ? em.tag : '';
+    R.edge = ed ? { id: ed.id, from: nm(start.nodes.find(q => q.id === ed.from)), to: nm(start.nodes.find(q => q.id === ed.to)), amp: (((r0.res.edges[ed.id] || {}).info || {}).amp || 1) } : null;
+    /* запас на отказ: был ли он в обычный день — проверяем, а не предполагаем */
+    const gi = m.i, b0ok = b0.goals[gi] ? b0.goals[gi].ok : true;
     const N = R.name, ci = D.goals.findIndex(g => g.t === 'cost'), max = ci >= 0 ? D.goals[ci].max : 0, gap = Math.max(0, r0.res.cost - max);
     const fixLine = fix ? `Проверил на симуляторе: ${fix} — ${fixOk ? 'цель станет зелёной' : 'станет лучше, но не до конца'}.` : (w.rem ? `Что попробовать: ${w.rem}` : '');
     const marked = new Set(why.flatMap(o => o.w.marks.map(x => x.id)));
@@ -185,8 +212,15 @@
       R.right = `Запрос дольше всего стоит в «${N}»: ${R.tag}`;
       R.explain = `Время ответа складывается из остановок по пути, и самая долгая — «${N}» (загрузка ${pu(R.u1)}). ${fixLine}`;
     } else if (kind === 'survive') {
-      R.right = `У «${N}» нет запаса: под новой нагрузкой упадёт один экземпляр — и оставшиеся не вытянут`;
-      R.explain = `${R.tag ? `При падении одного экземпляра «${N}» ${R.tag.replace(/^упадёт — /, '')}. ` : ''}В обычный день запас был, под испытанием загрузка ${pu(R.u0)} → ${pu(R.u1)}. ${fixLine}`;
+      R.right = `У «${N}» не осталось запаса на отказ: под новой нагрузкой без одного экземпляра оставшиеся не вытянут`;
+      R.explain = `Проверка отказом: ${R.tag ? `если упадёт один экземпляр «${N}», ${R.tag.replace(/^упадёт — /, '')}` : `без одного экземпляра «${N}» цель не держится`}. ${b0ok ? 'В обычный день запаса хватало' : 'Запаса не было и в обычный день'}: загрузка ${pu(R.u0)} → ${pu(R.u1)}. Пока все экземпляры живы, пользователи ошибок не видят — авария ждёт первого отказа. ${fixLine}`;
+    } else if (kind === 'edge' && R.edge && /^повтор/.test(R.etag)) {
+      const sf = stormFix(D, start, R.edge.id, gi), advE = r0.adv.find(a => a.edge === R.edge.id && /Повтор/.test(a.text));
+      R.stormFix = sf;
+      R.right = `Повторы на связи ${ename} без паузы раздувают нагрузку ×${R.edge.amp.toFixed(1).replace('.', ',')}: перегруженный «${N}» получает ещё больше запросов`;
+      R.explain = `${advE ? advE.text + ' ' : ''}Когда «${N}» отвечает медленно, «${R.edge.from}» сразу повторяет запрос — и нагрузка растёт сама, хотя пользователей больше не стало. `
+        + (sf ? `Проверил на симуляторе: экспоненциальная пауза между повторами и предохранитель на этой связи — раздувание ×${R.edge.amp.toFixed(1).replace('.', ',')} → ×${sf.amp.toFixed(1).replace('.', ',')}, загрузка «${N}» ${pu(R.u1)} → ${pu(sf.util)}${sf.ok ? ', цель станет зелёной.' : '. Одной паузы мало: под пиком нужна ещё мощность.'}` : '')
+        + (sf && !sf.ok && sf.more ? ` Вместе с паузой: ${sf.more} — ${sf.moreOk ? 'цель станет зелёной' : 'станет лучше, но не до конца'}.` : sf && !sf.ok && fix ? ` Без паузы понадобилось бы: ${fix.replace(/\.$/, '')}.` : '');
     } else if (kind === 'cost') {
       /* причина — экземпляры сверх нужного (их нашла проверенная правка), а не просто «самый дорогой» */
       const fx = (w.fix || []).map(c => start.nodes.find(q => q.id === c.id)).filter(Boolean).slice(0, 2);
@@ -235,8 +269,14 @@
       else if (N) out.push(`Больше всего тратит «${N}»: ${usd((r0.res.nodes[R.node] || {}).cost || 0)} в месяц`);
       if (ci >= 0) out.push(`Счёт ${usd(r0.res.cost)} не помещается в новый бюджет ${usd(D.goals[ci].max)}: не хватает ${usd(Math.max(0, r0.res.cost - D.goals[ci].max))}`);
     } else if (R.kind === 'survive') {
-      out.push(`Нагрузка на «${N}» растёт: ${pu(R.u0)} → ${pu(R.u1)} — экземпляров хватает впритык`);
-      out.push(`Падает один экземпляр «${N}» — оставшиеся не вытягивают: ${String(R.tag || '').replace(/^упадёт — /, '') || 'ошибки у пользователей'}`);
+      out.push(`Нагрузка на «${N}» растёт: ${pu(R.u0)} → ${pu(R.u1)} — экземпляров хватает только впритык`);
+      out.push(`Проверка отказом: без одного экземпляра «${N}» оставшиеся не вытягивают — ${String(R.tag || '').replace(/^упадёт — /, '') || 'цель краснеет'}`);
+      out.push(`Пока все экземпляры живы, ошибок нет — но первый же отказ «${N}» ударит по пользователям`);
+    } else if (R.kind === 'edge' && R.edge && /^повтор/.test(R.etag)) {
+      out.push(`«${N}» не успевает: загрузка ${pu(R.u0)} → ${pu(R.u1)}, ответы замедляются`);
+      out.push(`«${R.edge.from}» повторяет запросы к «${N}» без паузы: нагрузка ×${R.edge.amp.toFixed(1).replace('.', ',')} — перегрузка растёт сама`);
+      const m2 = why.flatMap(o => o.w.marks).find(x => x.id !== R.node && start.nodes.some(q => q.id === x.id));
+      if (m2 && /^перегружен/.test(m2.tag || '')) out.push(`Следом перегружается «${nm(start.nodes.find(q => q.id === m2.id))}»: ${pu(+String(m2.tag).replace(/\D/g, '') / 100)}`);
     } else if (R.node || R.kind === 'edge') {
       if (R.kind === 'dead') out.push(`«${N}» не выдерживает и перестаёт отвечать`);
       else if (R.kind === 'slow') out.push(`Запросы застревают в «${N}»: ${R.tag}`);
@@ -254,7 +294,7 @@
       const m2 = why.flatMap(o => o.w.marks).find(x => x.id !== R.node && start.nodes.some(q => q.id === x.id));
       if (m2 && out.length < 4) {
         const n2 = nm(start.nodes.find(q => q.id === m2.id)), t2 = String(m2.tag || '');
-        out.push(/^перегружен/.test(t2) ? `Следом перегружается «${n2}»: ${t2.replace(/^перегружен: /, '')}` : t2 === 'лежит' ? `Следом падает «${n2}»` : /^упадёт/.test(t2) ? `Запаса нет и у «${n2}»: при падении одного экземпляра ${t2.replace(/^упадёт — /, '')}` : /^≈/.test(t2) ? `Ещё одна долгая остановка — «${n2}»: ${t2}` : `Следом не выдерживает «${n2}»: ${t2}`);
+        out.push(/^перегружен/.test(t2) ? `Следом перегружается «${n2}»: ${pu(+t2.replace(/\D/g, '') / 100)}` : t2 === 'лежит' ? `Следом падает «${n2}»` : /^упадёт/.test(t2) ? `Запаса нет и у «${n2}»: при падении одного экземпляра ${t2.replace(/^упадёт — /, '')}` : /^≈/.test(t2) ? `Ещё одна долгая остановка — «${n2}»: ${t2}` : `Следом не выдерживает «${n2}»: ${t2}`);
       }
     }
     /* что увидели пользователи */
@@ -263,7 +303,8 @@
       if (o.lg.t === 'success') { const wv = worst(D, r0.res); sym.push(`пользователи видят ошибки: успешных ответов ${pct(wv.v)} при цели не меньше ${pct(o.lg.min)}`); }
       else if (o.lg.t === 'latency') sym.push(`ответа ждут ${String(o.g.detail).replace(/^сейчас /, '')} при цели до ${o.lg.max} мс`);
       else if (o.lg.t === 'jobs') sym.push(`фоновые задачи не успевают: ${o.g.detail}`);
-      else if (o.lg.t !== 'cost' && o.lg.t !== 'survive') sym.push(`краснеет цель «${o.g.text}»: ${o.g.detail}`);
+      /* в симптомы — только то, что видят пользователи; диагноз, бюджет и запас на отказ — не симптомы */
+      else if (SYMPT.includes(o.lg.t)) sym.push(`краснеет цель «${o.g.text}»: ${o.g.detail}`);
     });
     if (sym.length) out.push(cap1(sym.slice(0, 2).join('; ')));
     else if (out.length < 3) out.push(`Краснеет цель «${P.red[0] ? P.red[0].g.text : 'испытания'}»`);
@@ -327,9 +368,12 @@
   function suggest(P) {
     const { R = P.root, X, e, start } = P, n = R.node ? start.nodes.find(q => q.id === R.node) : null, own = n ? ownerOf(n.type) : 'backend', N = R.name;
     const L = [];
-    if (R.fix) L.push({ id: 'fix', t: R.kind === 'cost' ? `Урезать лишнее: ${R.fix} — остальные цели не краснеют (проверено на симуляторе)` : `Расширить узкое место: ${R.fix} (проверено на симуляторе)`, cat: 'cause', own, due: '1w', good: true });
+    const storm = R.kind === 'edge' && R.edge && /^повтор/.test(R.etag), cnt = n ? (n.props.count || 1) : 1;
+    if (storm && R.stormFix) L.push({ id: 'fix', t: `Экспоненциальная пауза между повторами и предохранитель на связи ${R.ename}${R.stormFix.ok ? '' : ` и запас мощности: ${R.stormFix.more || R.fix}`} (проверено на симуляторе)`, cat: 'cause', own: 'backend', due: '1w', good: true });
+    else if (R.fix) L.push({ id: 'fix', t: R.kind === 'cost' ? `Урезать лишнее: ${R.fix} — остальные цели не краснеют (проверено на симуляторе)` : R.kind === 'survive' ? `Добавить запас на отказ: ${R.fix} (проверено на симуляторе)` : `Расширить узкое место: ${R.fix} (проверено на симуляторе)`, cat: 'cause', own, due: '1w', good: true });
     const t = n ? n.type : '';
-    const pat = R.kind === 'survive' ? `Запас на падение: второй экземпляр «${N}» за балансировщиком, в другой зоне`
+    const pat = R.kind === 'survive' ? (cnt > 1 ? `Считать запас по правилу N+1: «${N}» должен держать пик без одного из ${cnt} экземпляров` : `Запас на отказ: второй экземпляр «${N}» за балансировщиком, в другой зоне`)
+      : storm ? `Лимит повторов (не больше 2) и бюджет повторов на всю связь ${R.ename}, чтобы повторы не били залпом`
       : R.kind === 'cost' ? 'Запас держать только там, где цель требует пережить падение; остальное — по фактической загрузке и с автомасштабированием'
       : R.kind === 'edge' ? `Повторы с экспоненциальной паузой и предохранитель на связи ${R.ename}`
       : t === 'sql' ? (e.id === 'import' ? 'Шарды под записи и загрузка импорта пачками через очередь' : e.id === 'viral' ? 'Кэш перед базой для частых чтений и реплики для остального' : 'Кэш для чтений и реплики базы; записи — пачками через очередь')
@@ -343,6 +387,8 @@
     L.push({ id: 'pat', t: pat, cat: 'cause', own: R.kind === 'cost' ? 'platform' : own, due: '2w', good: true });
     L.push(R.kind === 'cost'
       ? { id: 'alert', t: 'Ежемесячный отчёт о загрузке и цене каждого узла; сигнал, когда счёт выше 90 % бюджета', cat: 'detect', own: 'fin', due: '1w', good: true }
+      : R.kind === 'survive' && cnt > 1 ? { id: 'alert', t: `Алерт: загрузка «${N}» выше ${Math.round((cnt - 1) / cnt * 100)} % — дальше без одного экземпляра пик не вытянуть`, cat: 'detect', own: 'sre', due: '3d', good: true }
+      : storm ? { id: 'alert', t: `Алерт: доля повторных вызовов на связи ${R.ename} выше 10 % дольше 5 минут`, cat: 'detect', own: 'sre', due: '3d', good: true }
       : { id: 'alert', t: `Алерт: загрузка «${N || 'узла'}» выше 75 % дольше 5 минут — узнаём раньше пользователей`, cat: 'detect', own: 'sre', due: '3d', good: true });
     L.push({ id: 'test', t: X.test, cat: 'respond', own: X.testOwn || 'sre', due: '1m', good: true });
     L.push({ id: 'att', t: 'Быть внимательнее при расчёте нагрузки', cat: 'cause', own: 'backend', due: '1w', good: false, why: 'не действие: нельзя проверить, что сделано' });
@@ -351,21 +397,73 @@
     P.sug = L.map(o => { h = Math.imul(h ^ (h >>> 15), 2246822519) >>> 0; return { o, r: h }; }).sort((a, b) => a.r - b.r).map(x => x.o);
   }
 
-  /* похожая настоящая авария: сначала по уровню, потом по причине, потом по испытанию */
+  /* похожая настоящая авария. Подбираем по механизму корневой причины и честно говорим, чем она похожа:
+     тот же механизм («mech»), только риск («risk» — для бюджета), тема уровня («level») или само испытание («event»).
+     incidents.js не трогаем — берём из него только тексты аварий. */
+  const REL = { mech: 'Похожая по механизму авария', risk: 'Не по механизму, а про риск', level: 'Авария к теме уровня', event: 'Авария к этому испытанию' };
+  const DBT = ['sql', 'nosql', 'cache', 'search'];
   function incident(P) {
     const I = SD.incidents; P.inc = null;
     if (!I || !I.INC) return;
-    const base = P.D.daily ? P.D.daily.base : P.D.id;
-    let id = I.BY_LEVEL && I.BY_LEVEL[base], why = id ? `Уровень «${P.B.title}» — про ту же проблему.` : '';
-    if (!id && P.root.kind === 'edge') { id = 'aws2021'; why = 'Тоже повторы, которые раздувают перегрузку в лавину.'; }
-    if (!id && P.root.kind === 'survive') { id = 'aws2011'; why = 'Тоже не хватило запаса на падение части системы.'; }
-    if (!id && P.X.inc) { id = P.X.inc; why = P.X.incWhy; }
-    if (id && I.INC[id]) P.inc = { id, why, x: I.INC[id] };
+    const R = P.root, base = P.D.daily ? P.D.daily.base : P.D.id, lvl = I.BY_LEVEL && I.BY_LEVEL[base];
+    const n = R.node ? P.start.nodes.find(q => q.id === R.node) : null, N = R.name, peak = P.e.chip || 'под испытанием';
+    let pick = null;
+    if (R.kind === 'edge' && R.edge && /^повтор/.test(R.etag)) pick = ['aws2021', 'mech', `Повторы без паузы раздули перегрузку в лавину. У тебя то же на связи ${R.ename}: нагрузка ×${R.edge.amp.toFixed(1).replace('.', ',')}.`];
+    else if (R.kind === 'edge') pick = ['aws2021', 'mech', `Задержки и обрывы на связи между сервисами расползлись по системе. У тебя это связь ${R.ename}: ${R.etag}.`];
+    else if (R.kind === 'survive') pick = ['aws2011', 'mech', `Не хватило запаса, когда отказала часть системы. У тебя без одного экземпляра «${N}» оставшиеся не вытягивают.`];
+    else if (R.kind === 'dead') pick = ['aws2011', 'mech', `Всё, что шло только через одно место, легло вместе с ним. У тебя так с «${N}».`];
+    else if ((R.kind === 'hot' || R.kind === 'slow') && n && DBT.includes(n.type)) pick = ['fb2010', 'mech', `Хранилище получило больше запросов, чем может обработать, и перестало отвечать. У Facebook поток создали промахи кэша, у тебя — испытание (${peak}) на «${N}».`];
+    else if (R.kind === 'hot') pick = ['aws2021', 'mech', `Всплеск нагрузки упёрся в одно звено, задержки выросли, а повторы клиентов добили систему. У тебя первый шаг тот же: «${N}» упёрся в потолок (${peak}).`];
+    else if (R.kind === 'slow') pick = ['aws2021', 'mech', `Задержка в одном звене расползлась на всех, кто его ждёт. У тебя дольше всего запрос стоит в «${N}».`];
+    else if (R.kind === 'cost') pick = ['aws2011', 'risk', 'Урезая бюджет, легко срезать и запас на отказ. Эта авария показала, что бывает, когда запаса нет: режь простаивающее, а не резерв.'];
+    else if (lvl) pick = [lvl, 'level', `Уровень «${P.B.title}» — про ту же проблему.`];
+    else if (P.X.inc) pick = [P.X.inc, 'event', P.X.incWhy];
+    if (pick && pick[0] === lvl && pick[1] === 'mech') pick[2] += ` Уровень «${P.B.title}» тоже про неё.`;
+    if (pick && I.INC[pick[0]]) P.inc = { id: pick[0], rel: pick[1], why: pick[2], x: I.INC[pick[0]] };
   }
 
   /* ---------- рабочая копия разбора ---------- */
   let C = null, P = null, W = null, view = 'pm', busy = false;
   function fresh() { return { tab: 'what', chrono: P.chrono.slice(), pick: null, tried: 0, acts: [] }; }
+
+  /* ---------- черновик: несохранённый разбор события переживает повторную проверку и перезагрузку ----------
+     Лежит в том же ключе хранилища (S.draft), один на браузер: id = день + событие. saved — совпадает с сохранённой записью. */
+  const idOf = ctx => (ctx && ctx.key ? ctx.key : '') + '-' + (ctx && ctx.ev ? ctx.ev.id : '');
+  const pid = () => P.key + '-' + (P.e.id || '');
+  const draftFor = id => (S.draft && S.draft.id === id && !S.draft.saved ? S.draft : null);
+  const edited = () => !!(P && W) && (W.pick != null || W.acts.length > 0 || JSON.stringify(W.chrono) !== JSON.stringify(P.chrono));
+  const wsig = () => JSON.stringify([W.chrono, W.pick != null && P.root.opts[W.pick] ? P.root.opts[W.pick].k : null, W.acts]);
+  const hm = iso => { const d = new Date(iso); return isNaN(d) ? '' : `${dayTxt(d)}, ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+  let dT = 0;
+  function keepDraft() { clearTimeout(dT); dT = setTimeout(writeDraft, 250); }
+  function writeDraft() {
+    clearTimeout(dT);
+    if (!P || !W) return;
+    const id = pid(), prev = S.draft && S.draft.id === id ? S.draft : null;
+    if (!edited()) { if (prev && !prev.saved) { S.draft = null; save(); } return; }
+    const pick = W.pick != null ? P.root.opts[W.pick] : null;
+    S.draft = { id, key: P.key, ev: P.e.id, evTitle: P.e.title, baseTitle: P.B.title, at: new Date().toISOString(), tab: W.tab, chrono: W.chrono.slice(), pickK: pick ? pick.k : null, acts: copy(W.acts), savedSig: prev ? prev.savedSig || '' : '' };
+    S.draft.saved = S.draft.savedSig === wsig();
+    save();
+  }
+  function restore(d) {
+    const i = d.pickK ? P.root.opts.findIndex(o => o.k === d.pickK) : -1;
+    return { tab: !d.saved && STEPS.some(s => s[0] === d.tab) ? d.tab : 'what', chrono: (d.chrono && d.chrono.length ? d.chrono : P.chrono).slice(), pick: i >= 0 ? i : null, tried: 0, acts: (d.acts || []).map(a => Object.assign({}, a)),
+      noteTag: d.saved ? 'Сохранено' : 'Черновик', note: `${d.saved ? 'Это сохранённый разбор' : 'Продолжаешь черновик'} от ${hm(d.at)}: твои строки, ответ и действия на месте. Цифры пересчитаны по схеме на момент последней проверки.` };
+  }
+  /* «new» — начать заново и выбросить черновик; иначе — продолжить, если он есть */
+  function startW(mode) {
+    const d = S.draft && S.draft.id === pid() ? S.draft : null;
+    if (mode === 'new') { if (d) { S.draft = null; save(); } return fresh(); }
+    return d ? restore(d) : fresh();
+  }
+  /* контекст события из открытого уровня — чтобы продолжить черновик из списка без новой проверки */
+  function ctxFromApp() {
+    const A = SD.app && SD.app.A, L = A && A.level; if (!L || !L.daily || !L.start || !SD.walk) return null;
+    const G = s => { const o = SD.walk.orderOf(L, s); return SD.walk.build(L, s, o, o.length); };
+    return { how: 'check', key: L.daily.key, L, ev: ((SD.daily && SD.daily.EV) || []).find(x => x.id === L.daily.ev), base: SD.LEVELS.find(x => x.id === L.daily.base), start: G(L.start), sol: L.solution ? G(L.solution) : null, graph: copy(A.graph), goals: A.goals };
+  }
+  function draftCtx(d) { if (!d) return null; if (C && idOf(C) === d.id) return C; const c = ctxFromApp(); return c && idOf(c) === d.id ? c : null; }
   const outTxt = o => o === 'ok' ? 'выдержал' : o === 'gave' ? 'открыт эталон' : 'не выдержал';
   function quality() {
     const lines = W.chrono.map(s => s.trim()).filter(Boolean), acts = W.acts.filter(a => a.t.trim());
@@ -394,7 +492,7 @@
       worked: P.worked, notWorked: P.notWorked,
       acts: W.acts.filter(a => a.t.trim()).map(a => ({ t: a.t.trim(), cat: a.cat, own: a.own, due: a.due, date: a.date || dueDate(a.due) })),
       q: [Q.filter(x => x[1]).length, Q.length],
-      inc: P.inc ? { who: P.inc.x.who, when: P.inc.x.when, what: P.inc.x.what, lesson: P.inc.x.lesson, why: P.inc.why } : null
+      inc: P.inc ? { who: P.inc.x.who, when: P.inc.x.when, what: P.inc.x.what, lesson: P.inc.x.lesson, why: P.inc.why, rel: P.inc.rel } : null
     };
   }
   const mdc = s => String(s == null ? '' : s).replace(/\|/g, '\\|').replace(/\n/g, ' ');
@@ -421,7 +519,7 @@
     if (r.acts.length) { L.push('| # | Действие | Тип | Владелец | Срок |', '|---|---|---|---|---|'); r.acts.forEach((a, i) => L.push(`| ${i + 1} | ${mdc(a.t)} | ${label(CAT, a.cat)} | ${label(OWN, a.own)} | ${mdc(a.date)} |`)); }
     else L.push('Действий пока нет.');
     L.push('', `Качество разбора: ${r.q[0]} из ${r.q[1]}.`);
-    if (r.inc) L.push('', '## Как это было в жизни', '', `**${r.inc.who} · ${r.inc.when}.** ${r.inc.why}`, '', r.inc.what, '', `Урок: ${r.inc.lesson}`, '', '_По публичному разбору компании, пересказ._');
+    if (r.inc) L.push('', '## Как это было в жизни', '', `**${r.inc.who} · ${r.inc.when}.** ${r.inc.rel && REL[r.inc.rel] ? `_${REL[r.inc.rel]}._ ` : ''}${r.inc.why}`, '', r.inc.what, '', `Урок: ${r.inc.lesson}`, '', '_По публичному разбору компании, пересказ._');
     L.push('', '---', '_AMP Стройплощадка · разбор события дня_');
     return L.join('\n');
   }
@@ -455,14 +553,19 @@
     m = document.createElement('div'); m.className = 'modal pm2-modal'; m.id = 'pm2Modal'; m.hidden = true;
     m.innerHTML = '<div class="sheet pm2-sheet" role="dialog" aria-modal="true" aria-labelledby="pm2Title"><div class="sheet-head pm2-head"><span class="pm2-eyebrow">Разбор аварии</span><h2 id="pm2Title"></h2><button type="button" class="btn ghost pm2-hbtn" data-pm2-list>Прошлые разборы</button><button class="btn ghost x" type="button" data-pm2-x>Закрыть</button></div><div class="pm2-body" id="pm2Body"></div></div>';
     document.body.appendChild(m);
-    m.addEventListener('click', onClick);
-    m.addEventListener('input', onInput);
-    m.addEventListener('change', onChange);
+    const after = () => { if (P && W && view === 'pm') keepDraft(); };
+    m.addEventListener('click', e => { onClick(e); after(); });
+    m.addEventListener('input', e => { onInput(e); after(); });
+    m.addEventListener('change', e => { onChange(e); after(); });
     return m;
   }
-  function close() { const m = $('pm2Modal'); if (m) m.hidden = true; }
-  function open(ctx) {
-    if (ctx) { C = ctx; P = null; }
+  function close() {
+    const m = $('pm2Modal'); if (!m || m.hidden) return;
+    m.hidden = true;
+    if (P && W) { writeDraft(); if (draftFor(pid())) toast('Черновик разбора сохранён в браузере: продолжить можно после следующей проверки или из «Прошлых разборов».'); }
+  }
+  function open(ctx, mode) {
+    if (ctx) { if (P && W) writeDraft(); C = ctx; P = null; W = null; }
     if (!C) { openList(); return; }
     hideOffer();
     document.querySelectorAll('.modal').forEach(x => { if (x.id !== 'pm2Modal') x.hidden = true; });
@@ -471,11 +574,12 @@
       busy = true; $('pm2Title').textContent = 'Собираю разбор…';
       $('pm2Body').innerHTML = '<div class="pm2-wait"><span class="pm2-spin" aria-hidden="true"></span>Гоняю стартовую схему через испытание и ищу виновников — пара секунд.</div>';
       setTimeout(() => {
-        try { P = analyze(C); W = fresh(); } catch (err) { P = null; busy = false; $('pm2Body').innerHTML = `<div class="pm2-wait">Не получилось собрать разбор: ${esc(err && err.message)}</div>`; return; }
+        try { P = analyze(C); W = startW(mode); } catch (err) { P = null; busy = false; $('pm2Body').innerHTML = `<div class="pm2-wait">Не получилось собрать разбор: ${esc(err && err.message)}</div>`; return; }
         busy = false; render();
       }, 30);
       return;
     }
+    if (mode === 'new') W = startW('new');
     render();
   }
   function openList() {
@@ -500,7 +604,7 @@
     $('pm2Title').textContent = `${cap1(P.e.title)} · «${P.B.title}»`;
     const i = STEPS.findIndex(s => s[0] === W.tab);
     let h = `<nav class="pm2-steps" aria-label="Шаги разбора">${STEPS.map(([id, num0, t], j) => `<button type="button" data-pm2-tab="${id}" class="${id === W.tab ? 'on' : ''} ${j < i ? 'done' : ''}" aria-current="${id === W.tab ? 'step' : 'false'}"><i>${num0}</i>${t}</button>`).join('')}</nav>`;
-    h += `<div class="pm2-pane">${VIEWS[W.tab]()}</div>`;
+    h += `<div class="pm2-pane">${W.note ? hint(W.noteTag || 'Черновик', esc(W.note)) : ''}${VIEWS[W.tab]()}</div>`;
     if (i < STEPS.length - 1) h += `<div class="pm2-nav">${i > 0 ? `<button type="button" class="btn" data-pm2-tab="${STEPS[i - 1][0]}">← ${STEPS[i - 1][2]}</button>` : ''}<button type="button" class="btn primary" data-pm2-tab="${STEPS[i + 1][0]}">Дальше: ${STEPS[i + 1][2].toLowerCase()} →</button></div>`;
     else h += `<div class="pm2-nav"><button type="button" class="btn" data-pm2-tab="${STEPS[i - 1][0]}">← ${STEPS[i - 1][2]}</button></div>`;
     body.innerHTML = h;
@@ -565,14 +669,14 @@
       h += `<ul class="pm2-q5">${Q.map(([t, ok, tip]) => `<li class="${ok ? 'ok' : 'warn'}"><b>${esc(t)}.</b>${ok ? '' : ' ' + esc(tip)}</li>`).join('')}</ul>`;
       h += `<div class="pm2-row"><button type="button" class="btn primary" data-pm2-save>${saved ? 'Сохранить заново' : 'Сохранить разбор'}</button><button type="button" class="btn" data-pm2-copy>Скопировать Markdown</button><button type="button" class="btn" data-pm2-dl>Скачать .md</button><button type="button" class="btn ghost" data-pm2-list>Прошлые разборы (${S.list.length})</button></div>`;
       h += `<details class="pm2-det"><summary>Посмотреть Markdown</summary><pre class="pm2-md" id="pm2Md">${esc(toMd(r))}</pre></details>`;
-      h += incHtml(P.inc && { who: P.inc.x.who, when: P.inc.x.when, what: P.inc.x.what, lesson: P.inc.x.lesson, why: P.inc.why });
+      h += incHtml(P.inc && { who: P.inc.x.who, when: P.inc.x.when, what: P.inc.x.what, lesson: P.inc.x.lesson, why: P.inc.why, rel: P.inc.rel });
       return h;
     }
   };
   /* поле растёт под текст: на узком экране строка хронологии не прячется за прокруткой */
   const fit = el => { if (!el || !el.scrollHeight) return; el.style.height = 'auto'; el.style.height = (el.scrollHeight + 2) + 'px'; };
   /* метки виновников из «Почему?» — в обычные фразы */
-  const tagTxt = t => { t = String(t || ''); return /^упадёт — /.test(t) ? 'при падении одного экземпляра ' + t.replace(/^упадёт — /, '') : /^перегружен: /.test(t) ? 'загрузка ' + t.replace(/^перегружен: /, '') : t; };
+  const tagTxt = t => { t = String(t || ''); return /^упадёт — /.test(t) ? 'при падении одного экземпляра ' + t.replace(/^упадёт — /, '') : /^перегружен: /.test(t) ? 'загрузка ' + pu(+t.replace(/\D/g, '') / 100) : t; };
   const short = s => { const t = String(s).split(/[:—]/)[0].trim(); return t.length > 42 ? t.slice(0, 40) + '…' : t; };
   const cntTxt = n => `Строк: ${n}${n >= 3 && n <= 5 ? ' — хорошо' : n < 3 ? ' — нужно хотя бы 3' : ' — сократи до 5'}`;
   const blameMsg = b => `Похоже на поиск виноватого: «${esc(b)}». Опиши, что изменить в системе — процесс, проверку, схему.`;
@@ -583,14 +687,19 @@
   }
   function incHtml(x) {
     if (!x) return '';
-    return `<section class="pm2-inc"><span class="pm2-tag">Как это было в жизни</span><b>${esc(x.who)} · ${esc(x.when)}</b>${x.why ? `<p class="pm2-incwhy">${esc(x.why)}</p>` : ''}<p>${esc(x.what)}</p><p><b>Урок:</b> ${esc(x.lesson)}</p><small>По публичному разбору компании, пересказ.</small></section>`;
+    return `<section class="pm2-inc"><span class="pm2-tag">Как это было в жизни</span><b>${esc(x.who)} · ${esc(x.when)}</b>${x.why ? `<p class="pm2-incwhy">${x.rel && REL[x.rel] ? `<b>${esc(REL[x.rel])}.</b> ` : ''}${esc(x.why)}</p>` : ''}<p>${esc(x.what)}</p><p><b>Урок:</b> ${esc(x.lesson)}</p><small>По публичному разбору компании, пересказ.</small></section>`;
   }
 
   /* ---------- прошлые разборы ---------- */
+  function draftRow() {
+    const d = S.draft; if (!d || d.saved) return '';
+    const can = !!draftCtx(d);
+    return `<div class="pm2-box warn"><b>Несохранённый черновик</b><p>${esc(cap1(d.evTitle))} · «${esc(d.baseTitle)}» — изменён ${esc(hm(d.at))}.</p><div class="pm2-row">${can ? '<button type="button" class="btn primary" data-pm2-draft>Продолжить</button>' : '<span class="pm2-small">Продолжить можно в «Событии дня» того же дня: открой событие и проверь решение — появится кнопка.</span>'}<button type="button" class="btn ghost" data-pm2-dropdraft>Удалить черновик</button></div></div>`;
+  }
   function listHtml() {
-    if (!S.list.length) return `<div class="pm2-pane">${ana()}<p class="pm2-lede">Сохранённых разборов пока нет. Проверь решение в «Событии дня» — появится кнопка «Разобрать, как разбирают аварии».</p></div>`;
+    if (!S.list.length) return `<div class="pm2-pane">${draftRow()}${ana()}<p class="pm2-lede">Сохранённых разборов пока нет. Проверь решение в «Событии дня» — появится кнопка «Разобрать, как разбирают аварии».</p></div>`;
     const rows = S.list.slice().sort((a, b) => String(b.at).localeCompare(String(a.at)));
-    return `<div class="pm2-pane"><p class="pm2-small">Хранятся в этом браузере. Открой разбор, чтобы перечитать, скопировать или скачать Markdown.</p><ul class="pm2-list">${rows.map(r => `<li><div class="pm2-li"><b>${esc(cap1(r.evTitle))} · «${esc(r.baseTitle)}»</b><span>${dayTxt(keyDate(r.key))} ${keyDate(r.key).getFullYear()} · ${badge(r.outcome)} · качество ${r.q[0]} из ${r.q[1]}</span><small>${esc(r.root.right)}</small></div><div class="pm2-lia"><button type="button" class="btn" data-pm2-view="${esc(r.id)}">Открыть</button><button type="button" class="btn ghost" data-pm2-rm="${esc(r.id)}">Удалить</button></div></li>`).join('')}</ul></div>`;
+    return `<div class="pm2-pane">${draftRow()}<p class="pm2-small">Хранятся в этом браузере. Открой разбор, чтобы перечитать, скопировать или скачать Markdown.</p><ul class="pm2-list">${rows.map(r => `<li><div class="pm2-li"><b>${esc(cap1(r.evTitle))} · «${esc(r.baseTitle)}»</b><span>${dayTxt(keyDate(r.key))} ${keyDate(r.key).getFullYear()} · ${badge(r.outcome)} · качество ${r.q[0]} из ${r.q[1]}</span><small>${esc(r.root.right)}</small></div><div class="pm2-lia"><button type="button" class="btn" data-pm2-view="${esc(r.id)}">Открыть</button><button type="button" class="btn ghost" data-pm2-rm="${esc(r.id)}">Удалить</button></div></li>`).join('')}</ul></div>`;
   }
   function savedHtml(r) {
     let h = `<div class="pm2-pane"><div class="pm2-top">${badge(r.outcome)}<span>Эталон уровня «${esc(r.baseTitle)}» под испытанием «${esc(r.evTitle)}» (${esc(r.chip)}). Качество разбора: ${r.q[0]} из ${r.q[1]}.</span></div>`;
@@ -612,12 +721,14 @@
     if ((b = q('[data-pm2-back]'))) { view = 'list'; render(); return; }
     if ((b = q('[data-pm2-cur]'))) { view = P && W ? 'pm' : 'list'; render(); return; }
     if ((b = q('[data-pm2-list]'))) { view = 'list'; render(); return; }
+    if (q('[data-pm2-draft]')) { const c = draftCtx(S.draft); if (c) open(c, 'draft'); return; }
+    if (q('[data-pm2-dropdraft]')) { const id = S.draft && S.draft.id; S.draft = null; save(); if (P && W && id === pid()) W = fresh(); render(); toast('Черновик удалён.'); return; }
     if ((b = q('[data-pm2-view]'))) { view = 'saved:' + b.dataset.pm2View; render(); return; }
     if ((b = q('[data-pm2-rm]'))) { const id = b.dataset.pm2Rm; S.list = S.list.filter(x => x.id !== id); save(); render(); refreshCard(); toast('Разбор удалён.'); return; }
     if ((b = q('[data-pm2-copy]'))) { const r = b.dataset.pm2Copy ? S.list.find(x => x.id === b.dataset.pm2Copy) : recOf(); if (r) copyMd(toMd(r)); return; }
     if ((b = q('[data-pm2-dl]'))) { const r = b.dataset.pm2Dl ? S.list.find(x => x.id === b.dataset.pm2Dl) : recOf(); if (r) download(toMd(r), r); return; }
     if (!P || !W || busy) return;
-    if ((b = q('[data-pm2-tab]'))) { W.tab = b.dataset.pm2Tab; render(); return; }
+    if ((b = q('[data-pm2-tab]'))) { W.tab = b.dataset.pm2Tab; W.note = ''; render(); return; }
     if ((b = q('[data-pm2-up]'))) { const i = +b.dataset.pm2Up; if (i > 0) { [W.chrono[i - 1], W.chrono[i]] = [W.chrono[i], W.chrono[i - 1]]; render(); } return; }
     if ((b = q('[data-pm2-down]'))) { const i = +b.dataset.pm2Down; if (i < W.chrono.length - 1) { [W.chrono[i + 1], W.chrono[i]] = [W.chrono[i], W.chrono[i + 1]]; render(); } return; }
     if ((b = q('[data-pm2-del]'))) { W.chrono.splice(+b.dataset.pm2Del, 1); render(); return; }
@@ -631,6 +742,7 @@
       const r = recOf(), i = S.list.findIndex(x => x.id === r.id);
       if (i >= 0) S.list[i] = r; else S.list.push(r);
       if (S.list.length > 60) S.list = S.list.slice(-60);
+      writeDraft(); if (S.draft && S.draft.id === r.id) { S.draft.savedSig = wsig(); S.draft.saved = true; }
       toast(save() ? 'Разбор сохранён. Прошлые разборы — на карточке «Событие дня» в «Уровнях».' : 'Хранилище браузера недоступно — скопируй или скачай Markdown.');
       render(); refreshCard();
     }
@@ -654,14 +766,18 @@
   /* ---------- кнопка после проверки ---------- */
   function offer(ctx) {
     if (!ctx || !ctx.L) return;
+    if (P && W) writeDraft();
     C = ctx; P = null; W = null;
+    const d = draftFor(idOf(ctx)), stepT = d ? (STEPS.find(s => s[0] === d.tab) || STEPS[0])[2] : '';
     let o = $('pm2Offer');
     if (!o) { o = document.createElement('div'); o.id = 'pm2Offer'; o.className = 'pm2-offer'; o.setAttribute('role', 'status'); document.body.appendChild(o); }
     const goals = (SD.app && SD.app.A && SD.app.A.goals) || ctx.goals || [], bad = goals.filter(g => !g.ok).length;
     const sol = ctx.how === 'gave' || (!!ctx.sol && !!ctx.graph && gsig(ctx.sol) === gsig(ctx.graph));
     const head = sol ? 'Ты открыл эталон события' : bad ? `Схема не выдержала: красных целей ${bad} из ${goals.length}` : 'Событие выдержано ✓';
     const sub = sol ? 'Разбери, что в нём поменяли и почему это помогло.' : bad ? 'Самое время для разбора: что случилось и что изменить.' : 'Разбери, что именно сработало, — так это запомнится.';
-    o.innerHTML = `<b>${esc(head)}</b><span>${esc(sub)} Как разбор матча после игры: не кто виноват, а что изменить.</span><div class="pm2-oa"><button type="button" class="btn primary" data-pm2-open>Разобрать, как разбирают аварии</button><button type="button" class="btn ghost" data-pm2-hide>Позже</button></div>`;
+    o.innerHTML = d
+      ? `<b>${esc(head)}</b><span>${esc(sub)}</span><span class="pm2-small">Есть несохранённый разбор этого события: изменён ${esc(hm(d.at))}, шаг «${esc(stepT)}». Продолжить его или начать заново?</span><div class="pm2-oa"><button type="button" class="btn primary" data-pm2-open="draft">Продолжить разбор</button><button type="button" class="btn" data-pm2-open="new">Начать заново</button><button type="button" class="btn ghost" data-pm2-hide>Позже</button></div>`
+      : `<b>${esc(head)}</b><span>${esc(sub)} Как разбор матча после игры: не кто виноват, а что изменить.</span><div class="pm2-oa"><button type="button" class="btn primary" data-pm2-open>Разобрать, как разбирают аварии</button><button type="button" class="btn ghost" data-pm2-hide>Позже</button></div>`;
     o.hidden = false;
   }
   function hideOffer() { const o = $('pm2Offer'); if (o) o.hidden = true; }
@@ -675,16 +791,18 @@
 
   if (typeof document !== 'undefined' && document.addEventListener) {
     document.addEventListener('click', e => {
-      if (e.target.closest('[data-pm2-open]')) { open(); return; }
+      const op = e.target.closest('[data-pm2-open]'); if (op) { open(null, op.getAttribute('data-pm2-open') || ''); return; }
       if (e.target.closest('[data-pm2-hide]')) { hideOffer(); return; }
       if (e.target.closest('[data-pm2-openlist]')) { openList(); }
     });
     document.addEventListener('keydown', e => { if (e.key === 'Escape') { const m = $('pm2Modal'); if (m && !m.hidden) { e.stopPropagation(); close(); } } }, true);
+    /* закрыл вкладку посреди разбора — черновик не теряется */
+    window.addEventListener('pagehide', () => { if (P && W) writeDraft(); });
     /* ушёл с уровня события — кнопка разбора больше не к месту */
     setInterval(() => { const o = $('pm2Offer'), A = SD.app && SD.app.A; if (o && !o.hidden && C && A && A.level && A.level.id !== C.L.id) o.hidden = true; }, 800);
   }
 
   /* Ctrl+K: прошлые разборы аварий */
   (SD.cmdExtra = SD.cmdExtra || []).push(add => add('Учиться', 'Прошлые разборы аварий', 'постмортемы после «События дня»', () => openList(), 'постмортем postmortem авария разбор инцидент blameless'));
-  SD.postmortem = { offer, open, openList, close, cardLink, analyze, toMd, markdown: () => (P && W ? toMd(recOf()) : ''), list: () => S.list.slice(), KEY };
+  SD.postmortem = { offer, open, openList, close, cardLink, analyze, toMd, markdown: () => (P && W ? toMd(recOf()) : ''), list: () => S.list.slice(), draft: () => (S.draft ? copy(S.draft) : null), KEY };
 })();
