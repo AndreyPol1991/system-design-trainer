@@ -25,7 +25,8 @@
       <div class="xr-body">
         <div class="xr-main">
           <div class="xr-ctl" id="xrCtl"></div>
-          <svg class="xr-svg" id="xrSvg" viewBox="0 0 1000 500" role="img" aria-labelledby="xrTitle"></svg>
+          <div class="xr-pan"><svg class="xr-svg" id="xrSvg" viewBox="0 0 1000 500" role="img" aria-labelledby="xrTitle"></svg></div>
+          <p class="xr-pan-tip">Картинка шире экрана — листай её пальцем влево и вправо.</p>
           <div class="xr-html" id="xrHtml" hidden></div>
           <p class="xr-hint" id="xrHint" hidden></p>
           <div class="xr-stats" id="xrStats"></div>
@@ -77,7 +78,8 @@
     const el = document.querySelector(`#nodesG .node[data-id="${X.id}"]`);
     stop();
     const sh = m.querySelector('.xr-sheet');
-    const fin = () => { m.hidden = true; m.classList.remove('xr-out'); };
+    const tok = X.closeTok = (X.closeTok || 0) + 1;   /* закрытие доводим один раз и не трогаем окно, если его успели открыть снова */
+    const fin = () => { if (X.closeTok !== tok) return; X.closeTok = 0; m.hidden = true; m.classList.remove('xr-out'); };
     if (el && sh.animate && !reduced()) { const k = flip(el, sh); if (k) { m.classList.add('xr-out'); const an = sh.animate([{ transform: 'none', opacity: 1 }, { transform: k, opacity: 0.2 }], { duration: 260, easing: 'ease-in' }); an.onfinish = fin; setTimeout(fin, 400); return; } }
     fin();
   }
@@ -88,7 +90,7 @@
   }
   function zoom(el) {
     const m = $('xrModal'), sh = m.querySelector('.xr-sheet');
-    m.hidden = false;
+    X.closeTok = 0; m.classList.remove('xr-out'); m.hidden = false;
     if (!el || !sh.animate || reduced()) return;
     const k = flip(el, sh); if (!k) return;
     sh.animate([{ transform: k, opacity: 0.35, borderRadius: '14px' }, { transform: 'none', opacity: 1 }], { duration: 440, easing: 'cubic-bezier(.2,.8,.2,1)' });
@@ -110,7 +112,7 @@
     loadDone();
     const ctx = makeCtx(n);
     $('xrSvg').setAttribute('viewBox', def.viewBox || '0 0 1000 500');
-    $('xrSvg').innerHTML = ''; $('xrSvg').style.display = ''; $('xrHtml').hidden = true; $('xrHtml').innerHTML = '';
+    $('xrSvg').innerHTML = ''; $('xrSvg').style.display = ''; { const tp0 = document.querySelector('.xr-pan-tip'); if (tp0) tp0.style.display = ''; } $('xrHtml').hidden = true; $('xrHtml').innerHTML = '';
     renderCrumbs(); renderLive(); renderCtl(); renderProps(); renderTries(); renderLegend(); renderNb(); renderParts(); renderPart();
     const s = def.simple ? def.simple(n) : null;
     $('xrSimple').innerHTML = s ? `<span class="eyebrow">Простыми словами</span><span class="an">${s.an}</span>${s.pl ? `<span class="pl">${s.pl}</span>` : ''}` : '';
@@ -154,7 +156,7 @@
       scenario: () => X.scn,
       view: () => X.view,
       html: $('xrHtml'),
-      useHtml: on => { $('xrSvg').style.display = on ? 'none' : ''; $('xrHtml').hidden = !on; },
+      useHtml: on => { $('xrSvg').style.display = on ? 'none' : ''; $('xrHtml').hidden = !on; const tp = document.querySelector('.xr-pan-tip'); if (tp) tp.style.display = on ? 'none' : ''; },
       part: () => X.part,
       setPart: k => setPart(k),
       speed: () => X.speed
