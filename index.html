@@ -3438,6 +3438,12 @@ html.calm .loc * { animation: none !important; transition: none !important; }
 }
 html.calm .lc2 *, html.calm .lc2 *::before, html.calm .lc2 *::after { animation: none !important; transition: none !important; }
 /* ===== регионы и сеть: конец ===== */
+/* ===== CI/CD на схеме (js/cicd-sim.js, префикс .cicd-) ===== */
+/* CI/CD: стрелка «разворачивает» от конвейера и её частицы-релизы — цветом записи, чтобы отличать от Kubernetes */
+#edgesG .edge.ops-cicd .wire { stroke: var(--k-write); }
+.ops-p.cicd { fill: var(--k-write); }
+/* плитка «Релизы» в полосе метрик: цифры одной ширины, как у соседних плиток */
+.metric.cicd-metric b { font-variant-numeric: tabular-nums; }
 .pred-pop { position: fixed; z-index: 60; width: 300px; display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border-strong); box-shadow: var(--shadow); font-size: 12.5px; line-height: 1.45; color: var(--text-2); animation: chgIn .2s ease-out; }
 .pred-pop[hidden] { display: none; }
 .pred-pop b { color: var(--text); font-size: 13.5px; }
@@ -5563,6 +5569,7 @@ html.xr-loading, html.xr-loading * { cursor: progress !important; }
 <script src="js/levels-dtrack.js"></script>
 <script src="js/cloud.js"></script>
 <script src="js/k8s-sim.js"></script>
+<script src="js/cicd-sim.js"></script>
 <script src="js/ux.js"></script>
 <script src="js/learn.js"></script>
 <script src="js/walk.js"></script>
