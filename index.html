@@ -1065,6 +1065,15 @@ h1, h2, h3 { text-wrap: balance; margin: 0; }
 .p-list { display: flex; flex-direction: column; gap: 2px; margin-top: 2px; }
 .p-list[hidden] { display: none; }
 .workspace.pal-mini .palette .p-locked { display: none; }
+/* узкий экран: свёрнутая палитра и скрытая панель не должны возвращать три колонки — всё друг под другом */
+@media (max-width: 900px) {
+  .workspace.pal-mini, .workspace.side-hide, .workspace.pal-mini.side-hide { grid-template-columns: minmax(0, 1fr); }
+  .pane-tg { display: none; }
+  .workspace.side-hide > .panel { display: grid; }
+  .workspace.pal-mini .palette { padding: 10px 16px; }
+  .workspace.pal-mini .palette .t { display: block; }
+  .workspace.pal-mini .palette .part { justify-content: flex-start; padding: 6px 8px; }
+}
 .p-locked { margin-top: 6px; }
 .goals li.pend { opacity: .8; }
 .goals li.pend .st { border-style: dashed; color: var(--text-muted); background: none; }
