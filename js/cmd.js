@@ -147,6 +147,8 @@
     /* паттерны и разборы */
     (SD.PATTERNS || []).forEach(p => add('Паттерн', p.name, p.en || '', () => SD.patterns.open(p.id), p.problem));
     Object.entries(SD.DIVES || {}).forEach(([id, d]) => add('Разбор', d.title, 'как это работает', () => SD.player.open(id), d.lede));
+    /* пункты других модулей: SD.cmdExtra — функции (add, S), каждая добавляет свои строки */
+    (SD.cmdExtra || []).forEach(f => { try { f(add, S); } catch (e) { /* модуль без пунктов — не мешаем остальным */ } });
     return out;
   }
   function closeModals() {

@@ -142,7 +142,9 @@
     const D = today(), key = dayKey(), st = streak();
     if (D) {
       const e = EV.find(x => x.id === D.daily.ev), done = !!U.done[key];
+      if (SD.postmortem) h += '<div class="pm2-cardwrap">'; /* разборы аварий (js/postmortem.js) — под карточкой */
       h += `<button type="button" class="lvl dly-card ${done ? 'done' : ''}" data-level="${D.id}"><span class="n">СОБЫТИЕ ДНЯ<span>${done ? '✓ выдержано' : esc(e.chip)}</span></span><b>${esc(e.title[0].toUpperCase() + e.title.slice(1))}</b><small>Эталон уровня «${esc(D.daily.baseTitle)}» под испытанием. ${st ? `Серия: ${st} ${st === 1 ? 'день' : st < 5 ? 'дня' : 'дней'} подряд.` : 'Выдержи — начнётся серия.'}</small></button>`;
+      if (SD.postmortem) h += SD.postmortem.cardLink() + '</div>';
     }
     const all = (SD.PATTERNS || []), got = all.filter(p => U.coll[p.id]);
     h += `<div class="dly-coll"><div class="dly-ch"><b>Коллекция паттернов</b><span>${got.length} из ${all.length}</span></div><div class="dly-bar"><i style="width:${all.length ? Math.round(got.length / all.length * 100) : 0}%"></i></div>`;
@@ -180,6 +182,15 @@
     }, 0);
     document.addEventListener('click', e => { const p = e.target.closest('[data-openpat2]'); if (p) { document.querySelectorAll('.modal').forEach(m => { m.hidden = true; }); SD.patterns.open(p.dataset.openpat2); } });
     setInterval(watch, 700);
+    /* разбор аварии (js/postmortem.js): после проверки — при успехе и провале — и когда открыл эталон («сдался») */
+    const pm = how => setTimeout(() => {
+      const A = SD.app && SD.app.A, L = A && A.level; if (!L || !L.daily || !SD.postmortem) return;
+      SD.postmortem.offer({ how, key: L.daily.key, L, ev: EV.find(x => x.id === L.daily.ev), base: SD.LEVELS.find(x => x.id === L.daily.base), start: graphOf(L, L.start), sol: graphOf(L, L.solution), graph: JSON.parse(JSON.stringify(A.graph)), goals: A.goals });
+    }, 0);
+    let gave = false;
+    if ($('checkBtn')) $('checkBtn').addEventListener('click', () => pm('check'));
+    if ($('solBtn')) $('solBtn').addEventListener('click', () => { gave = !!(SD.app.A.level && SD.app.A.level.daily); });
+    document.addEventListener('click', e => { if (!gave || !e.target.closest('.confirm')) return; gave = false; if (e.target.closest('[data-c="yes"]')) pm('gave'); });
   }
 
   /* уровень события находится по id — так он переживает перезагрузку страницы */
