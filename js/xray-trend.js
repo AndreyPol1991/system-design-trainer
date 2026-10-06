@@ -290,6 +290,7 @@
     };
   }
   const wrapAll = () => Object.keys(SD.XRAY).forEach(wrap);
+  (SD.XRAY_HOOKS = SD.XRAY_HOOKS || []).push(wrap);   // сцена загрузилась позже
   wrapAll();
   window.addEventListener('load', wrapAll);   // если сцену зарегистрируют позже
 

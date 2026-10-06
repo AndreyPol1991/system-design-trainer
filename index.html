@@ -3603,6 +3603,7 @@ html.calm .lc2 *, html.calm .lc2 *::before, html.calm .lc2 *::after { animation:
 .xr-grp { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .xr-grp > b { font: 600 max(10.5px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted); }
 .xr-pan { flex: none; min-width: 0; display: flex; flex-direction: column; }
+html.xr-loading, html.xr-loading * { cursor: progress !important; }
 .xr-pan-tip { display: none; margin: -4px 0 0; font-size: 12px; color: var(--text-muted); }
 @media (max-width: 760px) { .xr-pan { overflow-x: auto; overscroll-behavior-x: contain; border-radius: 12px; } .xr-pan > .xr-svg { min-width: 720px; } .xr-pan-tip { display: block; } }
 .xr-svg { width: 100%; height: auto; max-height: calc(100vh - 250px); background: var(--bg); border: 1px solid var(--border); border-radius: 12px; flex: none; }
@@ -5555,26 +5556,7 @@ html.calm .lc2 *, html.calm .lc2 *::before, html.calm .lc2 *::after { animation:
 <script src="js/labs-2.js"></script>
 <script src="js/labs-resil.js"></script>
 <script src="js/xray.js"></script>
-<script src="js/xray-lb.js"></script>
-<script src="js/xray-app.js"></script>
-<script src="js/xray-sql.js"></script>
-<script src="js/xray-cache.js"></script>
-<script src="js/xray-queue.js"></script>
-<script src="js/xray-olap.js"></script>
-<script src="js/xray-lake.js"></script>
-<script src="js/xray-etl.js"></script>
-<script src="js/xray-nosql.js"></script>
-<script src="js/xray-objstore.js"></script>
-<script src="js/xray-cdn.js"></script>
-<script src="js/xray-search.js"></script>
-<script src="js/xray-gateway.js"></script>
-<script src="js/xray-ws.js"></script>
-<script src="js/xray-llm.js"></script>
-<script src="js/xray-vectordb.js"></script>
-<script src="js/xray-agent.js"></script>
-<script src="js/xray-router.js"></script>
-<script src="js/xray-semcache.js"></script>
-<script src="js/xray-guard.js"></script>
+<script src="js/xray-lazy.js"></script>
 <script src="js/arch-lens.js"></script>
 <script src="js/ops-console.js"></script>
 <script src="js/ops-ui.js"></script>

@@ -23,7 +23,8 @@
     }
   };
   function attach(type, C) {
-    const def = SD.XRAY && SD.XRAY[type]; if (!def) return;
+    const def = SD.XRAY && SD.XRAY[type]; if (!def || def.__xsd) return;
+    def.__xsd = 1;
     const views0 = def.views;
     def.views = (views0 && views0.length ? views0 : [{ id: 'engine', name: 'Как работает внутри' }]).concat(C.views.map(([id, name]) => ({ id, name, scenarios: [] })));
     const isData = v => !!C.tab[v];
@@ -77,4 +78,5 @@
     };
   }
   Object.entries(CFG).forEach(([t, c]) => attach(t, c));
+  (SD.XRAY_HOOKS = SD.XRAY_HOOKS || []).push(t => { if (CFG[t]) attach(t, CFG[t]); });   // сцена загрузилась позже
 })();

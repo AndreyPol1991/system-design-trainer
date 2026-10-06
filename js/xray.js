@@ -49,11 +49,45 @@
     m.addEventListener('input', e => { const t = e.target; if (t.dataset.xp && t.type === 'range') { const o = t.parentElement.querySelector('output'); if (o) o.textContent = t.value; } });
     window.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('xrModal').hidden) { e.stopPropagation(); back(); } }, true);
   }
-  const has = type => !!SD.XRAY[type];
+  /* сцены грузятся по требованию: SD.XRAY_LAZY[type] — файл сцены (js/xray-lazy.js). После загрузки новую сцену
+     оборачивают SD.XRAY_HOOKS — «на данных», «Бизнес», мини-графики — в том же порядке, в каком подключены их файлы */
+  SD.XRAY_LAZY = SD.XRAY_LAZY || {};
+  SD.XRAY_HOOKS = SD.XRAY_HOOKS || [];
+  const has = type => !!SD.XRAY[type] || !!SD.XRAY_LAZY[type];
+  const files = {}, hooked = new Set();
+  function need(type) {
+    if (SD.XRAY[type] || !SD.XRAY_LAZY[type]) return Promise.resolve(!!SD.XRAY[type]);
+    const src = SD.XRAY_LAZY[type];
+    if (!files[src]) files[src] = new Promise(res => {
+      const s = document.createElement('script'); s.src = src; s.async = true;
+      s.onload = () => {
+        Object.keys(SD.XRAY).filter(t => SD.XRAY_LAZY[t] && !hooked.has(t)).forEach(t => {
+          hooked.add(t);
+          SD.XRAY_HOOKS.forEach(h => { try { h(t); } catch (e) { if (window.console) console.warn('xray: обёртка сцены', t, e); } });
+        });
+        res();
+      };
+      s.onerror = () => { delete files[src]; res(); };
+      document.head.appendChild(s);
+    });
+    return files[src].then(() => !!SD.XRAY[type]);
+  }
+  /* узел ещё без сцены: грузим и открываем; курсор «жду», чтобы было видно, что клик принят */
+  function later(type, fn) {
+    document.documentElement.classList.add('xr-loading');
+    need(type).then(ok => { document.documentElement.classList.remove('xr-loading'); if (ok) fn(); else if (SD.app && SD.app.toast) SD.app.toast('Сцена не загрузилась — проверь интернет и попробуй ещё раз.'); });
+  }
+  /* через несколько секунд после старта, когда браузер свободен, подгружаем сцены узлов текущей схемы — открытие будет мгновенным */
+  function prefetch() {
+    const g = SD.app && SD.app.A && SD.app.A.graph; if (!g) return;
+    [...new Set(g.nodes.map(n => n.type))].filter(t => !SD.XRAY[t] && SD.XRAY_LAZY[t]).reduce((p, t) => p.then(() => need(t)), Promise.resolve());
+  }
+  setTimeout(() => (window.requestIdleCallback || (f => setTimeout(f, 0)))(prefetch), 5000);
 
   /* ---------- открыть, перейти к соседу, вернуться ---------- */
   function open(id, fromEl) {
     const n = nodeOf(id); if (!n || !has(n.type)) return false;
+    if (!SD.XRAY[n.type]) { later(n.type, () => open(id, fromEl)); return true; }
     X.stack = [id];
     show(id);
     zoom(fromEl || document.querySelector(`#nodesG .node[data-id="${id}"]`), false);
@@ -62,6 +96,7 @@
   }
   function go(id) {
     const n = nodeOf(id); if (!n || !has(n.type)) return;
+    if (!SD.XRAY[n.type]) { later(n.type, () => go(id)); return; }
     const i = X.stack.indexOf(id);
     if (i >= 0) X.stack = X.stack.slice(0, i + 1); else X.stack.push(id);
     show(id);
@@ -321,5 +356,5 @@
     renderProps(); side();
   }
 
-  SD.xray = { mount, open, go, close, has };
+  SD.xray = { mount, open, go, close, has, need };
 })();

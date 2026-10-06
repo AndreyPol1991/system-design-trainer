@@ -547,4 +547,5 @@
   API.build = build;
   API.attached = [];
   Object.keys(SD.XRAY).forEach(t => { if (!SKIP.has(t)) { attach(t, SD.XRAY[t]); API.attached.push(t); } });
+  (SD.XRAY_HOOKS = SD.XRAY_HOOKS || []).push(t => { if (!SKIP.has(t) && SD.XRAY[t] && API.attached.indexOf(t) < 0) { attach(t, SD.XRAY[t]); API.attached.push(t); } });   // сцена загрузилась позже
 })();
