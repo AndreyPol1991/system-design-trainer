@@ -23,4 +23,5 @@
   add('xray-router.js', ['router']);
   add('xray-semcache.js', ['semcache']);
   add('xray-guard.js', ['guard']);
+  add('xray-embed.js', ['embed']);
 })();

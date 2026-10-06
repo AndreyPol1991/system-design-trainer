@@ -393,6 +393,18 @@
         asm: ['ticket', 'per1k', 'usd']
       };
     },
+    embed(c) {
+      const q = c.g(/^Вопрос → вектор/), r = c.g(/^429/), hit = c.g(/^Из кэша/), pr = c.g(/^Цена/), qu = c.g(/^Очередь/);
+      const month = pr ? num(pr.s) * A.usdRub : NaN;
+      return {
+        an: 'Переводчик, который пересказывает каждый текст коротким «кодом смысла», чтобы потом искать по смыслу, а не по словам. Если он завален работой, клиент ждёт ответа дольше.',
+        k: [['Вопрос клиента в «код смысла»', q ? q.s : '…', q && q.c, q && q.c === 'bad' ? 'вопрос ждёт в очереди за загрузкой документов — клиент видит ответ заметно позже' : 'это добавка к ожиданию ответа, до поиска и до модели'],
+          r ? ['Отказы поставщика (429)', r.s + ' за 10 с', r.c, r.n ? 'лимит запросов: каждый отказ — повтор с паузой, вопросы клиентов ждут дольше' : 'лимит поставщика не мешает'] : (qu ? ['Очередь текстов', qu.s, qu.c, qu.n ? 'свои видеокарты не успевают — ответы задерживаются' : 'видеокарты успевают'] : null),
+          ['Повторные тексты из кэша', hit ? hit.s : '…', hit && hit.c, hit && /выкл/.test(hit.s) ? 'кэш выключен: одинаковые тексты оплачиваем каждый раз' : 'одинаковые тексты не пересчитываем и не оплачиваем'],
+          ['В месяц', isFinite(month) ? rub(month) : '…', '', 'цена как на площадке, по курсу $1 = 90 ₽']],
+        asm: ['usd', 'model']
+      };
+    },
     router(c) {
       const pr = c.g(/^Цена ответа/), hi = c.g(/^Всё в сильную/), er = c.g(/^Ошибки маршрута/), rj = c.g(/^Отказы/), fb = c.g(/^Через запасную/);
       const one = pr ? num(pr.s) : NaN, top = hi ? num(hi.s) : NaN, perM = aiRps(c) * A.aiMonth;
@@ -464,7 +476,7 @@
 
   /* ---------- карточка ---------- */
   const DOM_BANK = new Set(['support', 'voice']);
-  const domain = type => type === 'vectordb' || (['llm', 'router', 'semcache', 'guard'].includes(type) && DOM_BANK.has(((SD.app && SD.app.A && SD.app.A.level) || {}).id)) ? 'банка' : 'магазина';
+  const domain = type => type === 'vectordb' || (['llm', 'router', 'semcache', 'guard', 'embed'].includes(type) && DOM_BANK.has(((SD.app && SD.app.A && SD.app.A.level) || {}).id)) ? 'банка' : 'магазина';
   function build(type, ctx, inner, live) {
     const rows = inner && typeof inner.stats === 'function' ? inner.stats() : [];
     const g0 = reader(rows), g = re => { const r = g0(re); if (r) { const row = rows.find(x => Array.isArray(x) && re.test(String(x[0]))); r.s0 = row ? String(row[0]) : ''; } return r; };
