@@ -28,9 +28,41 @@
       return `<button type="button" class="lab-item ${cur === l.id ? 'on' : ''}" data-lab="${l.id}"><b>${esc(l.title)}</b><small>${esc(l.lede)}</small><span class="lab-prog">${d}/${t}${d === t ? ' ✓' : ''}</span></button>`;
     }).join('');
   }
+  /* лаборатории по требованию: в SD.LABS сначала лежит запись-оглавление с полем lazy (js/labs-lazy.js);
+     при первом открытии грузим файл, и настоящая лаборатория встаёт на место записи */
+  const files = {};
+  function need(lab) {
+    const src = lab.lazy;
+    if (!files[src]) files[src] = new Promise(res => {
+      const s = document.createElement('script'); s.src = src; s.async = true;
+      s.onload = () => {
+        SD.LABS.filter(l => l.lazy === src).forEach(stub => {
+          const real = SD.LABS.find(x => x.id === stub.id && !x.lazy); if (!real) return;
+          SD.LABS.splice(SD.LABS.indexOf(real), 1);
+          SD.LABS[SD.LABS.indexOf(stub)] = real;
+          const a = stub.tasks.map(t => t.id).join(), b = real.tasks.map(t => t.id).join();
+          if (a !== b && window.console) console.warn('labs-lazy.js устарел для «' + real.id + '»: обнови задания в оглавлении');
+        });
+        res();
+      };
+      s.onerror = () => { delete files[src]; res(); };
+      document.head.appendChild(s);
+    });
+    return files[src];
+  }
   function open(id) {
+    const want = SD.LABS.find(l => l.id === id) || SD.LABS[0];
+    if (want.lazy) {
+      document.documentElement.classList.add('xr-loading');
+      return need(want).then(() => {
+        document.documentElement.classList.remove('xr-loading');
+        const now = SD.LABS.find(l => l.id === want.id);
+        if (now && !now.lazy) return open(want.id);
+        if (SD.app && SD.app.toast) SD.app.toast('Лаборатория не загрузилась — проверь интернет и попробуй ещё раз.');
+      });
+    }
     load();
-    const lab = SD.LABS.find(l => l.id === id) || SD.LABS[0];
+    const lab = want;
     if (cleanup) cleanup();
     cur = lab.id;
     document.getElementById('labModal').hidden = false;
@@ -42,6 +74,7 @@
     if (SD.incidents && SD.incidents.labCard) { const hd = root.querySelector('.lab-head'); if (hd) hd.insertAdjacentHTML('beforeend', SD.incidents.labCard(lab.id)); }
     const dv = document.getElementById('labDive'); if (dv) dv.onclick = () => SD.player.open(lab.dive);
     cleanup = lab.mount(document.getElementById('labBody'), { done: tid => done(lab, tid) }) || null;
+    return Promise.resolve();
   }
   function renderTasks(lab) {
     const d = S.done[lab.id] || [];
@@ -55,7 +88,7 @@
     const t = lab.tasks.find(x => x.id === tid);
     if (SD.app && t) SD.app.toast(`Задание выполнено: ${t.text}`);
   }
-  SD.labs = { mount, open, progress: () => { load(); return S.done; } };
+  SD.labs = { mount, open, need, progress: () => { load(); return S.done; } };
 
   const fnv = s => { let h = 0x811c9dc5; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; } return h >>> 0; };
   SD.labHash = fnv;

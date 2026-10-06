@@ -357,7 +357,10 @@
   }
   function go(x) {
     if (!x || !SD.labs || !labDef(x.lab)) return;
-    SD.labs.open(x.lab);
+    /* лаборатория может грузиться по требованию — вкладку выбираем, когда она открылась */
+    Promise.resolve(SD.labs.open(x.lab)).then(() => opened(x));
+  }
+  function opened(x) {
     const m = $('labModal');
     if (m && !moModal) {
       /* закрыли лабораторию — обновить прогресс в карточке */
