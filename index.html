@@ -4983,6 +4983,221 @@ html.calm .lc2 *, html.calm .lc2 *::before, html.calm .lc2 *::after { animation:
 .xr-legend .xr-sw.xag-swt { background: none; border: 2px solid var(--accent); }
 .xr-legend .xr-sw.xag-swc { background: var(--accent); }
 
+/* ---------- «Роутер моделей изнутри» (xray-router.js, xrt-) ---------- */
+/* текст в сцене не меньше 12 px на экране: свой минимум поверх общего --fsmin (10/12 px) */
+#xrtSt, #xrtDy { --fsmin: 12px; }
+#xrtSt .xr-t, .xrt-tt { font-size: max(13px, calc(var(--fsmin, 0px) / var(--sc, 1))); }
+.xrt-dyn { pointer-events: none; }
+.xrt-badge { fill: var(--surface-2); stroke: var(--border-strong); stroke-width: 1.2; }
+.xrt-badge.warn { stroke: var(--warn); stroke-width: 1.8; }
+.xrt-go { fill: var(--accent); }
+.xrt-ok { fill: var(--ok); font-weight: 700; } .xrt-warn { fill: var(--warn); font-weight: 700; } .xrt-bad { fill: var(--bad); font-weight: 700; } .xrt-acc { fill: var(--accent); font-weight: 700; }
+.xrt-vt { font: 700 max(15px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-body); fill: var(--text); }
+.xrt-big { font: 600 max(14px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-body); fill: var(--text); }
+.xrt-qt { font: 600 max(12.5px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-body); fill: var(--text); }
+.xrt-name { font: 700 max(13px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-body); fill: var(--text); }
+.xrt-num { font: 700 max(22px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-mono); fill: var(--text); }
+.xrt-num.sm { font-size: max(18px, calc(var(--fsmin, 0px) / var(--sc, 1))); }
+.xrt-ms { font: 500 max(11px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-body); fill: var(--text-muted); }
+.xrt-ms.dim { opacity: .6; }
+.xrt-fn { font: 600 max(11px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-mono); fill: var(--text); }
+.xrt-fn.dim { fill: var(--text-muted); font-weight: 500; }
+.xrt-pn { font: 600 max(11px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-mono); fill: var(--text-2); }
+.xrt-ct { font: 500 max(11px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-body); fill: var(--text); }
+.xrt-mono { font: 500 max(11px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-mono); fill: var(--text); white-space: pre; font-variant-ligatures: none; }
+.xrt-mono.on { fill: var(--accent); font-weight: 700; } .xrt-mono.dim { fill: var(--text-muted); }
+.xrt-pop { font: 700 max(11px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-body); fill: var(--text); paint-order: stroke; stroke: var(--bg); stroke-width: 3px; }
+/* классификатор и правила */
+.xrt-feat { fill: var(--surface); stroke: var(--border); stroke-width: 1; stroke-dasharray: 3 3; }
+.xrt-feat.on { fill: var(--accent-soft); stroke: var(--accent); stroke-dasharray: none; }
+.xrt-th { stroke: var(--bad); stroke-width: 1.8; stroke-dasharray: 4 3; }
+.xrt-row { fill: var(--surface); stroke: var(--border); stroke-width: 1; stroke-dasharray: 3 3; }
+.xrt-bin { fill: var(--surface-2); stroke: var(--border-strong); stroke-width: 1.2; }
+/* фолбэк, предохранитель */
+.xrt-fail { fill: var(--surface-3); stroke: var(--border-strong); stroke-width: 1; }
+.xrt-fail.on { fill: var(--bad); stroke: var(--bad); }
+.xrt-ring { fill: none; stroke: var(--warn); stroke-width: 2.4; }
+.xrt-x { stroke: var(--bad); stroke-width: 3; stroke-linecap: round; fill: none; }
+.xrt-state { fill: var(--surface-2); stroke: var(--border); stroke-width: 1.2; }
+.xrt-state.on { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 2; }
+.xrt-state.on.bad { fill: var(--bad-soft); stroke: var(--bad); }
+.xrt-state.on.warn { fill: var(--warn-soft); stroke: var(--warn); }
+.xrt-arr { stroke: var(--text-muted); stroke-width: 1.6; stroke-dasharray: 4 3; }
+.xrt-grid { stroke: var(--border); stroke-width: 1; stroke-dasharray: 2 3; }
+.xrt-seg { stroke-width: 1.2; }
+.xrt-seg.wait { fill: var(--warn-soft); stroke: var(--warn); }
+.xrt-seg.ok { fill: var(--ok-soft); stroke: var(--ok); }
+.xrt-seg.bad { fill: var(--bad-soft); stroke: var(--bad); }
+.xrt-sgt { font: 600 max(11px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-body); fill: var(--text); }
+.xrt-now { stroke: var(--text); stroke-width: 1.6; stroke-dasharray: 3 2; }
+/* ошибки маршрута, пул, цена */
+.xrt-cell { fill: var(--surface-2); stroke-width: 1.4; }
+.xrt-cell.ok { stroke: var(--ok); } .xrt-cell.warn { stroke: var(--warn); fill: var(--warn-soft); } .xrt-cell.bad { stroke: var(--bad); fill: var(--bad-soft); }
+.xrt-flow { fill: var(--k-chat); opacity: .8; }
+.xrt-pbar { fill: var(--accent); } .xrt-pbar.dim { opacity: .45; }
+/* панели блоков изнутри */
+.xrt-panel { fill: var(--surface); stroke: var(--border); stroke-width: 1.2; }
+.xrt-panel.on { stroke: var(--accent); stroke-width: 1.8; }
+.xrt-codebg { fill: var(--code-bg); stroke: var(--border); stroke-width: 1; }
+.xrt-backb { fill: var(--surface-2); stroke: var(--border-strong); }
+.xrt-back { fill: var(--accent); font-weight: 600; }
+/* кнопки */
+.xrt-btn { cursor: pointer; outline: none; }
+.xrt-btn rect { fill: var(--surface-2); stroke: var(--border-strong); stroke-width: 1.2; }
+.xrt-btn.on rect { fill: var(--accent-soft); stroke: var(--accent); }
+.xrt-btn text { font: 600 max(11px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-body); fill: var(--text-2); text-anchor: middle; }
+.xrt-btn.on text { fill: var(--accent); }
+.xrt-btn:hover rect, .xrt-btn:focus-visible rect { stroke: var(--accent); stroke-width: 2; }
+/* легенда */
+.xr-legend .xr-sw.xrt-sws { background: var(--k-chat); }
+.xr-legend .xr-sw.xrt-swc { background: var(--k-write); }
+.xrt-track { stroke: var(--border); stroke-width: 1; stroke-dasharray: 3 4; }
+
+/* ---------- «Семантический кэш изнутри» (xray-semcache.js, xsc-) ---------- */
+/* текст в сцене не меньше 12 px на экране: свой минимум поверх общего --fsmin (10/12 px) */
+#xscSt, #xscDy { --fsmin: 12px; }
+#xscSt .xr-t, .xsc-tt { font-size: max(13px, calc(var(--fsmin, 0px) / var(--sc, 1))); }
+.xsc-dyn { pointer-events: none; }
+.xsc-badge { fill: var(--surface-2); stroke: var(--border-strong); stroke-width: 1.2; }
+.xsc-badge.bad { stroke: var(--bad); stroke-width: 1.8; }
+.xsc-go { fill: var(--accent); }
+.xsc-ok { fill: var(--ok); font-weight: 700; } .xsc-warn { fill: var(--warn); font-weight: 700; } .xsc-bad { fill: var(--bad); font-weight: 700; } .xsc-acc { fill: var(--accent); font-weight: 700; }
+.xsc-vt { font: 700 max(15px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-body); fill: var(--text); }
+.xsc-big { font: 600 max(14px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-body); fill: var(--text); }
+.xsc-qt { font: 600 max(12.5px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-body); fill: var(--text); }
+.xsc-name { font: 700 max(13px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-body); fill: var(--text); }
+.xsc-ms { font: 500 max(11px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-body); fill: var(--text-muted); }
+.xsc-fn { font: 600 max(11px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-mono); fill: var(--text); }
+.xsc-pn { font: 600 max(11px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-mono); fill: var(--text-2); }
+.xsc-ct { font: 500 max(11px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-body); fill: var(--text); }
+.xsc-ct.dim { fill: var(--text-muted); }
+.xsc-cl { font: 600 max(11px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-body); fill: var(--text-2); paint-order: stroke; stroke: var(--surface-2); stroke-width: 3px; }
+.xsc-cl.dim { fill: var(--text-muted); opacity: .7; } .xsc-cl.bad { fill: var(--bad); }
+.xsc-sim { font: 700 max(11px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-mono); fill: var(--ok); paint-order: stroke; stroke: var(--bg); stroke-width: 3px; }
+.xsc-sim.bad { fill: var(--bad); } .xsc-sim.low { fill: var(--accent); }
+.xsc-ans { font: 500 max(11.5px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-body); fill: var(--text); }
+.xsc-mono { font: 500 max(11px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-mono); fill: var(--text); white-space: pre; font-variant-ligatures: none; }
+.xsc-mono.on { fill: var(--accent); font-weight: 700; } .xsc-mono.dim { fill: var(--text-muted); }
+/* память кэша */
+.xsc-bg { fill: var(--text-muted); opacity: .32; }
+.xsc-pt { fill: var(--k-read); stroke: var(--bg); stroke-width: 1.5; }
+.xsc-pt.pers { fill: var(--k-voice); }
+.xsc-pt.exp { fill: var(--surface-3); stroke: var(--text-muted); stroke-dasharray: 2 2; }
+.xsc-pt.stale { stroke: var(--bad); stroke-width: 2.4; stroke-dasharray: 3 2; }
+.xsc-pt.near { stroke: var(--accent); stroke-width: 3; }
+.xsc-pt.hit { fill: var(--ok); stroke: var(--ok); stroke-width: 3; }
+.xsc-pt.bad { fill: var(--bad); stroke: var(--bad); stroke-width: 3; }
+.xsc-pt.new { stroke: var(--ok); stroke-width: 3.5; }
+.xsc-lock { fill: var(--bg); }
+.xsc-star { fill: var(--k-chat); stroke: var(--bg); stroke-width: 1.5; }
+.xsc-star.pers { fill: var(--k-voice); }
+.xsc-thc { fill: var(--accent-soft); fill-opacity: .35; stroke: var(--accent); stroke-width: 1.6; stroke-dasharray: 5 4; }
+.xsc-thc.ok { stroke: var(--ok); } .xsc-thc.bad { stroke: var(--bad); fill: var(--bad-soft); }
+.xsc-ln { stroke: var(--accent); stroke-width: 1.8; stroke-dasharray: 4 3; }
+.xsc-ln.ok { stroke: var(--ok); stroke-dasharray: none; } .xsc-ln.bad { stroke: var(--bad); stroke-dasharray: none; }
+.xsc-ring { fill: none; stroke: var(--accent); stroke-width: 1.4; }
+.xsc-th { stroke: var(--bad); stroke-width: 1.8; stroke-dasharray: 4 3; }
+.xsc-x { stroke: var(--bad); stroke-width: 3; stroke-linecap: round; fill: none; }
+/* ответ */
+.xsc-bubble { fill: var(--surface-2); stroke: var(--border); stroke-width: 1.2; }
+.xsc-bubble.ok { stroke: var(--ok); fill: var(--ok-soft); } .xsc-bubble.mdl { stroke: var(--accent); }
+.xsc-bubble.bad { stroke: var(--bad); stroke-width: 1.8; fill: var(--bad-soft); }
+/* блоки изнутри */
+.xsc-panel { fill: var(--surface); stroke: var(--border); stroke-width: 1.2; }
+.xsc-panel.on { stroke: var(--accent); stroke-width: 1.8; }
+.xsc-codebg { fill: var(--code-bg); stroke: var(--border); stroke-width: 1; }
+.xsc-backb { fill: var(--surface-2); stroke: var(--border-strong); }
+.xsc-back { fill: var(--accent); font-weight: 600; }
+.xsc-grid { stroke: var(--border); stroke-width: 1; stroke-dasharray: 2 3; }
+.xsc-seg { stroke-width: 1.2; }
+.xsc-seg.ok { fill: var(--ok-soft); stroke: var(--ok); } .xsc-seg.bad { fill: var(--bad-soft); stroke: var(--bad); }
+.xsc-hitd { fill: var(--ok); stroke: var(--bg); stroke-width: 1.2; } .xsc-hitd.bad { fill: var(--bad); }
+.xsc-now { stroke: var(--text); stroke-width: 1.6; stroke-dasharray: 3 2; }
+.xsc-step { fill: var(--surface-2); stroke: var(--border); stroke-width: 1.2; stroke-dasharray: 3 3; }
+.xsc-step.on { stroke: var(--accent); stroke-dasharray: none; }
+.xsc-step.on.bad { stroke: var(--bad); fill: var(--bad-soft); } .xsc-step.on.ok { stroke: var(--ok); fill: var(--ok-soft); }
+.xsc-arr { stroke: var(--text-muted); stroke-width: 1.6; }
+.xsc-pbar { fill: var(--accent); } .xsc-pbar.dim { opacity: .45; }
+/* кнопки */
+.xsc-btn { cursor: pointer; outline: none; }
+.xsc-btn rect { fill: var(--surface-2); stroke: var(--border-strong); stroke-width: 1.2; }
+.xsc-btn.on rect { fill: var(--accent-soft); stroke: var(--accent); }
+.xsc-btn text { font: 600 max(11px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-body); fill: var(--text-2); text-anchor: middle; }
+.xsc-btn.on text { fill: var(--accent); }
+.xsc-btn:hover rect, .xsc-btn:focus-visible rect { stroke: var(--accent); stroke-width: 2; }
+/* легенда */
+.xr-legend .xr-sw.xsc-swq { background: var(--k-chat); clip-path: polygon(50% 0, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%); border-radius: 0; }
+.xr-legend .xr-sw.xsc-swe { background: var(--k-read); }
+.xr-legend .xr-sw.xsc-swm { background: none; border: 2px solid var(--accent); }
+
+/* ---------- «Guardrails изнутри» (xray-guard.js, xgd-) ---------- */
+/* текст в сцене не меньше 12 px на экране: свой минимум поверх общего --fsmin (10/12 px) */
+#xgdSt, #xgdDy { --fsmin: 12px; }
+#xgdSt .xr-t, .xgd-tt { font-size: max(13px, calc(var(--fsmin, 0px) / var(--sc, 1))); }
+.xgd-dyn { pointer-events: none; }
+.xgd-badge { fill: var(--surface-2); stroke: var(--border-strong); stroke-width: 1.2; }
+.xgd-badge.warn { stroke: var(--warn); stroke-width: 1.8; }
+.xgd-go { fill: var(--accent); }
+.xgd-ok { fill: var(--ok); font-weight: 700; } .xgd-warn { fill: var(--warn); font-weight: 700; } .xgd-bad { fill: var(--bad); font-weight: 700; } .xgd-acc { fill: var(--accent); font-weight: 700; }
+.xgd-vt { font: 700 max(15px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-body); fill: var(--text); }
+.xgd-big { font: 600 max(14px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-body); fill: var(--text); }
+.xgd-qt { font: 600 max(12.5px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-body); fill: var(--text); }
+.xgd-name { font: 700 max(13px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-body); fill: var(--text); }
+.xgd-ms { font: 500 max(11px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-body); fill: var(--text-muted); }
+.xgd-fn { font: 600 max(11px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-mono); fill: var(--text); }
+.xgd-pn { font: 600 max(11px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-mono); fill: var(--text-2); }
+.xgd-ct { font: 500 max(11px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-body); fill: var(--text); }
+.xgd-ans { font: 500 max(11.5px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-body); fill: var(--text); }
+.xgd-sgt { font: 600 max(11px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-body); fill: var(--text); }
+.xgd-pop { font: 700 max(11px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-body); fill: var(--text); paint-order: stroke; stroke: var(--bg); stroke-width: 3px; }
+.xgd-mono { font: 500 max(11px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-mono); fill: var(--text); white-space: pre; font-variant-ligatures: none; }
+.xgd-mono.on { fill: var(--accent); font-weight: 700; } .xgd-mono.dim { fill: var(--text-muted); } .xgd-mono.bad { fill: var(--bad); font-weight: 700; }
+/* подсветка в тексте */
+.xgd-pii { fill: var(--warn); font-weight: 700; text-decoration: underline; }
+.xgd-ph { fill: var(--accent); font-weight: 700; }
+.xgd-atk { fill: var(--bad); }
+/* конвейер */
+.xgd-off { stroke-dasharray: 5 4; opacity: .75; }
+.xgd-th { stroke: var(--bad); stroke-width: 1.8; stroke-dasharray: 4 3; }
+.xgd-chk { fill: var(--surface-2); stroke: var(--border); stroke-width: 1; stroke-dasharray: 3 3; }
+.xgd-chk.ok { fill: var(--ok-soft); stroke: var(--ok); stroke-dasharray: none; }
+.xgd-chk.bad { fill: var(--bad-soft); stroke: var(--bad); stroke-width: 1.6; stroke-dasharray: none; }
+.xgd-tpc { stroke-width: 1.2; }
+.xgd-tpc.ok { fill: var(--ok-soft); stroke: var(--ok); } .xgd-tpc.no { fill: var(--surface-2); stroke: var(--border-strong); }
+.xgd-tpc.on { stroke: var(--accent); stroke-width: 2.4; } .xgd-tpc.no.on { fill: var(--bad-soft); stroke: var(--bad); }
+.xgd-sep { stroke: var(--border); stroke-width: 1; }
+.xgd-x { stroke: var(--bad); stroke-width: 3; stroke-linecap: round; fill: none; }
+.xgd-bot { fill: var(--bad); opacity: .75; }
+.xgd-lseg { stroke-width: 1.2; }
+.xgd-lseg.acc { fill: var(--accent-soft); stroke: var(--accent); } .xgd-lseg.mdl { fill: var(--surface-3); stroke: var(--border-strong); }
+/* блоки изнутри */
+.xgd-panel { fill: var(--surface); stroke: var(--border); stroke-width: 1.2; }
+.xgd-panel.on { stroke: var(--accent); stroke-width: 1.8; }
+.xgd-codebg { fill: var(--code-bg); stroke: var(--border); stroke-width: 1; }
+.xgd-backb { fill: var(--surface-2); stroke: var(--border-strong); }
+.xgd-back { fill: var(--accent); font-weight: 600; }
+.xgd-step { fill: var(--surface-2); stroke: var(--border); stroke-width: 1.2; }
+.xgd-step.on { stroke: var(--accent); }
+.xgd-grid { stroke: var(--border); stroke-width: 1; stroke-dasharray: 2 3; }
+.xgd-pt { stroke: var(--bg); stroke-width: 1.5; }
+.xgd-pt.ok { fill: var(--ok); } .xgd-pt.bad { fill: var(--bad); }
+.xgd-pt.hl { stroke: var(--warn); stroke-width: 3.5; }
+.xgd-inst { fill: var(--surface-2); stroke: var(--border); stroke-width: 1; stroke-dasharray: 3 3; }
+.xgd-inst.on { stroke: var(--border-strong); stroke-dasharray: none; }
+.xgd-instf { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1; }
+.xgd-instf.warn { fill: var(--warn-soft); stroke: var(--warn); } .xgd-instf.bad { fill: var(--bad-soft); stroke: var(--bad); }
+/* кнопки */
+.xgd-btn { cursor: pointer; outline: none; }
+.xgd-btn rect { fill: var(--surface-2); stroke: var(--border-strong); stroke-width: 1.2; }
+.xgd-btn.on rect { fill: var(--accent-soft); stroke: var(--accent); }
+.xgd-btn text { font: 600 max(11px, calc(var(--fsmin, 0px) / var(--sc, 1))) var(--f-body); fill: var(--text-2); text-anchor: middle; }
+.xgd-btn.on text { fill: var(--accent); }
+.xgd-btn:hover rect, .xgd-btn:focus-visible rect { stroke: var(--accent); stroke-width: 2; }
+/* легенда */
+.xr-legend .xr-sw.xgd-swq { background: var(--k-chat); }
+.xr-legend .xr-sw.xgd-swp { background: var(--warn); border-radius: 3px; }
+.xr-legend .xr-sw.xgd-swm { background: var(--accent-soft); border: 2px solid var(--accent); border-radius: 3px; }
+
 /* «Изнутри» → взгляд «Бизнес»: карточка «Что это значит для магазина» под картинкой сцены (js/xray-biz.js).
    Сцена не закрывается: в режиме «Бизнес» картинка чуть ниже, чтобы карточка поместилась на экран без прокрутки. */
 .xbz-card { display: flex; flex-direction: column; gap: 8px; flex: none; padding: 10px 12px 10px 14px; border: 1px solid var(--border); border-left: 3px solid var(--info); border-radius: var(--r); background: var(--surface); }
@@ -4999,7 +5214,8 @@ html.calm .lc2 *, html.calm .lc2 *::before, html.calm .lc2 *::after { animation:
 .xbz-kpi span { font-size: 12px; line-height: 1.4; color: var(--text-muted); }
 .xbz-asm { margin: 0; font-size: 12px; line-height: 1.45; color: var(--text-muted); }
 .xbz-asm b { font-weight: 600; color: var(--text-2); }
-.xr-main.xbz-on .xr-svg { max-height: calc(100vh - 520px); min-height: 220px; }
+/* картинку сжимаем, но не мельче 440 px по высоте: иначе подписи с минимумом 12 px налезают друг на друга */
+.xr-main.xbz-on .xr-svg { max-height: max(calc(100vh - 520px), 440px); min-height: 220px; }
 @media (max-width: 1000px) {
   .xr-main.xbz-on .xr-svg { max-height: none; min-height: 0; }
   /* Узкий экран: колонки сцены и настроек идут друг под другом; общая правка — grid-auto-rows: max-content у .xr-body в ядре. */
@@ -5347,6 +5563,9 @@ html.calm .lc2 *, html.calm .lc2 *::before, html.calm .lc2 *::after { animation:
 <script src="js/xray-llm.js"></script>
 <script src="js/xray-vectordb.js"></script>
 <script src="js/xray-agent.js"></script>
+<script src="js/xray-router.js"></script>
+<script src="js/xray-semcache.js"></script>
+<script src="js/xray-guard.js"></script>
 <script src="js/arch-lens.js"></script>
 <script src="js/ops-console.js"></script>
 <script src="js/ops-ui.js"></script>
