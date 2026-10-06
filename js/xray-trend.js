@@ -228,7 +228,13 @@
       const p = t.closest('.xr-prop'), lb = p && p.querySelector('label');
       note('«' + (lb ? lb.textContent.trim() : t.dataset.xp) + '»');
     };
-    const onClk = e => { const b = e.target && e.target.closest ? e.target.closest('[data-xscn]') : null; if (b) note('ситуация «' + b.textContent.trim() + '»'); };
+    const onClk = e => {
+      const t = e.target && e.target.closest ? e.target : null; if (!t) return;
+      const b = t.closest('[data-xscn]'); if (b) { note('ситуация «' + b.textContent.trim() + '»'); return; }
+      /* кнопки прямо на картинке сцены: порог, «переиндексировать», «одобрить» и т. п. — тоже изменения */
+      const k = t.closest('#xrSvg [role="button"], #xrSvg [tabindex], #xrSvg button, #xrHtml button');
+      if (k) { const tx = (k.getAttribute('aria-label') || k.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 40); if (tx) note('«' + tx + '» на картинке'); }
+    };
 
     box.addEventListener('click', onBox);
     range.addEventListener('pointerdown', onDown);
