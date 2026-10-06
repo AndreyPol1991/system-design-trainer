@@ -43,6 +43,7 @@
     if (SD.walk && SD.walk.active()) h += SD.walk.paneHtml();
     h += `<span class="eyebrow">${L.free ? `Свободный режим · кейс «${esc(L.free.baseTitle)}»` : L.daily ? `Событие дня · по уровню «${esc(L.daily.baseTitle)}»` : L.sandbox ? 'Песочница' : L.interview ? 'Собеседование · этап «Схема»' : L.innerLvl ? 'Внутри сервиса · C4, уровень компонентов' : L.knobLvl ? 'Настройки на пальцах' : L.saasLvl ? 'Много клиентов в одном сервисе (SaaS)' : L.cloudLvl ? 'Облако: зоны, цены, хранение' : L.dataLvl ? 'Данные: от события до дашборда' : L.opsLvl ? 'Эксплуатация и инструменты' : L.archLvl ? 'Архитектура из сервисов' : L.practice ? 'Практикум паттернов' : L.fix ? 'Найди и перестрой · инцидент' : `Уровень ${idx + 1} · ${tierLabel(L.tier)}`}</span>`;
     h += `<h2>${esc(L.title)}</h2>`;
+    if (SD.fingers) h += SD.fingers.card(L);
     h += `<p class="story" style="margin-top:8px">${esc(L.story)}</p>`;
     if (SD.free) h += SD.free.taskBlock(A);
     if (SD.incidents) h += SD.incidents.card(L);

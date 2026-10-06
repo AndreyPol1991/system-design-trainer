@@ -4235,6 +4235,76 @@ html.calm .lc2 *, html.calm .lc2 *::before, html.calm .lc2 *::after { animation:
   .e2e-pairwrap, .e2e-two, .e2e-lossw { grid-template-columns: minmax(0, 1fr); }
 }
 html.calm .e2e *, html.calm .e2e *::before, html.calm .e2e *::after { animation: none !important; transition: none !important; }
+/* ===== «На пальцах» в уровнях (js/level-fingers.js, префикс .lf-fg) и уровни сквозной аналитики (js/levels-e2e.js) ===== */
+/* ===== «На пальцах»: тезис, аналогия и картинка темы уровня (js/level-fingers.js, префикс .lf-fg) =====
+   Только переменные :root проекта — обе темы работают сами. Текст не меньше 12 px. На узком экране — одна колонка.
+   Префикс .lf-fg, а не просто .lf-: классы .lf-card, .lf-note и др. уже заняты лабораторией «Фронтенд» (js/lab-front.js). */
+.lf-fg { margin-top: 12px; border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 10px; background: var(--surface-2); }
+.lf-fg-head { display: flex; align-items: center; gap: 8px; width: 100%; padding: 9px 12px; border: 0; border-radius: 10px; background: transparent; color: var(--text); text-align: left; }
+.lf-fg-head:hover .lf-fg-chev { color: var(--accent); }
+.lf-fg-eb { display: inline-flex; align-items: center; gap: 6px; flex: none; font: 600 12px/1.2 var(--f-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--accent); }
+.lf-fg-eb svg { width: 16px; height: 16px; flex: none; }
+.lf-fg-ti { flex: 1 1 auto; min-width: 0; font-size: 13px; font-weight: 600; line-height: 1.35; color: var(--text); }
+.lf-fg-chev { flex: none; margin-left: auto; display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--text-muted); white-space: nowrap; }
+.lf-fg-chev i { font-style: normal; }
+.lf-fg-body { padding: 0 10px 12px; }
+.lf-fg .lf-fg-thesis { margin: 0 0 8px; font-size: 14px; line-height: 1.5; font-weight: 600; color: var(--text); }
+.lf-fg .lf-fg-an { margin: 0 0 10px; font-size: 13px; line-height: 1.55; color: var(--text-2); }
+.lf-fg .lf-fg-an b { color: var(--text); }
+
+/* картинка: предметы аналогии, у каждого подписан термин */
+.lf-fg-pic { margin: 0; padding: 8px 0 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+.lf-fg-svg { display: block; width: 100%; height: auto; overflow: visible; }
+.lf-fg-it { cursor: pointer; transition: opacity .15s ease; }
+.lf-fg-box { fill: var(--surface-2); stroke: var(--border-strong); stroke-width: 1; transition: fill .15s ease, stroke .15s ease; }
+.lf-fg-ico { fill: none; stroke: var(--text-2); stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.lf-fg-ta { font: 600 13px var(--f-body); fill: var(--text); }
+.lf-fg-tt { font: 500 12.5px var(--f-body); fill: var(--info); }
+.lf-fg-ar path { fill: none; stroke: var(--text-muted); stroke-width: 1.5; stroke-linecap: round; }
+.lf-fg-ar .lf-fg-ah { fill: var(--text-muted); stroke: none; }
+.lf-fg-ar.lf-fg-dash path:first-child { stroke-dasharray: 4 3; }
+.lf-fg-ar.lf-fg-bad path { stroke: var(--bad); }
+.lf-fg-ar.lf-fg-bad .lf-fg-ah { fill: var(--bad); stroke: none; }
+.lf-fg-tag { font: 600 12px var(--f-mono); fill: var(--text-2); }
+.lf-fg-tag.lf-fg-bad { fill: var(--bad); }
+.lf-fg-tag.lf-fg-ok { fill: var(--ok); }
+.lf-fg-tag.lf-fg-zone { font: 500 12px var(--f-body); fill: var(--text-muted); }
+.lf-fg-wall { fill: none; stroke: var(--border-strong); stroke-width: 1.5; stroke-dasharray: 3 4; }
+.lf-fg-it.lf-fg-weak .lf-fg-box { stroke: var(--warn); stroke-dasharray: 4 3; }
+.lf-fg-it.lf-fg-weak .lf-fg-tt { fill: var(--warn); }
+.lf-fg-it:hover .lf-fg-box { stroke: var(--accent); }
+/* подсветка пары: остальное притухает */
+.lf-fg-pic.lf-fg-has .lf-fg-it:not(.lf-fg-on) { opacity: .55; }
+.lf-fg-it.lf-fg-on .lf-fg-box { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 2; }
+.lf-fg-it.lf-fg-on .lf-fg-ico { stroke: var(--accent); }
+.lf-fg-it.lf-fg-on .lf-fg-tt { fill: var(--accent); font-weight: 600; }
+.lf-fg-cap { margin-top: 6px; padding: 0 8px; min-height: 2.9em; font-size: 12.5px; line-height: 1.45; color: var(--text-2); }
+.lf-fg-cap b { color: var(--text); }
+.lf-fg-cap .lf-fg-term { color: var(--accent); }
+.lf-fg-cap .lf-fg-eq { color: var(--text-muted); }
+.lf-fg-capx { display: block; color: var(--text-2); }
+
+/* пары «предмет ↔ термин» */
+.lf-fg-map { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 4px; }
+.lf-fg-pair { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 2px 8px; align-items: baseline; width: 100%; padding: 6px 9px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); text-align: left; font-size: 13px; line-height: 1.4; }
+.lf-fg-pair .lf-fg-a { color: var(--text); }
+.lf-fg-pair .lf-fg-eq { color: var(--text-muted); }
+.lf-fg-pair .lf-fg-t { color: var(--info); font-weight: 600; }
+.lf-fg-pair small { grid-column: 1 / -1; font-size: 12px; line-height: 1.4; color: var(--text-muted); }
+.lf-fg-pair:hover, .lf-fg-pair.lf-fg-on { border-color: var(--accent); background: var(--accent-soft); }
+.lf-fg-pair.lf-fg-on .lf-fg-t { color: var(--accent); }
+.lf-fg-pair.lf-fg-on small { color: var(--text-2); }
+
+@media (max-width: 480px) {
+  .lf-fg-head { flex-wrap: wrap; }
+  .lf-fg-ti { order: 3; flex-basis: 100%; }
+  .lf-fg-pair { grid-template-columns: minmax(0, 1fr); }
+  .lf-fg-pair .lf-fg-eq { display: none; }
+  .lf-fg-pair .lf-fg-t::before { content: '↔ '; color: var(--text-muted); font-weight: 400; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lf-fg-it, .lf-fg-box { transition: none; }
+}
 .pred-pop { position: fixed; z-index: 60; width: 300px; display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border-strong); box-shadow: var(--shadow); font-size: 12.5px; line-height: 1.45; color: var(--text-2); animation: chgIn .2s ease-out; }
 .pred-pop[hidden] { display: none; }
 .pred-pop b { color: var(--text); font-size: 13.5px; }
@@ -6690,6 +6760,8 @@ html.xr-loading, html.xr-loading * { cursor: progress !important; }
 <script src="js/ops-console.js"></script>
 <script src="js/ops-ui.js"></script>
 <script src="js/levels-dtrack.js"></script>
+<script src="js/level-fingers.js"></script>
+<script src="js/levels-e2e.js"></script>
 <script src="js/cloud.js"></script>
 <script src="js/k8s-sim.js"></script>
 <script src="js/levels-tenant.js"></script>
