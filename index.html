@@ -4368,6 +4368,135 @@ html.calm .e2e *, html.calm .e2e *::before, html.calm .e2e *::after { animation:
   /* всплывающее сообщение внизу не ловит касания — кнопки под ним работают */
   .toast { pointer-events: none; }
 }
+/* ===== маршрут и меню (агент) ===== */
+/* Маршрут с первой минуты, «Дальше», три раздела шапки, «⋯» по группам, постепенное раскрытие (js/ux.js, js/path.js, js/hub.js).
+   Только переменные проекта, обе темы, текст от 12px; в html.calm — без анимаций. */
+/* постепенное раскрытие: инструмент спрятан, пока не пригодится; Ctrl+K и «Показать все инструменты сразу» находят его всегда */
+html.rv-no-chaos #chaosBtn, html.rv-no-wave #waveBtn, html.rv-no-lens .lens-ctl, html.rv-no-ops #palette .p-tools, html.rv-no-presets #palette .p-presets, html.rv-no-trace #traceBtn, html.rv-no-share #shareBtn { display: none !important; }
+.rv-pulse { animation: rvPulse 1.2s ease-in-out 3; }
+@keyframes rvPulse { 50% { box-shadow: 0 0 0 4px var(--accent-glow); border-color: var(--accent); } }
+/* шапка: «Путь · Практика · Справочник»; пункт меню — название и строка «что внутри» */
+.nav-gbtn { font-weight: 600; }
+.nav-menu { min-width: 260px; }
+.nav-menu > button { display: block; text-align: left; padding: 7px 12px; line-height: 1.3; }
+.nav-menu .nav-sub { display: block; margin-top: 1px; font-size: 12px; font-weight: 400; color: var(--text-muted); }
+.nav-menu > button:hover .nav-sub { color: var(--text-2); }
+/* «Дальше: шаг · почему» */
+.next-wrap { position: relative; display: flex; align-items: stretch; min-width: 0; flex: 0 1 auto; max-width: 400px; }
+.next-wrap[hidden] { display: none; }
+.next-btn { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 6px 12px 6px 14px; border: 1px solid transparent; border-radius: 999px 0 0 999px; background: linear-gradient(135deg, var(--accent), var(--accent-vivid)); color: var(--accent-text); font-weight: 650; font-size: 13px; box-shadow: 0 4px 14px var(--accent-glow); }
+.next-btn:hover { filter: brightness(1.08); }
+.next-btn .nx-k { font: 600 12px/1 var(--f-mono); letter-spacing: .04em; opacity: .85; white-space: nowrap; }
+.next-btn .nx-t { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.next-btn:not(.here):not(.fin) .nx-t::after { content: " \2192"; }
+.next-btn.here, .next-btn.fin { background: var(--surface-2); color: var(--text); border-color: var(--border); box-shadow: none; }
+.next-btn.here .nx-k, .next-btn.fin .nx-k { color: var(--accent); opacity: 1; }
+.next-why { border: 1px solid var(--border); border-left: 0; border-radius: 0 999px 999px 0; background: var(--surface-2); color: var(--text-2); font-size: 12px; padding: 0 12px; white-space: nowrap; }
+.next-why:hover, .next-why[aria-expanded="true"] { color: var(--text); background: var(--surface-3); }
+.next-pop { position: fixed; z-index: 45; display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border-strong); box-shadow: var(--shadow-lg); font-size: 13px; color: var(--text-2); }
+.next-pop[hidden] { display: none; }
+.next-pop .np-h { color: var(--text); font-size: 14px; }
+.next-pop p { margin: 0; line-height: 1.5; }
+.next-pop p b { color: var(--text); }
+.next-pop .np-an { font-size: 12.5px; color: var(--text-muted); }
+.np-acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+/* меню «⋯»: три смысловые группы */
+.tb-menu { min-width: 250px; gap: 2px; }
+.tbm-g { display: flex; flex-direction: column; gap: 2px; }
+.tbm-g + .tbm-g { border-top: 1px solid var(--border); margin-top: 2px; padding-top: 4px; }
+.tbm-h { font: 600 12px/1 var(--f-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted); padding: 6px 10px 4px; }
+#rvAllBtn[aria-pressed="true"] { color: var(--text); }
+/* подсказка «Новое: …» у открывшегося инструмента */
+.rv-tip { position: fixed; z-index: 65; display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border-radius: 12px; background: var(--surface); border: 1px solid var(--accent); box-shadow: 0 0 0 3px var(--accent-soft), var(--shadow-lg); font-size: 13px; line-height: 1.5; color: var(--text-2); animation: chgIn .25s ease-out; }
+.rv-tip[hidden] { display: none; }
+.rv-tip p { margin: 0; }
+.rv-tip p b { color: var(--text); }
+.rv-h { display: flex; align-items: center; gap: 8px; }
+.rv-h b { color: var(--text); font-size: 14px; }
+.rv-new { font: 700 12px/1 var(--f-mono); letter-spacing: .04em; padding: 4px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); }
+.rv-list { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 2px; }
+.rv-list b { color: var(--text); }
+.rv-acts { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 2px; }
+/* выбор цели при первом входе и «Проверь меня» */
+.gp-sheet { width: min(780px, 100%); }
+.gp-sheet:focus, .gp-sheet:focus-visible { outline: none; }
+.gp-body { overflow-y: auto; padding: 22px 24px 20px; display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+.gp-body .eyebrow { margin: 0; }
+.gp-body h2 { font: 700 22px/1.25 var(--f-brand); color: var(--text); }
+.gp-lede { margin: 0; color: var(--text-2); line-height: 1.55; max-width: 70ch; }
+.gp-lede b { color: var(--text); }
+.gp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
+.gp-opt { display: flex; flex-direction: column; gap: 3px; text-align: left; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); }
+.gp-opt b { font-size: 14px; line-height: 1.35; }
+.gp-opt small { font-size: 12.5px; color: var(--text-muted); line-height: 1.4; }
+.gp-opt:hover, .gp-opt:focus-visible { border-color: var(--accent); background: var(--surface-3); }
+.gp-opt.on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.gp-more { margin: 0; font-size: 13px; color: var(--text-muted); }
+.gp-more .linkish { font-size: 13px; }
+.gp-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; border-top: 1px solid var(--border); padding-top: 12px; }
+.gp-all { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-2); cursor: pointer; }
+.gp-all input { accent-color: var(--accent); width: 16px; height: 16px; margin: 0; }
+.gp-acts { display: flex; gap: 8px; flex-wrap: wrap; }
+.gp-note { margin: 0; font-size: 12.5px; color: var(--text-muted); }
+.gp-prog { height: 4px; border-radius: 2px; background: var(--surface-3); overflow: hidden; }
+.gp-prog i { display: block; height: 100%; background: var(--accent); transition: width .3s; }
+.gp-body h2.gp-q { font: 600 18px/1.4 var(--f-body); }
+.gp-opts { display: flex; flex-direction: column; gap: 6px; }
+.gp-a { text-align: left; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); font-size: 14px; line-height: 1.4; }
+.gp-a:hover:not(:disabled) { border-color: var(--accent); }
+.gp-a:disabled { opacity: 1; cursor: default; color: var(--text-2); }
+.gp-a.right { border-color: var(--ok); background: var(--ok-soft); color: var(--text); }
+.gp-a.wrong { border-color: var(--bad); background: var(--bad-soft); color: var(--text); }
+.gp-fb { margin: 0; padding: 10px 12px; border-radius: 10px; background: var(--surface-2); border-left: 3px solid var(--warn); color: var(--text-2); line-height: 1.5; }
+.gp-fb.ok { border-left-color: var(--ok); }
+.gp-fb b { color: var(--text); }
+.gp-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.gp-chips .chip { font-size: 12px; padding: 3px 9px; }
+.gp-chips .chip.ok { border-color: var(--ok); color: var(--ok); }
+/* «Мой путь»: цель, маршрут, знакомое */
+.pt-goal { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface-2); }
+.pt-goal p { margin: 0; font-size: 13px; color: var(--text-2); line-height: 1.5; }
+.pt-goal p b { color: var(--text); }
+.pt-gbtns { display: flex; flex-wrap: wrap; gap: 6px; }
+.pt-gbtns .ck { display: inline-block; width: 14px; color: var(--accent); font-weight: 700; }
+.pt-route { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 4px 14px; }
+.pt-route li { display: flex; gap: 6px; align-items: baseline; min-width: 0; flex-wrap: wrap; }
+.pt-route li i { font: 600 12px var(--f-mono); color: var(--text-muted); font-style: normal; }
+.pt-route li .linkish { text-align: left; }
+.pt-route li.now .linkish { font-weight: 700; }
+.pt-route li.done .linkish { color: var(--ok); text-decoration: none; }
+.pt-route li.skip { opacity: .75; }
+.pt-route small { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
+.pt-known { font-size: 12px; font-style: normal; font-weight: 600; color: var(--ok); margin-left: 6px; }
+.pt-fin { font-size: 13px; color: var(--ok); }
+/* хаб: один следующий шаг сверху */
+.hub-next { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin-top: 12px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--accent); background: var(--accent-soft); font-size: 13px; color: var(--text-2); }
+.hub-next > span { flex: 1 1 260px; }
+.hub-next b { color: var(--text); }
+.hub-next small { color: var(--text-muted); font-size: 12px; }
+.map-next { margin: 0 0 12px; }
+#mapBody .route-next { position: relative; border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+#mapBody .route-next::before { content: "дальше по маршруту"; position: absolute; top: -10px; right: 12px; font: 600 12px/1 var(--f-mono); padding: 3px 8px; border-radius: 999px; background: var(--accent); color: var(--accent-text); }
+@media (max-width: 1280px) { .next-wrap { max-width: 300px; } }
+@media (max-width: 900px) {
+  /* телефон: «Дальше» — своей строкой под логотипом и уровнем, меню разделов — касанием */
+  .next-wrap { flex: 1 1 100%; max-width: none; }
+  .next-btn { flex: 1 1 auto; min-height: 40px; }
+  .next-why { min-height: 40px; }
+  .nav-menu > button { min-height: 44px; }
+  /* шапка в одну строку на 390 px: поиск — значком (Ctrl+K и «Справочник → Поиск по всему» тоже ведут туда), разделы плотнее */
+  .nav-gbtn { padding: 6px 10px; }
+  .nav .nav-search { font-size: 0; gap: 0; min-width: 40px; justify-content: center; }
+  .nav .nav-search span { font-size: 18px; }
+  .gp-body { padding: 16px; }
+  .gp-body h2 { font-size: 19px; }
+  .gp-body h2.gp-q { font-size: 16px; }
+  .gp-grid { grid-template-columns: minmax(0, 1fr); }
+  .gp-opt, .gp-a { min-height: 44px; }
+  .pt-route { grid-template-columns: minmax(0, 1fr); }
+}
+html.calm .rv-pulse, html.calm .rv-tip { animation: none; }
+/* ===== маршрут и меню: конец ===== */
 .pred-pop { position: fixed; z-index: 60; width: 300px; display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border-strong); box-shadow: var(--shadow); font-size: 12.5px; line-height: 1.45; color: var(--text-2); animation: chgIn .2s ease-out; }
 .pred-pop[hidden] { display: none; }
 .pred-pop b { color: var(--text); font-size: 13.5px; }

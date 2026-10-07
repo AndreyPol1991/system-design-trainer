@@ -53,6 +53,8 @@
     $('healBtn').hidden = true;
     setTab('task');
     SD.mentor.onLevel(level);
+    /* маршрут и постепенное раскрытие инструментов (js/ux.js) */
+    if (SD.ux && SD.ux.onLevel) SD.ux.onLevel(level);
   }
 
   /* ---------- пересчёт ---------- */
@@ -96,11 +98,25 @@
       A.progress[L.id] = { stars: st };
       save();
       renderHeader();
+      if (SD.ux && SD.ux.onWin) SD.ux.onWin(L);
       if (!prev) { toast(`Уровень «${L.title}» пройден. Звёзд: ${st} из 3.`); if (SD.mentor) SD.mentor.onEvent('win', { stars: st }); }
     }
   }
+  /* «Следующий уровень»: уровень на маршруте «Моего пути» — дальше по маршруту, иначе по треку, как раньше */
+  function nextStep() {
+    const r = SD.ux && SD.ux.routeNext ? SD.ux.routeNext(A.level) : null;
+    if (r) { r.open(); return; }
+    const nx = SD.nextLevel(A.level); if (nx) loadLevel(nx);
+  }
+  function nextLabel() {
+    const b = $('paneTask').querySelector('[data-act="next"]'); if (!b || b.dataset.route) return;
+    const r = SD.ux && SD.ux.routeNext ? SD.ux.routeNext(A.level) : null; if (!r) return;
+    b.dataset.route = '1'; b.textContent = 'Дальше по маршруту: ' + r.title + ' →';
+    const nx = SD.nextLevel(A.level);
+    if (nx && nx.id !== r.key) { const t = document.createElement('button'); t.type = 'button'; t.className = 'btn ghost'; t.setAttribute('data-act', 'tracknext'); t.textContent = 'Следующий в треке: ' + nx.title; b.after(t); }
+  }
   function renderPanes() {
-    if (A.tab === 'task') SD.panels.task(A);
+    if (A.tab === 'task') { SD.panels.task(A); nextLabel(); }
     if (A.tab === 'node') SD.inspector.render(A);
     if (A.tab === 'stats') SD.panels.stats(A);
     if (A.tab === 'live') SD.explain.render();
@@ -118,6 +134,18 @@
     $('navSandbox').setAttribute('aria-pressed', L.sandbox ? 'true' : 'false');
     $('navLevels').setAttribute('aria-pressed', L.sandbox ? 'false' : 'true');
   }
+  /* карта уровней + один следующий шаг маршрута сверху и подсветка этого шага на карте (js/path.js) */
+  function openMap() {
+    SD.panels.map(A);
+    const n = SD.path && SD.path.next ? SD.path.next() : null, body = $('mapBody');
+    if (n && n.item && body) {
+      const d = document.createElement('div'); d.className = 'hub-next map-next';
+      d.innerHTML = `<span>Дальше по маршруту: <b>${esc(n.item.title)}</b> <small>· ${esc(n.why)}</small></span><button type="button" class="btn primary" data-mapnext="1">Перейти</button><button type="button" class="btn ghost" data-mappath="1">Мой путь</button>`;
+      body.insertBefore(d, body.firstChild);
+      const b = body.querySelector(`[data-level="${n.item.key}"]`); if (b) b.classList.add('route-next');
+    }
+    openModal('mapModal');
+  }
   function firstLevelWith(type) { const i = SD.LEVELS.findIndex(l => (l.allow || []).includes(type)); return i < 0 ? null : i + 1; }
   function renderPalette() {
     const allow = new Set(A.level.allow || []);
@@ -126,7 +154,7 @@
       const ps = SD.SERVICE_PRESETS.filter(p => allow.has(p.type));
       if (ps.length) {
         const openPre = A.level.archLvl || A.level.opsLvl || A.level.sandbox || (SD.ux && SD.ux.palOpen('presets'));
-        h += `<div class="grp"><button type="button" class="p-more preset-h" data-pmore="presets" aria-expanded="${!!openPre}">Готовые сервисы · ${ps.length} <span aria-hidden="true">${openPre ? '▾' : '▸'}</span></button><div class="p-list" data-plist="presets" ${openPre ? '' : 'hidden'}>`;
+        h += `<div class="grp p-presets"><button type="button" class="p-more preset-h" data-pmore="presets" aria-expanded="${!!openPre}">Готовые сервисы · ${ps.length} <span aria-hidden="true">${openPre ? '▾' : '▸'}</span></button><div class="p-list" data-plist="presets" ${openPre ? '' : 'hidden'}>`;
         ps.forEach(p => { h += `<button type="button" class="part preset" data-type="${p.type}" data-preset="${p.id}" title="${esc(p.label)}: ${esc(p.short)}">${SD.icon(p.type)}<span class="t"><b>${esc(p.label)}</b><small>${esc(p.short)}</small></span></button>`; });
         h += `</div></div>`;
       }
@@ -225,7 +253,7 @@
     SD.mentor.init(A, {
       revealHint: () => { A.hintsShown[A.level.id] = (A.hintsShown[A.level.id] || 0) + 1; save(); renderPanes(); },
       openDive, solution: () => $('solBtn').click(), heal: () => $('healBtn').click(),
-      next: () => { const nx = SD.nextLevel(A.level); if (nx) loadLevel(nx); }
+      next: nextStep
     });
 
     $('tabTask').addEventListener('click', () => setTab('task'));
@@ -304,8 +332,8 @@
     $('zoomOut').addEventListener('click', SD.editor.zoomOut);
     $('zoomFit').addEventListener('click', SD.editor.fit);
 
-    $('levelBtn').addEventListener('click', () => { SD.panels.map(A); openModal('mapModal'); });
-    $('navLevels').addEventListener('click', () => { SD.panels.map(A); openModal('mapModal'); });
+    $('levelBtn').addEventListener('click', openMap);
+    $('navLevels').addEventListener('click', openMap);
     $('navSandbox').addEventListener('click', () => loadLevel(SD.SANDBOX, null));
     $('navLib').addEventListener('click', () => { SD.panels.library(A); openModal('libModal'); });
     SD.patterns.mount();
@@ -338,6 +366,8 @@
     document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModals(); });
 
     $('mapBody').addEventListener('click', e => {
+      if (e.target.closest('[data-mapnext]')) { const n = SD.path && SD.path.next ? SD.path.next() : null; $('mapModal').hidden = true; if (n && n.item) n.item.open(); return; }
+      if (e.target.closest('[data-mappath]')) { $('mapModal').hidden = true; if (SD.path) SD.path.open(); return; }
       const b = e.target.closest('[data-level]'); if (!b) return;
       const id = b.getAttribute('data-level');
       $('mapModal').hidden = true;
@@ -380,7 +410,8 @@
     }
     const act = t.getAttribute('data-act');
     if (act === 'hint') { A.hintsShown[A.level.id] = (A.hintsShown[A.level.id] || 0) + 1; save(); renderPanes(); }
-    if (act === 'next') { const nx = SD.nextLevel(A.level); if (nx) loadLevel(nx); }
+    if (act === 'next') nextStep();
+    if (act === 'tracknext') { const nx = SD.nextLevel(A.level); if (nx) loadLevel(nx); }
     if (act === 'patcard') SD.patterns.open(A.level.pattern);
     if (act === 'guide' && SD.guide) SD.guide.open(t.getAttribute('data-id'), t.getAttribute('data-key') || null);
     if (act === 'chgclose' && A.lastChange) { A.lastChange.dismissed = true; renderPanes(); }
