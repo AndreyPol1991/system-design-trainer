@@ -2254,6 +2254,8 @@
     const t = LAB.tasks.find(x => x.id === tid);
     if (SD.app && SD.app.toast && t) SD.app.toast(`Задание выполнено: ${t.text}`);
     if (SD.bridge && SD.bridge.labDone && LAB.tasks.every(x => d.includes(x.id))) SD.bridge.labDone('table');
+    /* платформе — каждое задание отдельно: lab:table:<задание> (js/bridge.js) */
+    if (SD.bridge && SD.bridge.labTask) SD.bridge.labTask('table', tid);
     return true;
   }
   /* SD.labTable.embed(el, { shards, key, method, partition, replicas, tab }) → { set(opts), destroy() } */

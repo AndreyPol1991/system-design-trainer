@@ -68,6 +68,7 @@
     const lab = want;
     if (cleanup) cleanup();
     cur = lab.id;
+    if (SD.bridge && SD.bridge.labOpen) SD.bridge.labOpen(lab.id);
     document.getElementById('labModal').hidden = false;
     document.getElementById('labTitle').textContent = lab.title;
     list();
@@ -91,6 +92,8 @@
     if (S.done[lab.id].includes(tid)) return;
     S.done[lab.id].push(tid); save(); renderTasks(lab); list();
     if (SD.bridge && lab.tasks.every(x => S.done[lab.id].includes(x.id))) SD.bridge.labDone(lab.id);
+    /* платформе — каждое задание отдельно: lab:<лаборатория>:<задание> (js/bridge.js) */
+    if (SD.bridge && SD.bridge.labTask) SD.bridge.labTask(lab.id, tid);
     const t = lab.tasks.find(x => x.id === tid);
     if (SD.app && t) SD.app.toast(`Задание выполнено: ${t.text}`);
   }

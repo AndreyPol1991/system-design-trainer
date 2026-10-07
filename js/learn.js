@@ -294,6 +294,8 @@
     const t = U.tries[A.level.id] = (U.tries[A.level.id] || []).slice(-11);
     t.push({ c: Math.round(r.cost), l: Math.round(r.total.lat), s: +r.total.success.toFixed(4), ok: A.goals.every(x => x.ok) ? 1 : 0 });
     save();
+    /* событие учёбы для платформы: проверка решения (js/telemetry.js; вне платформы — ничего) */
+    if (SD.telemetry) SD.telemetry.attempt(A.level, A.goals.every(x => x.ok));
     if (A.tab === 'task') SD.panels.task(A);
   }
   function runCheck(pred) {
@@ -330,5 +332,5 @@
     window.addEventListener('resize', () => setTimeout(draw, 60));
   }
 
-  SD.learn = { mount, analyze, goalExtra, tries: id => (U.tries[id] || []).slice(), close: () => { cur = null; draw(); } };
+  SD.learn = { mount, analyze, goalExtra, record, tries: id => (U.tries[id] || []).slice(), close: () => { cur = null; draw(); } };
 })();
