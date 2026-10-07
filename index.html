@@ -4723,6 +4723,136 @@ html.calm .rv-pulse, html.calm .rv-tip { animation: none; }
   .canvas-wrap > .ex-dock { top: 8px; bottom: auto; width: auto; padding: 8px 10px; }
   .ex-dock .btn { flex: 1 1 auto; justify-content: center; }
 }
+/* ===== Разминка дня (js/warmup.js, префикс .wu-) ===== */
+/* ===== Разминка дня (js/warmup.js): начало =====
+   Только переменные :root проекта — обе темы работают сами. Текст не меньше 12 px. На узком экране — одна колонка. */
+.sheet.wu-sheet { width: min(780px, 100%); }
+.wu-sheet:focus, .wu-sheet:focus-visible { outline: none; }
+.wu-body { overflow-y: auto; padding: 18px 22px 0; display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+/* нижний отступ — у последнего блока, а не у прокрутки: так липкая панель действий ложится ровно на нижний край во всех браузерах */
+.wu-body > :last-child:not(.wu-foot) { margin-bottom: 20px; }
+.wu-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.wu-head .eyebrow { margin: 0; }
+.wu-head .wu-x { margin-left: auto; }
+.wu-body h2 { font: 700 22px/1.25 var(--f-brand); color: var(--text); margin: 0; }
+.wu-body h2.wu-q { font: 600 18px/1.4 var(--f-body); }
+.wu-lede { margin: 0; color: var(--text-2); line-height: 1.55; max-width: 72ch; font-size: 14px; }
+.wu-lede b { color: var(--text); }
+.wu-soft { margin: 0; font-size: 13px; color: var(--text-muted); line-height: 1.5; }
+.wu-acts { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+/* главные действия всегда на виду: на телефоне длинный экран листается, а кнопка остаётся внизу */
+.wu-foot { position: sticky; bottom: 0; z-index: 1; margin: 0 -22px; padding: 10px 22px 16px; background: var(--surface); border-top: 1px solid var(--border); }
+.wu-chip { font: 500 12px/1.4 var(--f-body); padding: 3px 9px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--border); color: var(--text-2); white-space: nowrap; }
+.wu-topics { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* картинка-схема «аналогия ↔ термин» и лесенка интервалов */
+.wu-map { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface-2); }
+.wu-mi { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1.25fr); gap: 10px; align-items: baseline; font-size: 13px; line-height: 1.4; padding: 3px 0; }
+.wu-mi + .wu-mi { border-top: 1px dashed var(--border); }
+.wu-ma { color: var(--text); font-weight: 600; }
+.wu-eq { color: var(--accent); font-weight: 700; }
+.wu-mt { color: var(--text-2); }
+.wu-ladder { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text-2); }
+.wu-lk { font: 600 12px var(--f-mono); color: var(--text-muted); text-transform: uppercase; letter-spacing: .06em; }
+.wu-step { --i: 0; padding: 4px 9px; border-radius: 8px; border: 1px solid var(--accent); background: color-mix(in srgb, var(--accent) calc(6% + var(--i) * 5%), var(--surface)); color: var(--text); font: 600 12px/1.3 var(--f-mono); white-space: nowrap; }
+.wu-la { color: var(--text-muted); }
+.wu-back { flex: 1 1 100%; color: var(--warn); font-size: 12.5px; }
+.wu-how, .wu-why, .wu-pic { border-radius: 10px; border: 1px solid var(--border); background: var(--surface); }
+.wu-how > summary, .wu-why > summary, .wu-pic > summary { cursor: pointer; padding: 8px 12px; font-size: 13px; font-weight: 600; color: var(--text-2); }
+.wu-how[open] { display: flex; flex-direction: column; gap: 10px; padding-bottom: 12px; }
+.wu-how[open] > :not(summary) { margin-left: 12px; margin-right: 12px; }
+.wu-why p { margin: 0; padding: 0 12px 10px; font-size: 13px; color: var(--text-2); line-height: 1.55; }
+.wu-pic-in { padding: 0 12px 12px; }
+.wu-pic-in svg { display: block; width: 100%; height: auto; max-height: 260px; }
+
+/* серия дней */
+.wu-streak { display: flex; gap: 14px; align-items: center; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface-2); }
+.wu-sn { flex: none; min-width: 72px; padding: 8px 8px 7px; border-radius: 14px; display: flex; flex-direction: column; align-items: center; gap: 3px; text-align: center; border: 2px solid var(--accent); background: var(--accent-soft); }
+.wu-sn b { font: 800 22px/1 var(--f-mono); color: var(--text); }
+.wu-sn small { font-size: 12px; line-height: 1.2; color: var(--text-2); }
+.wu-st { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.wu-st p { margin: 0; font-size: 13px; color: var(--text-2); line-height: 1.5; }
+.wu-st b { color: var(--text); }
+
+/* карточка */
+.wu-prog { height: 4px; border-radius: 2px; background: var(--surface-3); overflow: hidden; }
+.wu-prog i { display: block; height: 100%; background: var(--accent); transition: width .3s; }
+.wu-meta { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; }
+.wu-tag { font: 700 12px/1.3 var(--f-mono); padding: 3px 9px; border-radius: 999px; background: var(--info-soft); color: var(--info); border: 1px solid color-mix(in srgb, var(--info) 35%, transparent); }
+.wu-tag.wu-t-ld, .wu-tag.wu-t-fl { background: var(--warn-soft); color: var(--warn); border-color: color-mix(in srgb, var(--warn) 35%, transparent); }
+.wu-tag.wu-t-bn { background: var(--bad-soft); color: var(--bad); border-color: color-mix(in srgb, var(--bad) 35%, transparent); }
+.wu-tag.wu-t-fg { background: var(--accent-soft); color: var(--accent); border-color: color-mix(in srgb, var(--accent) 35%, transparent); }
+.wu-src { font-size: 12.5px; color: var(--text-muted); }
+
+/* мини-схема эталона: колонки слева направо */
+.wu-sch { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--border); background: var(--bg); background-image: radial-gradient(var(--grid-major) 1px, transparent 1px); background-size: 14px 14px; }
+.wu-col { display: flex; flex-direction: column; gap: 4px; }
+.wu-arr { color: var(--text-muted); font-size: 14px; }
+.wu-nd { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 8px; border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); font-size: 12.5px; line-height: 1.3; }
+.wu-nd svg { width: 16px; height: 16px; flex: none; color: var(--text-2); }
+.wu-nd i { font-style: normal; font: 600 12px var(--f-mono); color: var(--text-muted); }
+.wu-nd em { font-style: normal; font: 700 12px var(--f-mono); }
+.wu-nd.wu-hot { border-color: var(--bad); background: var(--bad-soft); box-shadow: 0 0 0 2px color-mix(in srgb, var(--bad) 25%, transparent); }
+.wu-nd.wu-hot em, .wu-nd.wu-hot svg { color: var(--bad); }
+.wu-nd.wu-down { border-color: var(--warn); border-style: dashed; background: var(--warn-soft); }
+.wu-nd.wu-down em, .wu-nd.wu-down svg { color: var(--warn); }
+
+/* варианты и разбор ответа */
+.wu-opts { display: flex; flex-direction: column; gap: 6px; }
+.wu-a { display: flex; align-items: flex-start; gap: 10px; text-align: left; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); font-size: 14px; line-height: 1.4; }
+.wu-a kbd { flex: none; min-width: 22px; height: 22px; display: inline-grid; place-items: center; border-radius: 6px; border: 1px solid var(--border-strong); background: var(--surface); font: 600 12px var(--f-mono); color: var(--text-muted); }
+.wu-a:hover:not(:disabled) { border-color: var(--accent); }
+.wu-a:disabled { opacity: 1; cursor: default; color: var(--text-2); }
+.wu-a.right { border-color: var(--ok); background: var(--ok-soft); color: var(--text); }
+.wu-a.right kbd { border-color: var(--ok); color: var(--ok); }
+.wu-a.wrong { border-color: var(--bad); background: var(--bad-soft); color: var(--text); }
+.wu-a.wrong kbd { border-color: var(--bad); color: var(--bad); }
+.wu-fb { margin: 0; padding: 10px 12px; border-radius: 10px; background: var(--surface-2); border-left: 3px solid var(--warn); color: var(--text-2); line-height: 1.55; font-size: 13.5px; }
+.wu-fb.ok { border-left-color: var(--ok); }
+.wu-fb b { color: var(--text); }
+.wu-fb small { display: block; margin-top: 6px; font-size: 12.5px; color: var(--text-muted); }
+
+/* итог */
+.wu-res { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
+.wu-rc { padding: 10px 12px; border-radius: 12px; border: 1px solid var(--ok); background: var(--surface-2); display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.wu-rc.bad { border-color: var(--warn); }
+.wu-rc h3 { margin: 0; font: 600 12px var(--f-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--ok); }
+.wu-rc.bad h3 { color: var(--warn); }
+.wu-rc ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.wu-ri { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 8px; align-items: baseline; font-size: 13px; }
+.wu-rk { font-weight: 700; color: var(--ok); }
+.wu-ri.bad .wu-rk { color: var(--warn); }
+.wu-rt { color: var(--text-2); min-width: 0; }
+.wu-rt b { color: var(--text); font-weight: 600; }
+.wu-rt small { display: block; font-size: 12px; color: var(--text-muted); }
+.wu-ra { grid-column: 2; display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.wu-ra .btn { white-space: normal; text-align: left; }
+.wu-ra .btn.ghost { color: var(--accent); }
+
+/* меню «Путь» и «Мой путь» */
+.wu-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); margin-left: 6px; vertical-align: middle; }
+.wu-pt { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface-2); font-size: 13px; color: var(--text-2); line-height: 1.5; }
+.wu-pt.on { border-color: var(--accent); background: var(--accent-soft); }
+.wu-pt > span { flex: 1 1 280px; }
+.wu-pt b { color: var(--text); }
+
+@media (max-width: 760px) {
+  .wu-body { padding: 14px 16px 0; }
+  .wu-body > :last-child:not(.wu-foot) { margin-bottom: 16px; }
+  .wu-body h2 { font-size: 19px; }
+  .wu-body h2.wu-q { font-size: 16px; }
+  .wu-res { grid-template-columns: minmax(0, 1fr); }
+  .wu-mi { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .wu-eq { display: none; }
+  .wu-mt::before { content: "↔ "; color: var(--accent); font-weight: 700; }
+  .wu-a, .wu-acts .btn { min-height: 44px; }
+  .wu-acts .btn { flex: 1 1 auto; justify-content: center; }
+  .wu-streak { align-items: flex-start; }
+  .wu-sn { min-width: 64px; }
+  .wu-foot { margin: 0 -16px; padding: 10px 16px 14px; }
+}
+html.calm .wu-prog i { transition: none; }
+/* ===== Разминка дня: конец ===== */
 .pred-pop { position: fixed; z-index: 60; width: 300px; display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border-strong); box-shadow: var(--shadow); font-size: 12.5px; line-height: 1.45; color: var(--text-2); animation: chgIn .2s ease-out; }
 .pred-pop[hidden] { display: none; }
 .pred-pop b { color: var(--text); font-size: 13.5px; }
@@ -7220,6 +7350,7 @@ html.xr-loading, html.xr-loading * { cursor: progress !important; }
 <script src="js/fingers-labs-b.js"></script>
 <script src="js/incidents.js"></script>
 <script src="js/exam.js"></script>
+<script src="js/warmup.js"></script>
 <script src="js/app.js"></script>
 
 </body>

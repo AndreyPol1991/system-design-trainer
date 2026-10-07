@@ -139,6 +139,8 @@
     if (nx.item) { cur.w = nx.item; h += `<button type="button" class="btn primary" data-ptgo="w">Следующий шаг: ${esc(nx.item.title)} <small>· ${esc(nx.why)}</small></button>`; }
     else h += '<span class="pt-fin">Маршрут пройден целиком. Возьми другую цель выше или «Событие дня».</span>';
     h += '</div></div>';
+    /* разминка дня (js/warmup.js): «К повторению сегодня: N» и кнопка */
+    if (SD.warmup && SD.warmup.pathHtml) h += SD.warmup.pathHtml();
     /* цель и маршрут: что дальше по порядку, без давления */
     const keys = route(role.id), its = keys.map(itemOf).filter(Boolean), at = nx.item ? its.indexOf(nx.item) : its.length;
     const win = its.slice(Math.max(0, at - 1), Math.max(0, at - 1) + 6);
