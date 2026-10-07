@@ -402,6 +402,8 @@
   function firstRun() {
     if (U.goalAsked || (SD.path && SD.path.goal && SD.path.goal()) || U.oldUser) return;
     if (deepLink) return;
+    /* внутри платформы цель и следующий шаг задаёт она — своё окно цели не показываем */
+    if (SD.bridge && SD.bridge.state && SD.bridge.state.linked) return;
     const S = A(); if (!S || Object.keys(S.progress || {}).length) return;
     goalOpen(false);
   }

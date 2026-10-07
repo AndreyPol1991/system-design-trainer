@@ -40,7 +40,7 @@
   const PROTOCOL = 'trainer/1', TRAINER = 'stroyka', KEY = 'amp-stroyka-bridge-v1';
   /* обычный код или задание лаборатории; то же правило, что в манифесте платформы */
   const TASK_ID = /^(?:[a-z0-9][a-z0-9-]{1,40}|lab:[a-z0-9][a-z0-9-]{0,30}:[a-z0-9][a-z0-9-]{0,30})$/;
-  const FEATURES = ['events', 'skills'];
+  const FEATURES = ['events', 'skills', 'open'];
   const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, Math.floor(+v) || 0));
   const labCode = (lab, task) => 'lab:' + lab + ':' + task;
 
@@ -163,6 +163,10 @@
       mountLabs();
       whenApp(A => { catchUp(A); paint(); });
       paint();
+      /* «Следующий шаг» платформы: открыть присланное задание (open). Подсказка, а не замок — дальше человек ходит где хочет */
+      if (B.features.includes('open') && typeof data.task === 'string') whenApp(() => openTask(data.task));
+      /* окно «Зачем ты здесь?» внутри платформы лишнее: цель и шаг задаёт она */
+      [0, 400, 1500].forEach(t => setTimeout(() => { const g = document.getElementById('goalModal'); if (g && !g.hidden) g.hidden = true; }, t));
     }
     if (data.kind === 'accepted' && typeof data.task === 'string') {
       B.credited.add(data.task);
@@ -282,6 +286,15 @@
   SD.bridge = { won, miss, peek, labDone, labTask, labOpen, post, pathLevel, skills: () => B.skills, state: B, PROTOCOL, TRAINER, FEATURES };
 
   /* ready — когда страница собрана и площадка запущена */
+  /* код задания: уровень (cache) или задание лаборатории (lab:<лаборатория>:<задание>, lab:<лаборатория>) */
+  function openTask(task) {
+    const lab = /^lab:([a-z0-9-]+)(?::[a-z0-9-]+)?$/.exec(task);
+    if (lab) { if (SD.labs && SD.labs.open && (SD.LABS || []).some(l => l.id === lab[1])) SD.labs.open(lab[1]); return; }
+    const L = SD.levelById && SD.levelById(task);
+    if (!L || !SD.app || !SD.app.loadLevel) return;
+    document.querySelectorAll('.modal').forEach(m => { if (m.id !== 'labModal') m.hidden = true; });
+    SD.app.loadLevel(L);
+  }
   const ready = () => send({ kind: 'ready', features: FEATURES });
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', ready); else setTimeout(ready, 0);
 })();
