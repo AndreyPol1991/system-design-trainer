@@ -50,6 +50,9 @@
     });
     return files[src];
   }
+  /* лабораторию уже открывали — «На пальцах» сворачиваем, чтобы сама лаборатория была на первом экране */
+  const SEEN = 'amp-stroyka-lab-seen-v1';
+  const seenLab = id => { let s = {}; try { s = JSON.parse(localStorage.getItem(SEEN) || '{}') || {}; } catch (e) { s = {}; } const was = !!s[id] || !!(S.done[id] && S.done[id].length); if (!s[id]) { s[id] = 1; try { localStorage.setItem(SEEN, JSON.stringify(s)); } catch (e) { /* без хранилища */ } } return was; };
   function open(id) {
     const want = SD.LABS.find(l => l.id === id) || SD.LABS[0];
     if (want.lazy) {
@@ -73,7 +76,7 @@
     renderTasks(lab);
     /* «На пальцах» сверху лаборатории: тезис, аналогия и картинка (SD.LAB_FINGERS[id], рисует js/level-fingers.js) */
     const LF = SD.LAB_FINGERS && SD.LAB_FINGERS[lab.id];
-    if (LF && SD.fingers && SD.fingers.card) { const hd = root.querySelector('.lab-head'); if (hd) hd.insertAdjacentHTML('afterbegin', SD.fingers.card({ id: 'lab-' + lab.id, title: lab.title, fingers: LF })); }
+    if (LF && SD.fingers && SD.fingers.card) { const hd = root.querySelector('.lab-head'); if (hd) hd.insertAdjacentHTML('afterbegin', SD.fingers.card({ id: 'lab-' + lab.id, title: lab.title, fingers: LF }, { closed: seenLab(lab.id) })); }
     if (SD.incidents && SD.incidents.labCard) { const hd = root.querySelector('.lab-head'); if (hd) hd.insertAdjacentHTML('beforeend', SD.incidents.labCard(lab.id)); }
     const dv = document.getElementById('labDive'); if (dv) dv.onclick = () => SD.player.open(lab.dive);
     cleanup = lab.mount(document.getElementById('labBody'), { done: tid => done(lab, tid) }) || null;

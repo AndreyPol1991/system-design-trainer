@@ -49,12 +49,13 @@
     return `<b>${esc(m[0])}</b> <span class="lf-fg-eq" aria-hidden="true">↔</span> <b class="lf-fg-term">${esc(m[1])}</b>${m[2] ? `<span class="lf-fg-capx">${esc(m[2])}</span>` : ''}`;
   };
 
-  function card(L) {
+  /* opt.closed — свернуть по умолчанию, пока человек сам не раскрыл (лаборатория, которую уже открывали) */
+  function card(L, opt) {
     if (!has(L)) return '';
     const F = fingersOf(L), k = baseId(L);
     if (ST.key !== k) { ST.key = k; ST.pin = null; ST.hov = null; }
     ST.F = F; FS[k] = F;
-    const open = !U.closed[k], on = ST.pin;
+    const open = k in U.closed ? !U.closed[k] : !(opt && opt.closed), on = ST.pin;
     let pic = '';
     try { pic = typeof F.picture === 'function' ? F.picture(L) : (F.picture || ''); } catch (e) { pic = ''; }
     const map = F.map || [];
@@ -94,7 +95,7 @@
   }
   function setOpen(sec, open) {
     const k = sec.getAttribute('data-lf-card');
-    if (open) delete U.closed[k]; else U.closed[k] = true;
+    U.closed[k] = !open;   /* помним и раскрытие: у карточки, свёрнутой по умолчанию, «раскрыта» — тоже выбор человека */
     save();
     sec.classList.toggle('lf-fg-closed', !open);
     const b = sec.querySelector('.lf-fg-body'); if (b) b.hidden = !open;
