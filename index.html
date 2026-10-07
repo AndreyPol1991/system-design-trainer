@@ -4340,6 +4340,34 @@ html.calm .e2e *, html.calm .e2e *::before, html.calm .e2e *::after { animation:
   .e2e-narrowonly { display: block; }
   .e2e-tabs .e2e-mode { position: sticky; right: 0; margin-left: 6px; box-shadow: -8px 0 10px -4px var(--surface-2); }
 }
+/* ===== телефон: касания (агент) ===== */
+@media (max-width: 900px) {
+  /* палитра в одну строку: вбок — листать ленту пальцем, вниз — тянуть деталь на холст */
+  .palette .part { touch-action: pan-x; }
+  /* точки трафика и резинка новой стрелки не перехватывают палец: касание попадает в стрелку или узел под ними */
+  #partsG, #canvas .rubber { pointer-events: none; }
+  /* холсту больше места: на нём работают пальцами */
+  .stage { height: 76vh; }
+  /* пальцу нужно не меньше 40 px */
+  .zoom-ctl button { width: 40px; height: 40px; }
+  .toolbar .btn, #tbMore, .level-btn, .nav button, .nav-menu button, .sheet-head [data-close], .mentor .m-acts .btn, .q .opt { min-height: 40px; }
+  #tbMore { min-width: 40px; justify-content: center; }
+  .nav-gbtn { white-space: nowrap; }
+  /* мелкие крестики и ссылки: видом прежние, а попасть пальцем — 40 px */
+  .mentor .m-x, .legend .lg-help { position: relative; }
+  .mentor .m-x::after, .coach .coach-x::after, .legend .lg-help::after { content: ''; position: absolute; inset: -11px -10px; }
+  .pane .qhelp { position: relative; }
+  .pane .qhelp::after { content: ''; position: absolute; inset: -11px; }
+  /* кнопки-пилюли на панели задания и узла */
+  .pane .why-btn, .pane .chip-btn, .pane .ac-pat, .pane .btn { min-height: 40px; align-items: center; }
+  .pane summary { padding-block: 10px; }
+  /* пузырь Арчи компактнее, пока он открыт — без аватара (закрыть — крестиком), чтобы схеме осталось место */
+  .mentor .m-bubble { padding: 10px 12px 12px; gap: 8px; }
+  .mentor .m-text { font-size: 13px; max-height: 24vh; }
+  .mentor:has(.m-bubble:not([hidden])) .m-ava { display: none; }
+  /* всплывающее сообщение внизу не ловит касания — кнопки под ним работают */
+  .toast { pointer-events: none; }
+}
 .pred-pop { position: fixed; z-index: 60; width: 300px; display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border-strong); box-shadow: var(--shadow); font-size: 12.5px; line-height: 1.45; color: var(--text-2); animation: chgIn .2s ease-out; }
 .pred-pop[hidden] { display: none; }
 .pred-pop b { color: var(--text); font-size: 13.5px; }

@@ -493,7 +493,15 @@
     const L0 = lvl || last || first;
     loadLevel(L0, L0.interview && SD.interview ? SD.interview.specFor(L0) : undefined);
     if (snap && snap.graph) { A.graph = snap.graph; SD.editor.setGraph(A.graph); recompute(true); requestAnimationFrame(() => SD.editor.fit()); }
-    window.addEventListener('resize', () => SD.editor.fit());
+    /* на телефоне resize прилетает и при прокрутке (прячется адресная строка, выезжает клавиатура):
+       холст того же размера — не сбрасываем масштаб и сдвиг, которые человек выставил пальцами */
+    const canvasSz = () => { const r = $('canvas').getBoundingClientRect(); return Math.round(r.width) + 'x' + Math.round(r.height); };
+    let fitSz = canvasSz();
+    window.addEventListener('resize', ev => {
+      const sz = canvasSz();
+      if (ev.isTrusted && sz === fitSz) return;
+      fitSz = sz; SD.editor.fit();
+    });
   }
   const hot = window.claude && window.claude.hot;
   if (hot && hot.snapshot) hot.snapshot(() => ({ levelId: A.level && A.level.id, graph: A.graph }));

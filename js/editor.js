@@ -85,14 +85,17 @@
     E.view.y = py - (py - E.view.y) * k / E.view.k;
     E.view.k = k; applyView();
   }
-  function fit() {
+  function fit() { fitBox(0, 0); }
+  /* вписать схему в полосу холста без top px сверху и bottom px снизу (на телефоне — мимо пузыря Арчи) */
+  function fitBox(top, bottom) {
     const r = E.svg.getBoundingClientRect();
     if (!E.graph.nodes.length || !r.width) return;
+    const hh = Math.max(40, r.height - (top || 0) - (bottom || 0));
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
     E.graph.nodes.forEach(n => { const s = size(n); x0 = Math.min(x0, n.x); y0 = Math.min(y0, n.y); x1 = Math.max(x1, n.x + s.w); y1 = Math.max(y1, n.y + s.h); });
     const pad = 40, bw = x1 - x0 + pad * 2, bh = y1 - y0 + pad * 2;
-    const k = Math.max(0.35, Math.min(1.15, Math.min(r.width / bw, r.height / bh)));
-    E.view.k = k; E.view.x = (r.width - (x1 - x0) * k) / 2 - x0 * k; E.view.y = (r.height - (y1 - y0) * k) / 2 - y0 * k + 6;
+    const k = Math.max(0.35, Math.min(1.15, Math.min(r.width / bw, hh / bh)));
+    E.view.k = k; E.view.x = (r.width - (x1 - x0) * k) / 2 - x0 * k; E.view.y = (top || 0) + (hh - (y1 - y0) * k) / 2 - y0 * k + 6;
     applyView();
   }
 
@@ -607,8 +610,57 @@
   function bindCanvas() {
     const svg = E.svg;
     let drag = null;
+    /* касания: пальцы на холсте, щипок двумя пальцами; своё распознавание двойного касания и двойного клика */
+    const fingers = new Map();
+    let pinch = null, lastTap = null;
+    const PORT_TOUCH = 24, NODE_TOUCH = 16;
+    /* палец толще кружка связи: ищем ближайший кружок в радиусе PORT_TOUCH px экрана
+       (если палец прямо на стрелке — только совсем рядом с кружком, иначе это касание стрелки) */
+    const nearPort = (cx, cy, rad) => {
+      let best = null, bd = rad || PORT_TOUCH;
+      E.gNodes.querySelectorAll('.node:not(.l-hide) [data-port]').forEach(c => {
+        const q = c.getBoundingClientRect(), d = Math.hypot(q.left + q.width / 2 - cx, q.top + q.height / 2 - cy);
+        if (d < bd) { bd = d; best = c; }
+      });
+      return best;
+    };
+    /* конец стрелки чуть мимо узла — всё равно этот узел */
+    const nearNode = (cx, cy) => {
+      let best = null, bd = NODE_TOUCH;
+      E.gNodes.querySelectorAll('.node:not(.l-hide)').forEach(g => {
+        const q = (g.querySelector('.body') || g).getBoundingClientRect();
+        const d = Math.hypot(Math.max(q.left - cx, 0, cx - q.right), Math.max(q.top - cy, 0, cy - q.bottom));
+        if (d < bd) { bd = d; best = g; }
+      });
+      return best;
+    };
+    /* двойное касание и двойной клик распознаём сами: после первого щелчка узел перерисовывается,
+       и Chrome/Edge не присылают click/dblclick по удалённому элементу */
+    const twice = (key, ev, fn) => {
+      const now = performance.now(), mouse = ev.pointerType === 'mouse';
+      if (lastTap && lastTap.key === key && now - lastTap.t < (mouse ? 500 : 420) && Math.hypot(ev.clientX - lastTap.x, ev.clientY - lastTap.y) < (mouse ? 8 : 32)) { lastTap = null; E.dblAt = now; fn(); return; }
+      lastTap = { key, t: now, x: ev.clientX, y: ev.clientY };
+    };
+    const startPinch = () => {
+      if (drag) {
+        if (drag.kind === 'connect') { drag.line.remove(); svg.classList.remove('connecting'); }
+        if (drag.kind === 'node' && drag.moved) changed('move');
+        drag = null;
+      }
+      lastTap = null;
+      const [a, b] = [...fingers.values()], r = E.svg.getBoundingClientRect();
+      const mx = (a.x + b.x) / 2 - r.left, my = (a.y + b.y) / 2 - r.top;
+      pinch = { d0: Math.max(12, Math.hypot(a.x - b.x, a.y - b.y)), k0: E.view.k, wx: (mx - E.view.x) / E.view.k, wy: (my - E.view.y) / E.view.k };
+    };
     svg.addEventListener('pointerdown', ev => {
-      const port = ev.target.closest('[data-port]');
+      const touch = ev.pointerType === 'touch' || ev.pointerType === 'pen';
+      if (touch) {
+        fingers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+        svg.setPointerCapture(ev.pointerId);
+        if (fingers.size === 2) { startPinch(); return; }
+        if (fingers.size > 2 || pinch) return;
+      }
+      const port = ev.target.closest('[data-port]') || (touch ? nearPort(ev.clientX, ev.clientY, ev.target.closest('.edge') ? 10 : PORT_TOUCH) : null);
       const nodeEl = ev.target.closest('.node');
       const edgeEl = ev.target.closest('.edge');
       const w = toWorld(ev.clientX, ev.clientY);
@@ -617,45 +669,66 @@
         const from = port.getAttribute('data-port');
         const n = node(from), p = portOut(n);
         const line = el('path', { class: 'rubber', d: `M${p.x},${p.y} L${w.x},${w.y}` }, E.gFx);
-        drag = { kind: 'connect', from, line, p };
+        drag = { kind: 'connect', from, line, p, touch };
         svg.classList.add('connecting');
       } else if (nodeEl) {
         const n = node(nodeEl.getAttribute('data-id'));
-        drag = { kind: 'node', n, dx: w.x - n.x, dy: w.y - n.y, moved: false, sx: ev.clientX, sy: ev.clientY };
+        drag = { kind: 'node', n, dx: w.x - n.x, dy: w.y - n.y, moved: false, sx: ev.clientX, sy: ev.clientY, touch };
       } else if (edgeEl) {
-        select({ type: 'edge', id: edgeEl.getAttribute('data-edge') });
+        const eid = edgeEl.getAttribute('data-edge');
+        select({ type: 'edge', id: eid });
+        twice('e:' + eid, ev, () => { if (E.cb.onOpenEdge) E.cb.onOpenEdge(eid); });
         drag = null;
       } else {
-        drag = { kind: 'pan', sx: ev.clientX, sy: ev.clientY, vx: E.view.x, vy: E.view.y, moved: false };
+        drag = { kind: 'pan', sx: ev.clientX, sy: ev.clientY, vx: E.view.x, vy: E.view.y, moved: false, touch };
       }
     });
     svg.addEventListener('pointermove', ev => {
+      if (fingers.has(ev.pointerId)) fingers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+      if (pinch) {
+        if (fingers.size < 2) return;
+        const [a, b] = [...fingers.values()], r = E.svg.getBoundingClientRect();
+        const mx = (a.x + b.x) / 2 - r.left, my = (a.y + b.y) / 2 - r.top;
+        const k = Math.max(0.3, Math.min(2.2, pinch.k0 * Math.hypot(a.x - b.x, a.y - b.y) / pinch.d0));
+        E.view.k = k; E.view.x = mx - pinch.wx * k; E.view.y = my - pinch.wy * k; applyView();
+        return;
+      }
       if (!drag) return;
       const w = toWorld(ev.clientX, ev.clientY);
       if (drag.kind === 'connect') drag.line.setAttribute('d', `M${drag.p.x},${drag.p.y} L${w.x},${w.y}`);
       else if (drag.kind === 'node') {
-        if (!drag.moved && Math.hypot(ev.clientX - drag.sx, ev.clientY - drag.sy) < 4) return;
+        if (!drag.moved && Math.hypot(ev.clientX - drag.sx, ev.clientY - drag.sy) < (drag.touch ? 8 : 4)) return;
         drag.moved = true;
         drag.n.x = Math.round((w.x - drag.dx) / 4) * 4; drag.n.y = Math.round((w.y - drag.dy) / 4) * 4;
         renderEdges(); renderNodes();
       } else if (drag.kind === 'pan') {
         const dx = ev.clientX - drag.sx, dy = ev.clientY - drag.sy;
-        if (Math.abs(dx) + Math.abs(dy) > 3) drag.moved = true;
+        if (Math.abs(dx) + Math.abs(dy) > (drag.touch ? 8 : 3)) drag.moved = true;
         E.view.x = drag.vx + dx; E.view.y = drag.vy + dy; applyView();
       }
     });
     const end = ev => {
+      if (fingers.delete(ev.pointerId) && pinch) { if (!fingers.size) pinch = null; return; }
       if (!drag) return;
       if (drag.kind === 'connect') {
         drag.line.remove(); svg.classList.remove('connecting');
         const target = document.elementFromPoint(ev.clientX, ev.clientY);
-        const tEl = target && target.closest && target.closest('.node');
+        const tEl = (target && target.closest && target.closest('.node')) || (drag.touch ? nearNode(ev.clientX, ev.clientY) : null);
         if (tEl) {
           const to = tEl.getAttribute('data-id');
-          if (!addEdge(drag.from, to) && to !== drag.from && E.cb.onToast) E.cb.onToast('Такая связь уже есть или к пользователям вести стрелку нельзя.');
+          if (to === drag.from && drag.touch) {
+            /* пальцем ткнули у края узла, рядом с кружком, и не потянули — это касание узла */
+            select({ type: 'node', id: to });
+            if (ev.type === 'pointerup') twice('n:' + to, ev, () => { if (E.cb.onOpen) E.cb.onOpen(to); });
+          } else if (!addEdge(drag.from, to) && to !== drag.from && E.cb.onToast) E.cb.onToast('Такая связь уже есть или к пользователям вести стрелку нельзя.');
         } else select({ type: 'node', id: drag.from });
       } else if (drag.kind === 'node') {
-        if (drag.moved) changed('move'); else select({ type: 'node', id: drag.n.id });
+        if (drag.moved) changed('move');
+        else {
+          const id = drag.n.id;
+          select({ type: 'node', id });
+          if (ev.type === 'pointerup') twice('n:' + id, ev, () => { if (E.cb.onOpen) E.cb.onOpen(id); });
+        }
       } else if (drag.kind === 'pan' && !drag.moved) select(null);
       drag = null;
     };
@@ -663,6 +736,7 @@
     svg.addEventListener('pointercancel', end);
     svg.addEventListener('wheel', ev => { ev.preventDefault(); zoomAt(ev.deltaY < 0 ? 1.1 : 1 / 1.1, ev.clientX, ev.clientY); }, { passive: false });
     svg.addEventListener('dblclick', ev => {
+      if (performance.now() - (E.dblAt || 0) < 800) return;   /* двойное касание уже открыло узел */
       const n = ev.target.closest('.node'); if (n && E.cb.onOpen) { E.cb.onOpen(n.getAttribute('data-id')); return; }
       const ed = ev.target.closest('[data-edge]'); if (ed && E.cb.onOpenEdge) E.cb.onOpenEdge(ed.getAttribute('data-edge'));
     });
@@ -686,8 +760,15 @@
       const preset = part.dataset.preset && SD.SERVICE_PRESETS ? SD.SERVICE_PRESETS.find(p => p.id === part.dataset.preset) : null;
       const pprops = preset ? JSON.parse(JSON.stringify(preset.props)) : undefined, plabel = preset ? preset.label : undefined;
       let ghost = null, moved = false;
-      const sx = ev.clientX, sy = ev.clientY;
+      const sx = ev.clientX, sy = ev.clientY, pid = ev.pointerId;
+      /* палец повёл ленту палитры вбок — браузер отменил указатель: деталь не ставим */
+      const cancel = e2 => {
+        if (e2.pointerId !== pid) return;
+        window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', cancel);
+        if (ghost) ghost.remove();
+      };
       const move = e2 => {
+        if (e2.pointerId !== pid) return;
         if (!moved && Math.hypot(e2.clientX - sx, e2.clientY - sy) < 6) return;
         moved = true;
         if (!ghost) {
@@ -699,7 +780,8 @@
         ghost.style.left = e2.clientX + 'px'; ghost.style.top = e2.clientY + 'px';
       };
       const up = e2 => {
-        window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up);
+        if (e2.pointerId !== pid) return;
+        window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', cancel);
         if (ghost) ghost.remove();
         const r = E.svg.getBoundingClientRect();
         if (moved && e2.clientX > r.left && e2.clientX < r.right && e2.clientY > r.top && e2.clientY < r.bottom) {
@@ -711,7 +793,7 @@
           addNode(type, c.x - W / 2 + off, c.y - H0 / 2 + off, pprops, plabel);
         }
       };
-      window.addEventListener('pointermove', move); window.addEventListener('pointerup', up);
+      window.addEventListener('pointermove', move); window.addEventListener('pointerup', up); window.addEventListener('pointercancel', cancel);
     });
   }
 
@@ -724,7 +806,7 @@
   }
 
   SD.editor = {
-    init, bindPalette, setGraph, render, fit, select, removeSel, addNode, addEdge, node, subtitle,
+    init, bindPalette, setGraph, render, fit, fitIn: fitBox, select, removeSel, addNode, addEdge, node, subtitle,
     getGraph: () => E.graph, getSel: () => E.sel, markDeltas,
     getLayer: () => layer, setLayer: l => { layer = l || 'all'; try { localStorage.setItem('amp-stroyka-layer', layer); } catch (e) { /* без хранилища */ } clearParticles(); render(); },
     zoomIn: () => zoomAt(1.2), zoomOut: () => zoomAt(1 / 1.2),

@@ -8,6 +8,8 @@
   try { U = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (e) { U = {}; }
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(U)); } catch (e) { /* без хранилища */ } };
   U.pal = U.pal || {};
+  /* телефон: всё стоит друг под другом (как в CSS @media max-width: 900px) */
+  const narrow = () => !!(window.matchMedia && window.matchMedia('(max-width: 900px)').matches);
 
   /* ---------- шапка: «Уровни» отдельно, остальное — в две группы ---------- */
   function navGroups() {
@@ -20,7 +22,14 @@
       const menu = g.querySelector('.nav-menu');
       ids.forEach(id => { const b = $(id); if (b) menu.appendChild(b); });
       const btn = g.querySelector('.nav-gbtn');
-      btn.addEventListener('click', e => { e.stopPropagation(); const open = menu.hidden; closeAll(); menu.hidden = !open; btn.setAttribute('aria-expanded', String(open)); });
+      /* на телефоне шапка листается вбок и обрезает выпадающее меню — ставим его поверх страницы под кнопкой */
+      const place = () => {
+        ['position', 'left', 'right', 'top'].forEach(k => { menu.style[k] = ''; });
+        if (!narrow()) return;
+        const r = btn.getBoundingClientRect(), w = Math.max(menu.offsetWidth, 200);
+        Object.assign(menu.style, { position: 'fixed', right: 'auto', top: Math.round(r.bottom + 6) + 'px', left: Math.round(Math.max(8, Math.min(window.innerWidth - w - 8, r.left))) + 'px' });
+      };
+      btn.addEventListener('click', e => { e.stopPropagation(); const open = menu.hidden; closeAll(); menu.hidden = !open; btn.setAttribute('aria-expanded', String(open)); if (open) place(); });
       menu.addEventListener('click', () => setTimeout(closeAll, 0));
       nav.insertBefore(g, sb); groups.push(g);
       return g;
@@ -30,6 +39,9 @@
     mk('Знания', ['navPat', 'navLib', 'navLand']);
     document.addEventListener('click', e => { if (!e.target.closest('.nav-grp')) closeAll(); });
     document.addEventListener('keydown', e => { if (e.key === 'Escape') closeAll(); });
+    /* меню, поставленное поверх страницы, не должно висеть отдельно от уехавшей кнопки */
+    const onScroll = () => { if (narrow()) closeAll(); };
+    window.addEventListener('scroll', onScroll, { passive: true }); nav.addEventListener('scroll', onScroll, { passive: true });
   }
 
   /* ---------- панель инструментов: главное в строку, редкое — в «⋯» ---------- */
@@ -80,14 +92,50 @@
   /* ---------- пузырь Архи не закрывает узлы ---------- */
   function mentorPlace() {
     const bub = $('mBubble'), m = $('mentor'); if (!bub || !m) return;
+    /* сколько площади узлов закрывает пузырь */
+    const cover = () => {
+      const r = bub.getBoundingClientRect(); let s = 0;
+      document.querySelectorAll('#nodesG .node:not(.l-hide)').forEach(n => { const q = n.getBoundingClientRect(); const w = Math.min(q.right, r.right) - Math.max(q.left, r.left), h = Math.min(q.bottom, r.bottom) - Math.max(q.top, r.top); if (w > 0 && h > 0) s += w * h; });
+      return s;
+    };
+    let fitFor = '', fitView = '';
+    const vpT = () => { const v = document.getElementById('viewport'); return v ? v.getAttribute('transform') : ''; };
     const place = () => {
-      if (bub.hidden) return;
+      if (bub.hidden) {
+        /* Арчи замолчал: если схему никто не двигал после нашей подгонки — вернуть её на весь холст */
+        if (fitFor && fitView && fitView === vpT() && SD.editor) SD.editor.fit();
+        fitFor = ''; fitView = ''; return;
+      }
       m.classList.remove('up');
-      const r = bub.getBoundingClientRect();
-      const hit = [...document.querySelectorAll('#nodesG .node:not(.l-hide)')].some(n => { const q = n.getBoundingClientRect(); return q.right > r.left && q.left < r.right && q.bottom > r.top && q.top < r.bottom; });
-      if (hit) m.classList.add('up');
+      const down = cover();
+      if (down) m.classList.add('up');
+      if (!down || !narrow()) return;
+      /* телефон: холст низкий, пузырь закрывает схему и внизу, и вверху — встаёт туда, где закрывает меньше,
+         а схема вписывается в свободную полосу, чтобы было видно, куда тянуть */
+      const up = cover();
+      if (up > down) m.classList.remove('up');
+      if (!Math.min(up, down)) return;
+      /* вписываем схему один раз на каждую новую реплику, а не на каждую мелкую правку пузыря */
+      const sig = bub.textContent.slice(0, 240);
+      if (sig === fitFor) return;
+      const wr = $('canvasWrap').getBoundingClientRect(), mr = m.getBoundingClientRect(), isUp = m.classList.contains('up');
+      const top = isUp ? mr.bottom - wr.top + 8 : 0, bottom = isUp ? 0 : wr.bottom - mr.top + 8;
+      if (wr.height - top - bottom >= 110 && SD.editor && SD.editor.fitIn) { SD.editor.fitIn(top, bottom); fitFor = sig; fitView = vpT(); }
     };
     new MutationObserver(() => requestAnimationFrame(place)).observe(bub, { attributes: true, attributeFilter: ['hidden'], childList: true, subtree: true });
+    /* приветствие Арчи появляется раньше, чем мы подключились, — на телефоне расставляем его сразу */
+    if (narrow()) requestAnimationFrame(place);
+    /* схему только что вписали на весь холст заново (resize в app.js) — снова вписать её мимо пузыря;
+       resize от адресной строки телефона холст не меняет — его пропускаем, как и app.js */
+    const canvasSz = () => { const c = $('canvas'), r = c ? c.getBoundingClientRect() : { width: 0, height: 0 }; return Math.round(r.width) + 'x' + Math.round(r.height); };
+    let sz = canvasSz();
+    window.addEventListener('resize', ev => {
+      const s = canvasSz(); if (ev.isTrusted && s === sz) return; sz = s;
+      if (narrow()) { fitFor = ''; requestAnimationFrame(place); }
+    });
+    /* «Показать всё» на телефоне — всё в видимой части холста, мимо открытого пузыря */
+    const zf = $('zoomFit');
+    if (zf) zf.addEventListener('click', () => { if (narrow() && !bub.hidden) { fitFor = ''; requestAnimationFrame(place); } });
   }
 
   /* ---------- подсказки новичку прямо на холсте ---------- */
@@ -125,9 +173,12 @@
       html = `<b>Шаг 2. Соедини стрелкой</b><span>${from ? `Потяни от кружка справа у «${from}» к «${(st.n.label || SD.TYPES[st.n.type].name)}»` : `Проведи стрелку к «${(st.n.label || SD.TYPES[st.n.type].name)}» от того, кто его вызывает: тяни от кружка справа у узла`}. Запросы пойдут по стрелкам.</span>`;
     } else {
       x = 14; y = 14; cls = 'tip';
-      html = '<b>Шаг 3. Смотри на цели справа →</b><span>Красное — что ещё не выполнено: у такой цели есть кнопка «Почему?» — покажу виновника на схеме. Всё зелёное — уровень пройден.</span>';
+      html = (narrow() ? '<b>Шаг 3. Смотри на цели под схемой ↓</b>' : '<b>Шаг 3. Смотри на цели справа →</b>') + '<span>Красное — что ещё не выполнено: у такой цели есть кнопка «Почему?» — покажу виновника на схеме. Всё зелёное — уровень пройден.</span>';
       if (!goalsT) goalsT = setTimeout(() => { U.goalsSeen = true; save(); goalsT = 0; }, 9000);
     }
+    /* телефон: холст маленький — одна подсказка за раз; пока говорит Арчи, рамку шага не рисуем (подсветка детали остаётся) */
+    const mb = $('mBubble');
+    if (narrow() && mb && !mb.hidden) { box.hidden = true; return; }
     box.className = 'coach ' + cls;
     box.style.left = Math.max(8, Math.min(wr.width - 260, x)) + 'px'; box.style.top = Math.max(8, Math.min(wr.height - 90, y)) + 'px';
     const body = `${html}<button type="button" class="coach-x" data-coachoff="1" title="Больше не подсказывать">×</button>`;
