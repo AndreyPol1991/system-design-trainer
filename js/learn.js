@@ -216,6 +216,7 @@
       h += '</ul>';
     }
     w.lines.forEach(l => { h += `<p class="why-ln">${esc(l)}</p>`; });
+    if (SD.calc && SD.calc.whyAi) { try { h += SD.calc.whyAi(A, i); } catch (e) { /* модель не разобрать — без строки про неё */ } }
     if (w.fix) {
       const fi = w.fixInfo || {};
       const lbl = w.fix.map(c => { const n = A.graph.nodes.find(x => x.id === c.id); return `«${esc(nm(n))}»${c.key === 'count' ? '' : ' · ' + esc((c.label || c.key).toLowerCase())}: ${c.from} → ${c.to}${c.key === 'count' ? ' экз.' : ''}`; }).join(', ');

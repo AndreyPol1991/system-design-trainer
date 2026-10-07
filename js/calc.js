@@ -187,7 +187,9 @@
   const HINT = new Set();
   function open(L) {
     const A = SD.app && SD.app.A; L = L || (A && A.level);
-    if (!usable(L)) { SD.app.toast(L && L.ai ? 'Для уровней с AI расчёт по токенам появится позже.' : 'Здесь нечего считать: нет нагрузки.'); return; }
+    /* уровни с языковой моделью считаются по-своему: токены, время ответа, разговоры одновременно (js/calc-ai.js) */
+    if (L && L.ai && usableAi(L)) { openAi(L); return; }
+    if (!usable(L)) { SD.app.toast(L && L.ai ? 'Здесь модель ничего не получает — считать нечего.' : 'Здесь нечего считать: нет нагрузки.'); return; }
     M = model(L); S = steps(M); HINT.clear();
     let m = $('calcModal');
     if (!m) {
@@ -287,6 +289,7 @@
   /* ---------- формула на узле ---------- */
   function nodeBlock(A, n) {
     const r = A.res && A.res.nodes[n.id], t = T()[n.type];
+    if (n.type === 'llm') return llmBlock(A, n, r);
     if (!r || !t || n.type === 'client' || t.ops || !(r.rps > 0.5)) return '';
     const cnt = r.count || n.props.count || 1, u = r.util || 0;
     let h = '';
@@ -301,10 +304,84 @@
     return `<details class="calc-node"><summary>Почему столько — формула</summary>${h}${usable(A.level) ? '<button type="button" class="linkish" data-calcopen>Как посчитать весь уровень ›</button>' : ''}</details>`;
   }
 
+  /* ---------- ИИ: долгий ответ модели ----------
+     Сам расчёт по шагам и лаборатория «Оценка на салфетке: ИИ» — в js/calc-ai.js (грузится по требованию через запись estai
+     в js/labs-lazy.js). Здесь — то, что нужно сразу: можно ли считать уровень, формула на узле LLM, строка в «Почему?»,
+     кнопка в задании, Ctrl+K и шаг в «Моём пути». Главная мысль: одновременно = поток × время ответа (закон Литтла). */
+  /* слово после числа так, как число показано: «2,4 вопроса», «23 разговора», «4 видеокарты» */
+  const plw = (s, f) => { if (/,/.test(s)) return f[1]; const n = parseInt(String(s).replace(/\s/g, ''), 10) || 0, a = n % 10, b = n % 100; return a === 1 && b !== 11 ? f[0] : a >= 2 && a <= 4 && (b < 12 || b > 14) ? f[1] : f[2]; };
+  const W_Q = ['вопрос', 'вопроса', 'вопросов'], W_D = ['разговор', 'разговора', 'разговоров'], W_Z = ['запрос', 'запроса', 'запросов'], W_G = ['видеокарта', 'видеокарты', 'видеокарт'];
+  const usableAi = L => !!(L && L.ai && !L.sandbox && L.solution && L.traffic && ((L.traffic.chat || 0) + (L.traffic.voice || 0)) > 0);
+  function openAi(L) {
+    const A = SD.app && SD.app.A;
+    L = usableAi(L) ? L : A && usableAi(A.level) ? A.level : SD.levelById('support');
+    if (!L) return Promise.resolve();
+    if (SD.calcAi) { SD.calcAi.open(L); return Promise.resolve(); }
+    const stub = (SD.LABS || []).find(l => l.id === 'estai' && l.lazy);
+    if (!stub || !SD.labs || !SD.labs.need) { SD.app.toast('ИИ-расчёт не загрузился — обнови страницу.'); return Promise.resolve(); }
+    document.documentElement.classList.add('xr-loading');
+    return SD.labs.need(stub).then(() => {
+      document.documentElement.classList.remove('xr-loading');
+      if (SD.calcAi) SD.calcAi.open(L); else SD.app.toast('ИИ-расчёт не загрузился — проверь интернет и попробуй ещё раз.');
+    });
+  }
+  /* сколько длится один ответ этой модели и сколько вопросов к ней в секунду — по результату симулятора на схеме */
+  function llmNow(A, n, r) {
+    const i = (r && r.info) || {}, ld = (r && r.load) || {}, m = (SD.LLM_SIZES || {})[n.props.size] || (SD.LLM_SIZES || {}).medium || {};
+    const chat = (ld.chat || 0) + (ld.vchat || 0) + (ld.inject || 0), ag = ld.agentllm || 0, rps = chat + ag;
+    if (!(rps > 0.001) || !m.speed) return null;
+    const a = Object.assign({ agentOut: 150 }, (A.level && A.level.ai) || {});
+    const genMs = ag > chat ? Math.min(n.props.maxOut || 512, a.agentOut) / m.speed * 1000 : (i.gen || 0);
+    const first = (i.ttft || 0) + (i.rewriteMs || 0), t = (first + genMs) / 1000;
+    return { rps, first, t, conc: rps * t, out: ag > chat ? Math.min(n.props.maxOut || 512, a.agentOut) : i.outT, speed: m.speed, util: r.util || 0, cap: r.cap || 0, api: n.props.hosting === 'api', stream: n.props.stream !== false && ag <= chat };
+  }
+  function llmBlock(A, n, r) {
+    const x = r && llmNow(A, n, r); if (!x) return '';
+    const u = x.util, seats = x.cap > 0 && isFinite(x.cap) ? x.cap * x.t : 0;
+    let h = `<p>Сюда приходит <b>${fx(x.rps)}/с</b>. Ответ: первое слово через ${F().ms(x.first)}, весь — через ${fx(x.t)} с (${num(x.out)} токенов ÷ ${x.speed}/с + пауза).</p>`;
+    h += `<p>Одновременно идёт ${fx(x.rps)} × ${fx(x.t)} ≈ <b>${fx(x.conc)}</b> ${plw(fx(x.conc), W_D)} — нагрузку на модель считают так (закон Литтла), а не по запросам в секунду.</p>`;
+    h += x.api ? `<p>Модель у поставщика: лимит тарифа ${num(x.cap)} ${plw(num(x.cap), W_Z)} в секунду — загрузка <b>${Math.round(u * 100)} %</b>.</p>`
+      : `<p>${n.props.gpus || 1} ${plw(String(n.props.gpus || 1), W_G)} ${plw(String(n.props.gpus || 1), ['тянет', 'тянут', 'тянут'])} ≈ ${fx(x.cap)} ${plw(fx(x.cap), W_Q)} в секунду — это ≈ ${fx(seats)} ${plw(fx(seats), W_D)} одновременно. Загрузка <b>${Math.round(u * 100)} %</b>.</p>`;
+    h += `<p class="cf-v ${u > 1 ? 'bad' : u > TARGET ? 'warn' : 'ok'}">${u > 1 ? (x.api ? 'Лимит превышен: лишние запросы получат 429 — тариф выше или второй поставщик.' : 'Мест не хватает: лишние вопросы получат отказ — больше видеокарт.') : u > TARGET ? 'У края: вопросы ждут свободного места, и первое слово опаздывает.' : 'Запас есть.'}</p>`;
+    return `<details class="calc-node"><summary>Почему столько — формула</summary>${h}${usableAi(A.level) ? '<button type="button" class="linkish" data-calcopen>Как посчитать модель по шагам ›</button>' : ''}</details>`;
+  }
+  /* строка в «Почему?» у красной цели (js/learn.js): ответ модели — секунды, а места считают разговорами */
+  function whyAi(A, i) {
+    const L = A && A.level, lg = L && L.goals && L.goals[i];
+    if (!L || !L.ai || !lg || !A.res || !['latency', 'success'].includes(lg.t)) return '';
+    const xs = A.graph.nodes.filter(n => n.type === 'llm').map(n => ({ n, x: llmNow(A, n, A.res.nodes[n.id]) })).filter(z => z.x);
+    if (!xs.length) return '';
+    const top = xs.slice().sort((p, q) => q.x.util - p.x.util)[0], x = top.x, name = top.n.label || 'LLM';
+    const seats = x.cap > 0 && isFinite(x.cap) ? x.cap * x.t : 0;
+    const lines = [];
+    if (lg.t === 'latency') {
+      lines.push(`Ответ модели — не миллисекунды: «${name}» отдаёт первое слово через ${F().ms(x.first)}, весь ответ — через ${fx(x.t)} с (${num(x.out)} токенов ÷ ${x.speed} в секунду).`);
+      if (!x.stream && lg.kind !== 'voice') lines.push('Ответ сейчас не потоком — человек ждёт его целиком. С потоком (SSE) он увидит первое слово почти сразу: включи у модели «Стриминг ответа».');
+    }
+    if (x.util > TARGET) lines.push(`Модель загружена на ${Math.round(x.util * 100)} %: одновременно идёт ${fx(x.rps)} × ${fx(x.t)} ≈ ${fx(x.conc)} ${plw(fx(x.conc), W_D)}, а мест ${x.api ? 'по лимиту' : 'на её видеокартах'} ≈ ${fx(seats)}. ${x.util > 1 ? 'Лишние получают отказ.' : 'Новые ждут свободного места, и первое слово опаздывает.'}`);
+    if (!lines.length) return '';
+    return lines.map(t => `<p class="why-ln">${esc(t)}</p>`).join('') + (usableAi(L) ? '<p class="why-ln"><button type="button" class="linkish" data-calcopen>Посчитать модель по шагам ›</button></p>' : '');
+  }
+  /* кнопка в задании ИИ-уровня (панель задания вызывает SD.taskCtas) */
+  (SD.taskCtas = SD.taskCtas || []).push(L => {
+    if (!usableAi(L) || (SD.free && SD.free.hintsOn && !SD.free.hintsOn())) return '';
+    return `<button type="button" class="dive-cta" data-calcopen>${SD.icon('llm')}<span><b>Как посчитать модель: время ответа и места</b><small>Вопросов в секунду мало, а разговоров одновременно много — ответ идёт секунды. По шагам до серверов модели, видеокарт и цены токенов</small></span></button>`;
+  });
+  /* Ctrl+K (js/cmd.js собирает пункты модулей из SD.cmdExtra) */
+  (SD.cmdExtra = SD.cmdExtra || []).push((add, S) => {
+    add('Открыть', 'Как посчитать ИИ-ассистента', 'время ответа, разговоры одновременно, видеопамять, серверы модели, цена токенов', () => openAi(S && S.level), 'расчёт салфетка llm ии ai модель токены ttft литтл gpu видеокарта видеопамять kv поток sse очередь');
+    if (SD.labs) add('Открыть', 'Оценка на салфетке: ИИ', 'ползунки: токены, скорость, TTFT, память → разговоры, серверы, цена; синхронно, поток или очередь', () => SD.labs.open('estai'), 'лаборатория llm ии ai токены ttft литтл gpu видеопамять sse поток очередь пачка batch');
+  });
+
   function mount() {
+    /* на узком экране колонка расчёта не должна раздвигаться по самому длинному тексту (было ≈ 600 px при 390) */
+    if (!$('calcFitCss')) { const st = document.createElement('style'); st.id = 'calcFitCss'; st.textContent = '@media (max-width: 980px) { .calc-wrap { grid-template-columns: minmax(0, 1fr); } }'; document.head.appendChild(st); }
     document.addEventListener('click', e => { if (e.target.closest('[data-calcopen]')) open(); });
     document.addEventListener('keydown', e => { const m = $('calcModal'); if (e.key === 'Escape' && m && !m.hidden) m.hidden = true; });
+    /* «Мой путь»: лаборатория ИИ-оценки — в навыке «AI-системы» сразу после первого ИИ-уровня */
+    const sk = SD.path && SD.path.SKILLS && SD.path.SKILLS.find(s => s.id === 'ai');
+    if (sk && !sk.items.includes('lab:estai')) sk.items.splice(sk.items.indexOf('support') + 1, 0, 'lab:estai');
   }
 
-  SD.calc = { mount, open, model, steps, nodeBlock, usable, planGraph, refGraph };
+  SD.calc = { mount, open, model, steps, nodeBlock, usable, planGraph, refGraph, usableAi, openAi, whyAi };
 })();
