@@ -155,7 +155,7 @@
   /* ---------- блок в задании ---------- */
   function taskBlock(A) {
     const L = A.level; if (!L.free) return '';
-    return `<div class="fr-cta"><button type="button" class="btn primary" data-freeeval>Оценить решение</button><button type="button" class="btn ghost" data-freehints>${A.freeHints ? 'Спрятать подсказки' : 'Показать подсказки'}</button><small>${A.freeHints ? 'Подсказки включены: советы прораба, «Почему?» и расчёт нагрузки.' : 'Подсказки скрыты — собираешь сам. Требования ниже — то, что проверит оценка.'}</small></div>`;
+    return `<div class="fr-cta"><button type="button" class="btn primary" data-freeeval>Оценить решение</button><button type="button" class="btn ghost" data-freehints>${A.freeHints ? 'Спрятать подсказки' : 'Показать подсказки'}</button>${SD.exam ? `<button type="button" class="btn" data-examfree>${SD.exam.inFree(L) ? '← К экзамену' : 'Сдать как собеседование'}</button>` : ''}<small>${A.freeHints ? 'Подсказки включены: советы прораба, «Почему?» и расчёт нагрузки.' : 'Подсказки скрыты — собираешь сам. Требования ниже — то, что проверит оценка.'}</small></div>`;
   }
 
   function mount() {
