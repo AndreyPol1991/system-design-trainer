@@ -71,6 +71,9 @@
     root = document.getElementById('labMain');
     root.innerHTML = `<div class="lab-head"><p>${esc(lab.intro)}</p><ul class="lab-tasks" id="labTasks"></ul></div><div class="lab-body" id="labBody"></div>${lab.dive && SD.DIVES[lab.dive] ? `<div class="row-btns"><button type="button" class="btn ghost" id="labDive">Пошаговый разбор: ${esc(SD.DIVES[lab.dive].title)}</button></div>` : ''}`;
     renderTasks(lab);
+    /* «На пальцах» сверху лаборатории: тезис, аналогия и картинка (SD.LAB_FINGERS[id], рисует js/level-fingers.js) */
+    const LF = SD.LAB_FINGERS && SD.LAB_FINGERS[lab.id];
+    if (LF && SD.fingers && SD.fingers.card) { const hd = root.querySelector('.lab-head'); if (hd) hd.insertAdjacentHTML('afterbegin', SD.fingers.card({ id: 'lab-' + lab.id, title: lab.title, fingers: LF })); }
     if (SD.incidents && SD.incidents.labCard) { const hd = root.querySelector('.lab-head'); if (hd) hd.insertAdjacentHTML('beforeend', SD.incidents.labCard(lab.id)); }
     const dv = document.getElementById('labDive'); if (dv) dv.onclick = () => SD.player.open(lab.dive);
     cleanup = lab.mount(document.getElementById('labBody'), { done: tid => done(lab, tid) }) || null;

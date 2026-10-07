@@ -29,6 +29,8 @@
 
   /* состояние живёт между перерисовками панели задания: какой уровень, какая пара закреплена, какая под мышью */
   const ST = { key: null, pin: null, hov: null, F: null };
+  /* у каждой карточки своя таблица пар: на экране могут быть сразу две — уровень и открытая поверх лаборатория */
+  const FS = {};
   const baseId = L => (L.free && L.free.base) || (L.daily && L.daily.base) || L.id;
   function fingersOf(L) {
     if (!L) return null;
@@ -51,7 +53,7 @@
     if (!has(L)) return '';
     const F = fingersOf(L), k = baseId(L);
     if (ST.key !== k) { ST.key = k; ST.pin = null; ST.hov = null; }
-    ST.F = F;
+    ST.F = F; FS[k] = F;
     const open = !U.closed[k], on = ST.pin;
     let pic = '';
     try { pic = typeof F.picture === 'function' ? F.picture(L) : (F.picture || ''); } catch (e) { pic = ''; }
@@ -82,7 +84,7 @@
       if (el.tagName === 'BUTTON') el.setAttribute('aria-pressed', String(ST.pin != null && +el.getAttribute('data-lf-k') === ST.pin));
     });
     const fig = sec.querySelector('.lf-fg-pic'); if (fig) fig.classList.toggle('lf-fg-has', a != null);
-    const cap = sec.querySelector('.lf-fg-cap'); if (cap) cap.innerHTML = capOf(ST.F, a);
+    const cap = sec.querySelector('.lf-fg-cap'); if (cap) cap.innerHTML = capOf(FS[sec.getAttribute('data-lf-card')] || ST.F, a);
   }
   let queued = false;
   function later() {
