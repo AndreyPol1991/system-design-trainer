@@ -30,7 +30,8 @@
     return D;
   }
   const baseOf = L => L && L.free ? SD.levelById(L.free.base) : null;
-  const hintsOn = () => { const A = SD.app && SD.app.A; return !!(A && A.level && (!A.level.free || A.freeHints)); };
+  /* подсказки скрыты только в свободном режиме без запроса; пока уровень ещё не записан (первая отрисовка) — показываем */
+  const hintsOn = () => { const A = SD.app && SD.app.A; if (!A || !A.level) return true; return !A.level.free || !!A.freeHints; };
 
   /* ---------- оценка ---------- */
   function refGraph(L) { const o = SD.walk.orderOf(L, L.solution), g = SD.walk.build(L, L.solution, o, o.length); return g; }
